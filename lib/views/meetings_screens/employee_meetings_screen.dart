@@ -7,7 +7,6 @@ import '../../widgets/meeting_widgets.dart';
 import 'meeting_detail_screen.dart';
 import 'notification_screen.dart';
 
-
 class EmployeeMeetingsScreen extends StatefulWidget {
   final String employeeId;
   final String employeeName;
@@ -48,10 +47,13 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen>
 
   List<MeetingModel> _applyFilters(List<MeetingModel> meetings) {
     return meetings.where((m) {
-      final matchSearch = _searchQuery.isEmpty ||
+      final matchSearch =
+          _searchQuery.isEmpty ||
           m.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           m.organizerName.toLowerCase().contains(_searchQuery.toLowerCase());
-      final matchStatus = _filterStatus == 'All' || m.status.name == _filterStatus.toLowerCase();
+      final matchStatus =
+          _filterStatus == 'All' ||
+          m.status.name == _filterStatus.toLowerCase();
       return matchSearch && matchStatus;
     }).toList();
   }
@@ -63,7 +65,7 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen>
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxScrolled) => [
           SliverAppBar(
-            expandedHeight: 160,
+            expandedHeight: 200,
             floating: false,
             pinned: true,
             backgroundColor: const Color(0xFF7C3AED),
@@ -79,9 +81,10 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen>
                 ),
                 child: SafeArea(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+
                       children: [
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -89,37 +92,73 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen>
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Hello, ${widget.employeeName.split(' ').first}! 👋',
-                                    style: const TextStyle(color: Colors.white70, fontSize: 14)),
-                                const Text('My Meetings', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                                Text(
+                                  'Hello, ${widget.employeeName.split(' ').first}! 👋',
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                const Text(
+                                  'My Meetings',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                               ],
                             ),
                             // Notification bell
                             StreamBuilder<int>(
-                              stream: _service.streamUnreadCount(widget.employeeId),
+                              stream: _service.streamUnreadCount(
+                                widget.employeeId,
+                              ),
                               builder: (context, snap) {
                                 final count = snap.data ?? 0;
                                 return GestureDetector(
-                                  onTap: () => Navigator.push(context, MaterialPageRoute(
-                                    builder: (_) => NotificationsScreen(userId: widget.employeeId),
-                                  )),
+                                  onTap: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => NotificationsScreen(
+                                        userId: widget.employeeId,
+                                      ),
+                                    ),
+                                  ),
                                   child: Stack(
                                     children: [
                                       Container(
                                         padding: const EdgeInsets.all(10),
                                         decoration: BoxDecoration(
                                           color: Colors.white.withOpacity(0.15),
-                                          borderRadius: BorderRadius.circular(12),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
                                         ),
-                                        child: const Icon(Icons.notifications_rounded, color: Colors.white, size: 22),
+                                        child: const Icon(
+                                          Icons.notifications_rounded,
+                                          color: Colors.white,
+                                          size: 22,
+                                        ),
                                       ),
                                       if (count > 0)
                                         Positioned(
-                                          top: 0, right: 0,
+                                          top: 0,
+                                          right: 0,
                                           child: Container(
                                             padding: const EdgeInsets.all(4),
-                                            decoration: const BoxDecoration(color: Color(0xFFEF4444), shape: BoxShape.circle),
-                                            child: Text('$count', style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                                            decoration: const BoxDecoration(
+                                              color: Color(0xFFEF4444),
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: Text(
+                                              '$count',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 9,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
                                           ),
                                         ),
                                     ],
@@ -135,8 +174,16 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen>
                           stream: _myMeetingsStream,
                           builder: (context, snap) {
                             final meetings = snap.data ?? [];
-                            final upcoming = meetings.where((m) => m.dateTime.isAfter(DateTime.now()) && m.status == MeetingStatus.approved).length;
-                            final pending = meetings.where((m) => m.status == MeetingStatus.pending).length;
+                            final upcoming = meetings
+                                .where(
+                                  (m) =>
+                                      m.dateTime.isAfter(DateTime.now()) &&
+                                      m.status == MeetingStatus.approved,
+                                )
+                                .length;
+                            final pending = meetings
+                                .where((m) => m.status == MeetingStatus.pending)
+                                .length;
                             return Row(
                               children: [
                                 _quickStat('${meetings.length}', 'Total'),
@@ -164,13 +211,24 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen>
                   unselectedLabelColor: Colors.grey.shade500,
                   indicatorColor: const Color(0xFF7C3AED),
                   indicatorWeight: 3,
-                  labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                  labelStyle: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
                   tabs: [
                     const Tab(text: 'All'),
                     StreamBuilder<List<MeetingModel>>(
                       stream: _myMeetingsStream,
                       builder: (context, snap) {
-                        final count = snap.data?.where((m) => m.dateTime.isAfter(DateTime.now()) && m.status == MeetingStatus.approved).length ?? 0;
+                        final count =
+                            snap.data
+                                ?.where(
+                                  (m) =>
+                                      m.dateTime.isAfter(DateTime.now()) &&
+                                      m.status == MeetingStatus.approved,
+                                )
+                                .length ??
+                            0;
                         return Tab(
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -179,9 +237,22 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen>
                               if (count > 0) ...[
                                 const SizedBox(width: 4),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(color: const Color(0xFF10B981), borderRadius: BorderRadius.circular(10)),
-                                  child: Text('$count', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF10B981),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    '$count',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                 ),
                               ],
                             ],
@@ -192,7 +263,15 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen>
                     StreamBuilder<List<MeetingModel>>(
                       stream: _myMeetingsStream,
                       builder: (context, snap) {
-                        final count = snap.data?.where((m) => m.status == MeetingStatus.pending && m.organizerId == widget.employeeId).length ?? 0;
+                        final count =
+                            snap.data
+                                ?.where(
+                                  (m) =>
+                                      m.status == MeetingStatus.pending &&
+                                      m.organizerId == widget.employeeId,
+                                )
+                                .length ??
+                            0;
                         return Tab(
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -201,9 +280,22 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen>
                               if (count > 0) ...[
                                 const SizedBox(width: 4),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(color: const Color(0xFFF59E0B), borderRadius: BorderRadius.circular(10)),
-                                  child: Text('$count', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF59E0B),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    '$count',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                 ),
                               ],
                             ],
@@ -239,7 +331,10 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen>
         ),
         backgroundColor: const Color(0xFF7C3AED),
         icon: const Icon(Icons.add_rounded, color: Colors.white),
-        label: const Text('Request Meeting', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+        label: const Text(
+          'Request Meeting',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+        ),
       ),
     );
   }
@@ -256,39 +351,33 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen>
                 return const Center(child: CircularProgressIndicator());
               }
               final filtered = _applyFilters(snap.data ?? []);
-              if (filtered.isEmpty) {
-                return EmptyState(
-                  icon: Icons.calendar_month_rounded,
-                  title: 'No meetings yet',
-                  subtitle: 'Request a meeting or check back after HR schedules one',
-                  actionLabel: 'Request a Meeting',
-                  onAction: () => showModalBottomSheet(
-                    context: context,
-                    isScrollControlled: true,
-                    backgroundColor: Colors.transparent,
-                    builder: (_) => MeetingFormSheet(
-                      currentUserId: widget.employeeId,
-                      currentUserName: widget.employeeName,
-                      isHR: false,
+              if (filtered.isNotEmpty) {
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: filtered.length,
+                  itemBuilder: (_, i) => MeetingCard(
+                    meeting: filtered[i],
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => MeetingDetailScreen(
+                          meeting: filtered[i],
+                          isHR: false,
+                          currentUserId: widget.employeeId,
+                        ),
+                      ),
                     ),
                   ),
-                  color: const Color(0xFF7C3AED),
+                );
+              } else {
+                return const EmptyState(
+                  icon: Icons.event_note_rounded,
+                  title: 'No meetings found',
+                  subtitle:
+                      'Try adjusting your search or filter to find meetings.',
+                  color: Color(0xFF7C3AED),
                 );
               }
-              return ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: filtered.length,
-                itemBuilder: (_, i) => MeetingCard(
-                  meeting: filtered[i],
-                  onTap: () => Navigator.push(context, MaterialPageRoute(
-                    builder: (_) => MeetingDetailScreen(
-                      meeting: filtered[i],
-                      isHR: false,
-                      currentUserId: widget.employeeId,
-                    ),
-                  )),
-                ),
-              );
             },
           ),
         ),
@@ -303,16 +392,22 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen>
         if (snap.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-        final upcoming = (snap.data ?? [])
-            .where((m) => m.dateTime.isAfter(DateTime.now()) && m.status == MeetingStatus.approved)
-            .toList()
-          ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+        final upcoming =
+            (snap.data ?? [])
+                .where(
+                  (m) =>
+                      m.dateTime.isAfter(DateTime.now()) &&
+                      m.status == MeetingStatus.approved,
+                )
+                .toList()
+              ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
 
         if (upcoming.isEmpty) {
           return const EmptyState(
             icon: Icons.event_available_rounded,
             title: 'No upcoming meetings',
-            subtitle: 'You don\'t have any approved meetings scheduled. Check back later!',
+            subtitle:
+                'You don\'t have any approved meetings scheduled. Check back later!',
             color: Color(0xFF10B981),
           );
         }
@@ -334,25 +429,25 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen>
           return const Center(child: CircularProgressIndicator());
         }
         final requests = snap.data ?? [];
-        if (requests.isEmpty) {
-          return EmptyState(
-            icon: Icons.send_rounded,
-            title: 'No requests yet',
-            subtitle: 'Submit a meeting request and track its status here',
-            actionLabel: 'Request a Meeting',
-            onAction: () => showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              backgroundColor: Colors.transparent,
-              builder: (_) => MeetingFormSheet(
-                currentUserId: widget.employeeId,
-                currentUserName: widget.employeeName,
-                isHR: false,
-              ),
-            ),
-            color: const Color(0xFF7C3AED),
-          );
-        }
+        // if (requests.isEmpty) {
+        //   return EmptyState(
+        //     icon: Icons.send_rounded,
+        //     title: 'No requests yet',
+        //     subtitle: 'Submit a meeting request and track its status here',
+        //     actionLabel: 'Request a Meeting',
+        //     onAction: () => showModalBottomSheet(
+        //       context: context,
+        //       isScrollControlled: true,
+        //       backgroundColor: Colors.transparent,
+        //       builder: (_) => MeetingFormSheet(
+        //         currentUserId: widget.employeeId,
+        //         currentUserName: widget.employeeName,
+        //         isHR: false,
+        //       ),
+        //     ),
+        //     color: const Color(0xFF7C3AED),
+        //   );
+        // }
 
         return Column(
           children: [
@@ -368,12 +463,19 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen>
                 ),
                 child: const Row(
                   children: [
-                    Icon(Icons.info_rounded, color: Color(0xFFF59E0B), size: 18),
+                    Icon(
+                      Icons.info_rounded,
+                      color: Color(0xFFF59E0B),
+                      size: 18,
+                    ),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         'Pending requests are being reviewed by HR. You\'ll be notified once approved.',
-                        style: TextStyle(fontSize: 12, color: Color(0xFF92400E)),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF92400E),
+                        ),
                       ),
                     ),
                   ],
@@ -381,7 +483,14 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen>
               ),
             Expanded(
               child: ListView.builder(
-                padding: EdgeInsets.fromLTRB(16, requests.any((m) => m.status == MeetingStatus.pending) ? 0 : 16, 16, 16),
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  requests.any((m) => m.status == MeetingStatus.pending)
+                      ? 0
+                      : 16,
+                  16,
+                  16,
+                ),
                 itemCount: requests.length,
                 itemBuilder: (_, i) => _buildRequestCard(requests[i]),
               ),
@@ -398,8 +507,16 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: const Border(left: BorderSide(color: Color(0xFF10B981), width: 4)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0,2))],
+        border: const Border(
+          left: BorderSide(color: Color(0xFF10B981), width: 4),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -411,15 +528,29 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(meeting.title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+                  Text(
+                    meeting.title,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1E293B),
+                    ),
+                  ),
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      Icon(Icons.access_time_rounded, size: 13, color: Colors.grey.shade500),
+                      Icon(
+                        Icons.access_time_rounded,
+                        size: 13,
+                        color: Colors.grey.shade500,
+                      ),
                       const SizedBox(width: 4),
                       Text(
-                        '${meeting.dateTime.hour.toString().padLeft(2,'0')}:${meeting.dateTime.minute.toString().padLeft(2,'0')} · ${meeting.duration}',
-                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                        '${meeting.dateTime.hour.toString().padLeft(2, '0')}:${meeting.dateTime.minute.toString().padLeft(2, '0')} · ${meeting.duration}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
                       ),
                     ],
                   ),
@@ -427,15 +558,22 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen>
                   Row(
                     children: [
                       Icon(
-                        meeting.format == MeetingFormat.virtual ? Icons.videocam_rounded : Icons.location_on_rounded,
+                        meeting.format == MeetingFormat.virtual
+                            ? Icons.videocam_rounded
+                            : Icons.location_on_rounded,
                         size: 13,
                         color: Colors.grey.shade500,
                       ),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
-                          meeting.location.isEmpty ? 'Location TBD' : meeting.location,
-                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                          meeting.location.isEmpty
+                              ? 'Location TBD'
+                              : meeting.location,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -461,7 +599,13 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen>
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: statusColor.withOpacity(0.2)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0,2))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -469,7 +613,14 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen>
           Row(
             children: [
               Expanded(
-                child: Text(meeting.title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+                child: Text(
+                  meeting.title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1E293B),
+                  ),
+                ),
               ),
               MeetingStatusBadge(status: meeting.status),
             ],
@@ -477,9 +628,27 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen>
           const SizedBox(height: 8),
           Row(
             children: [
-              Icon(Icons.calendar_today_rounded, size: 12, color: Colors.grey.shade500),
+              Icon(
+                Icons.calendar_today_rounded,
+                size: 12,
+                color: Colors.grey.shade500,
+              ),
               const SizedBox(width: 4),
-              Text(MeetingTheme.formatDateTime(meeting.dateTime), style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+              Text(
+                MeetingTheme.formatDateTime(meeting.dateTime),
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+
+              //Fazal :  will have to attach with delete functionality later to firebase
+              const Spacer(),
+              IconButton(
+                onPressed: () {},
+                icon: Icon(
+                  Icons.delete_outline_rounded,
+                  size: 25,
+                  color: Colors.red.shade400,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 4),
@@ -497,7 +666,9 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen>
               ),
             ],
           ),
-          if (meeting.status == MeetingStatus.rejected && meeting.rejectionReason != null && meeting.rejectionReason!.isNotEmpty) ...[
+          if (meeting.status == MeetingStatus.rejected &&
+              meeting.rejectionReason != null &&
+              meeting.rejectionReason!.isNotEmpty) ...[
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(10),
@@ -508,12 +679,19 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen>
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.info_rounded, size: 14, color: Color(0xFFEF4444)),
+                  const Icon(
+                    Icons.info_rounded,
+                    size: 14,
+                    color: Color(0xFFEF4444),
+                  ),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       'Reason: ${meeting.rejectionReason}',
-                      style: const TextStyle(fontSize: 12, color: Color(0xFF991B1B)),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF991B1B),
+                      ),
                     ),
                   ),
                 ],
@@ -537,9 +715,19 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen>
               decoration: InputDecoration(
                 hintText: 'Search my meetings...',
                 hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
-                prefixIcon: const Icon(Icons.search_rounded, color: Colors.grey, size: 20),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade200)),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade200)),
+                prefixIcon: const Icon(
+                  Icons.search_rounded,
+                  color: Colors.grey,
+                  size: 20,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: Colors.grey.shade200),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: Colors.grey.shade200),
+                ),
                 contentPadding: const EdgeInsets.symmetric(vertical: 10),
                 filled: true,
                 fillColor: Colors.grey.shade50,
@@ -579,8 +767,18 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen>
       ),
       child: Column(
         children: [
-          Text(value, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-          Text(label, style: const TextStyle(color: Colors.white70, fontSize: 11)),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white70, fontSize: 11),
+          ),
         ],
       ),
     );

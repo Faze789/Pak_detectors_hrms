@@ -416,7 +416,8 @@ class _LeaveHistoryTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
+          SizedBox(
+            height: 50,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -428,12 +429,26 @@ class _LeaveHistoryTile extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  '${fmt.format(leave.fromDate)}  →  ${fmt.format(leave.toDate)}  (${leave.days}d)',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: Color(0xFF64748B),
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      '${fmt.format(leave.fromDate)}  →  ${fmt.format(leave.toDate)}  (${leave.days}d)',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                    //Fazal :  will have to attach with delete functionality later to firebase
+                    const Spacer(),
+                    IconButton(
+                      onPressed: () {},
+                      icon: Icon(
+                        Icons.delete_outline_rounded,
+                        size: 25,
+                        color: Colors.red.shade400,
+                      ),
+                    ),
+                  ],
                 ),
                 Text(
                   'Reason: ${leave.reason}',
