@@ -125,7 +125,7 @@ class _EmployeeProfileViewState extends State<EmployeeProfileView>
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  widget.employee.email!,
+                  widget.employee.email,
                   style: const TextStyle(
                     fontSize: 14,
                     color: Color(0xFFCBD5E1),

@@ -1624,7 +1624,7 @@ class _QuarterlyTaskCard extends StatelessWidget {
   final QuarterlyGoalModel goal;
   final EmployeePerformanceViewModel vm;
 
-  const _QuarterlyTaskCard({super.key, required this.goal, required this.vm});
+  const _QuarterlyTaskCard({required this.goal, required this.vm});
 
   String _fmt(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';

@@ -1333,14 +1333,18 @@ class _ActivityLog extends StatelessWidget {
   IconData _emptyIcon() {
     if (vm.isWeekend) return Icons.weekend_rounded;
     if (vm.holidayName != null) return Icons.celebration_rounded;
-    if (vm.dailyStatus == AttendanceStatus.absent)
+    if (vm.dailyStatus == AttendanceStatus.absent) {
       return Icons.person_off_rounded;
-    if (vm.dailyStatus == AttendanceStatus.onLeave)
+    }
+    if (vm.dailyStatus == AttendanceStatus.onLeave) {
       return Icons.beach_access_rounded;
-    if (vm.dailyStatus == AttendanceStatus.firstHalfLeave)
+    }
+    if (vm.dailyStatus == AttendanceStatus.firstHalfLeave) {
       return Icons.wb_sunny_outlined;
-    if (vm.dailyStatus == AttendanceStatus.secondHalfLeave)
+    }
+    if (vm.dailyStatus == AttendanceStatus.secondHalfLeave) {
       return Icons.nights_stay_outlined;
+    }
     return Icons.timeline_rounded;
   }
 
@@ -1349,24 +1353,30 @@ class _ActivityLog extends StatelessWidget {
     if (vm.holidayName != null) return vm.holidayName!;
     if (vm.dailyStatus == AttendanceStatus.absent) return 'Marked absent today';
     if (vm.dailyStatus == AttendanceStatus.onLeave) return 'On approved leave';
-    if (vm.dailyStatus == AttendanceStatus.firstHalfLeave)
+    if (vm.dailyStatus == AttendanceStatus.firstHalfLeave) {
       return 'First half leave approved';
-    if (vm.dailyStatus == AttendanceStatus.secondHalfLeave)
+    }
+    if (vm.dailyStatus == AttendanceStatus.secondHalfLeave) {
       return 'Second half leave approved';
+    }
     return 'No activity yet';
   }
 
   String _emptySub() {
     if (vm.isWeekend) return 'No tracking on weekends';
     if (vm.holidayName != null) return 'No tracking on public holidays';
-    if (vm.dailyStatus == AttendanceStatus.absent)
+    if (vm.dailyStatus == AttendanceStatus.absent) {
       return 'Contact HR if this is a mistake';
-    if (vm.dailyStatus == AttendanceStatus.onLeave)
+    }
+    if (vm.dailyStatus == AttendanceStatus.onLeave) {
       return 'No time tracking during leave';
-    if (vm.dailyStatus == AttendanceStatus.firstHalfLeave)
+    }
+    if (vm.dailyStatus == AttendanceStatus.firstHalfLeave) {
       return 'Check in after 1 PM to start tracking';
-    if (vm.dailyStatus == AttendanceStatus.secondHalfLeave)
+    }
+    if (vm.dailyStatus == AttendanceStatus.secondHalfLeave) {
       return 'Check out at 1 PM when ready';
+    }
     return 'Check in to start tracking your time';
   }
 

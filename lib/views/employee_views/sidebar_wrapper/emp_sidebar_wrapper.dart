@@ -1,4 +1,3 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:hrms_app/views/employee_views/attendance_screen.dart';
 import 'package:hrms_app/views/employee_views/employee_payroll_screen.dart';

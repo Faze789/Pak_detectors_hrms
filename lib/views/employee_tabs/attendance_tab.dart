@@ -91,11 +91,12 @@ class _AttendanceTabState extends State<AttendanceTab> {
       _selectedYear,
       _selectedMonth,
     );
-    if (mounted)
+    if (mounted) {
       setState(() {
         _archive = archive;
         _loading = false;
       });
+    }
   }
 
   void _changeMonth(int delta) {

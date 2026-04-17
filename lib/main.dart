@@ -13,7 +13,6 @@ import 'package:hrms_app/viewmodels/document_viewmodel.dart';
 import 'package:hrms_app/viewmodels/employee_viewmodel.dart';
 import 'package:hrms_app/viewmodels/leave_viewmodel.dart';
 import 'package:hrms_app/viewmodels/performance_viewmodel.dart';
-import 'package:hrms_app/viewmodels/payroll_viewmodel.dart';
 import 'package:hrms_app/viewmodels/recruitment_viewmodel.dart';
 import 'package:hrms_app/views/HR_views/apply_screen.dart';
 import 'package:hrms_app/views/HR_views/employee_screen.dart';

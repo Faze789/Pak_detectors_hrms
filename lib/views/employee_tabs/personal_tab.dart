@@ -62,7 +62,7 @@ class PersonalTab extends StatelessWidget {
               _buildInfoRow('Join Date', employee.joinDate ?? 'N/A'),
               _buildInfoRow(
                 'Monthly Salary',
-                '\$${employee.salary!.toStringAsFixed(2)}',
+                '\$${employee.salary.toStringAsFixed(2)}',
               ),
             ],
           ),

@@ -203,8 +203,9 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
                     keyboardType: TextInputType.emailAddress,
                     validator: (v) {
                       if (v == null || v.isEmpty) return null;
-                      if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(v))
+                      if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(v)) {
                         return 'Invalid email';
+                      }
                       return null;
                     },
                   ),
