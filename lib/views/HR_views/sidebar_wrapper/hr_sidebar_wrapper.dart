@@ -42,6 +42,7 @@ class _HRDashboardWithSidebarState extends State<HRDashboardWithSidebar> {
         .doc(user.uid)
         .get();
 
+    if (!mounted) return;
     setState(() {
       _hrUserId = user.uid;
       _hrUserName = doc.data()?['name'] ?? user.displayName ?? 'HR';

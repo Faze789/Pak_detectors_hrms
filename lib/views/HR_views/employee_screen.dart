@@ -65,7 +65,7 @@ class _EmployeeListViewState extends State<EmployeeListView> {
     context.read<EmployeeViewModel>().loadEmployees('');
   }
 
-  /// Show employee profile
+  // / Show employee profile
   void _showEmployeeProfile(Employee employee) {
     Navigator.push(
       context,
@@ -223,6 +223,7 @@ class _EmployeeListViewState extends State<EmployeeListView> {
 
                   return EmployeeCard(
                     employee: employee,
+                    employee_id: employee,
                     onViewTap: () => _showEmployeeProfile(employee),
                     onEditTap: () => _goToEditEmployee(employee),
                   );

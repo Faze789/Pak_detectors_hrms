@@ -12,37 +12,39 @@ class LeaveViewModel extends ChangeNotifier {
   final LeaveService _service;
 
   LeaveViewModel({LeaveService? service})
-      : _service = service ?? LeaveService();
+    : _service = service ?? LeaveService();
 
   // ── State ─────────────────────────────────────────────────────────────────
 
-  LeaveViewState state       = LeaveViewState.idle;
-  String?        errorMessage;
+  LeaveViewState state = LeaveViewState.idle;
+  String? errorMessage;
 
   // ── Employee data ─────────────────────────────────────────────────────────
 
-  List<LeaveModel>                  myLeaves    = [];
+  List<LeaveModel> myLeaves = [];
   StreamSubscription<List<LeaveModel>>? _myLeavesSub;
 
   // ── HR data ───────────────────────────────────────────────────────────────
 
-  List<LeaveModel>                  allLeaves   = [];
+  List<LeaveModel> allLeaves = [];
   StreamSubscription<List<LeaveModel>>? _allLeavesSub;
 
   // ── Computed stats for HR ─────────────────────────────────────────────────
 
-  int get totalLeaves    => allLeaves.length;
-  int get pendingLeaves  => allLeaves.where((l) => l.status == LeaveStatus.pending).length;
-  int get approvedLeaves => allLeaves.where((l) => l.status == LeaveStatus.approved).length;
-  int get rejectedLeaves => allLeaves.where((l) => l.status == LeaveStatus.rejected).length;
+  int get totalLeaves => allLeaves.length;
+  int get pendingLeaves =>
+      allLeaves.where((l) => l.status == LeaveStatus.pending).length;
+  int get approvedLeaves =>
+      allLeaves.where((l) => l.status == LeaveStatus.approved).length;
+  int get rejectedLeaves =>
+      allLeaves.where((l) => l.status == LeaveStatus.rejected).length;
 
   /// Total days on leave (counts half days as 0.5)
   double get totalDeductedDays =>
       allLeaves.fold(0.0, (sum, l) => sum + l.deductedDays);
 
   /// Half-day leave requests count
-  int get halfDayLeaves =>
-      allLeaves.where((l) => l.isHalfDay).length;
+  int get halfDayLeaves => allLeaves.where((l) => l.isHalfDay).length;
 
   // ── Init ──────────────────────────────────────────────────────────────────
 
@@ -66,14 +68,15 @@ class LeaveViewModel extends ChangeNotifier {
   // ── Employee: submit ──────────────────────────────────────────────────────
 
   Future<bool> submitLeave({
-    required String        userId,
-    required String        employeeName,
-    required String        employeeRole,
-    required LeaveType     type,
+    required String userId,
+    required String employeeName,
+    required String emp_id,
+    required String employeeRole,
+    required LeaveType type,
     required LeaveDuration duration,
-    required DateTime      fromDate,
-    required DateTime      toDate,
-    required String        reason,
+    required DateTime fromDate,
+    required DateTime toDate,
+    required String reason,
   }) async {
     // ── Validation ────────────────────────────────────────────────────────
     if (reason.trim().isEmpty) {
@@ -95,19 +98,22 @@ class LeaveViewModel extends ChangeNotifier {
     // Can't apply both first and second half on same day
     // (would amount to a full day — user should pick fullDay instead)
     if (duration.isHalfDay) {
-      final existing = myLeaves.where((l) =>
-      l.status != LeaveStatus.rejected &&
-          l.status != LeaveStatus.cancelled &&
-          isSameDay(l.fromDate, fromDate) &&
-          l.isHalfDay,
-      ).toList();
+      final existing = myLeaves
+          .where(
+            (l) =>
+                l.status != LeaveStatus.rejected &&
+                l.status != LeaveStatus.cancelled &&
+                isSameDay(l.fromDate, fromDate) &&
+                l.isHalfDay,
+          )
+          .toList();
 
       if (existing.isNotEmpty) {
         final other = existing.first;
         if (other.duration != duration) {
           _setError(
             'You already have a ${other.duration.label} leave on this day. '
-                'Consider applying for a full day instead.',
+            'Consider applying for a full day instead.',
           );
           return false;
         } else {
@@ -118,30 +124,31 @@ class LeaveViewModel extends ChangeNotifier {
     }
 
     // ── Submit ────────────────────────────────────────────────────────────
-    state        = LeaveViewState.submitting;
+    state = LeaveViewState.submitting;
     errorMessage = null;
     notifyListeners();
 
     try {
       // For half days, toDate == fromDate; service enforces this too
-      final effectiveTo    = duration.isHalfDay ? fromDate : toDate;
-      final days           = effectiveTo.difference(fromDate).inDays + 1;
-      final deductedDays   = duration.isHalfDay ? 0.5 : days.toDouble();
+      final effectiveTo = duration.isHalfDay ? fromDate : toDate;
+      final days = effectiveTo.difference(fromDate).inDays + 1;
+      final deductedDays = duration.isHalfDay ? 0.5 : days.toDouble();
 
       final leave = LeaveModel(
-        id:           '',
-        userId:       userId,
+        id: '',
+        userId: userId,
         employeeName: employeeName,
+        emp_id: emp_id,
         employeeRole: employeeRole,
-        type:         type,
-        duration:     duration,
-        fromDate:     fromDate,
-        toDate:       effectiveTo,
-        days:         days,
+        type: type,
+        duration: duration,
+        fromDate: fromDate,
+        toDate: effectiveTo,
+        days: days,
         deductedDays: deductedDays,
-        reason:       reason.trim(),
-        status:       LeaveStatus.pending,
-        submittedAt:  DateTime.now(),
+        reason: reason.trim(),
+        status: LeaveStatus.pending,
+        submittedAt: DateTime.now(),
       );
 
       await _service.submitLeave(leave);
@@ -197,17 +204,19 @@ class LeaveViewModel extends ChangeNotifier {
   // ── Filter helpers ────────────────────────────────────────────────────────
 
   List<LeaveModel> filtered({
-    String?        search,
-    LeaveType?     type,
+    String? search,
+    LeaveType? type,
     LeaveDuration? duration,
-    LeaveStatus?   status,
+    LeaveStatus? status,
   }) {
     return allLeaves.where((l) {
-      final matchSearch   = search == null || search.isEmpty ||
+      final matchSearch =
+          search == null ||
+          search.isEmpty ||
           l.employeeName.toLowerCase().contains(search.toLowerCase());
-      final matchType     = type     == null || l.type     == type;
+      final matchType = type == null || l.type == type;
       final matchDuration = duration == null || l.duration == duration;
-      final matchStatus   = status   == null || l.status   == status;
+      final matchStatus = status == null || l.status == status;
       return matchSearch && matchType && matchDuration && matchStatus;
     }).toList();
   }
@@ -217,24 +226,26 @@ class LeaveViewModel extends ChangeNotifier {
       allLeaves.where((l) => l.userId == userId).toList();
 
   /// Returns approved leaves for a specific date — useful for attendance view.
-  List<LeaveModel> approvedLeavesOnDate(DateTime date) =>
-      allLeaves.where((l) =>
-      l.status == LeaveStatus.approved &&
-          !date.isBefore(l.fromDate) &&
-          !date.isAfter(l.toDate),
-      ).toList();
+  List<LeaveModel> approvedLeavesOnDate(DateTime date) => allLeaves
+      .where(
+        (l) =>
+            l.status == LeaveStatus.approved &&
+            !date.isBefore(l.fromDate) &&
+            !date.isAfter(l.toDate),
+      )
+      .toList();
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   void clearError() {
     errorMessage = null;
-    state        = LeaveViewState.idle;
+    state = LeaveViewState.idle;
     notifyListeners();
   }
 
   void _setError(String message) {
     errorMessage = message;
-    state        = LeaveViewState.error;
+    state = LeaveViewState.error;
     notifyListeners();
   }
 

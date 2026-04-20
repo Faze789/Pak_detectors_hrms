@@ -23,11 +23,11 @@ class PerformanceService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   // ── Collection references ─────────────────────────────────
-  CollectionReference get _goals      => _db.collection('quarterly_goals');
-  CollectionReference get _rules      => _db.collection('performance_rules');
-  CollectionReference get _monthly    => _db.collection('monthly_deductions');
-  CollectionReference get _barriers   => _db.collection('barriers');
-  CollectionReference get _users      => _db.collection('users');
+  CollectionReference get _goals => _db.collection('quarterly_goals');
+  CollectionReference get _rules => _db.collection('performance_rules');
+  CollectionReference get _monthly => _db.collection('monthly_deductions');
+  CollectionReference get _barriers => _db.collection('barriers');
+  CollectionReference get _users => _db.collection('users');
   CollectionReference get _standalone => _db.collection('standalone_tasks');
   CollectionReference get _employeeGoalsColl => _db.collection('goals');
 
@@ -39,10 +39,12 @@ class PerformanceService {
   // ============================================================
 
   Stream<Map<String, dynamic>> watchEmployeeProfile(String employeeId) {
-    return _users.doc(employeeId).snapshots().map(
-          (snap) =>
-      snap.exists ? (snap.data() as Map<String, dynamic>) : {},
-    );
+    return _users
+        .doc(employeeId)
+        .snapshots()
+        .map(
+          (snap) => snap.exists ? (snap.data() as Map<String, dynamic>) : {},
+        );
   }
 
   // ============================================================
@@ -70,7 +72,8 @@ class PerformanceService {
   }
 
   Future<List<QuarterlyGoalModel>> getGoalsForEmployee(
-      String employeeId) async {
+    String employeeId,
+  ) async {
     final snap = await _goals
         .where('employeeId', isEqualTo: employeeId)
         .orderBy('startDate', descending: true)
@@ -97,21 +100,20 @@ class PerformanceService {
     return ref.id;
   }
 
-  Stream<List<EmployeeGoalModel>> watchEmployeeGoalsDocs(
-      String employeeId) {
+  Stream<List<EmployeeGoalModel>> watchEmployeeGoalsDocs(String employeeId) {
     return _employeeGoalsColl
         .where('employeeId', isEqualTo: employeeId)
         .snapshots()
         .map((s) {
-      final list = s.docs.map(EmployeeGoalModel.fromDoc).toList()
-        ..sort((a, b) {
-          final pa = a.priority == TaskPriority.prioritized ? 0 : 1;
-          final pb = b.priority == TaskPriority.prioritized ? 0 : 1;
-          if (pa != pb) return pa.compareTo(pb);
-          return a.dueDate.compareTo(b.dueDate);
+          final list = s.docs.map(EmployeeGoalModel.fromDoc).toList()
+            ..sort((a, b) {
+              final pa = a.priority == TaskPriority.prioritized ? 0 : 1;
+              final pb = b.priority == TaskPriority.prioritized ? 0 : 1;
+              if (pa != pb) return pa.compareTo(pb);
+              return a.dueDate.compareTo(b.dueDate);
+            });
+          return list;
         });
-      return list;
-    });
   }
 
   Stream<List<EmployeeGoalModel>> watchAllEmployeeGoalsDocs() {
@@ -145,10 +147,13 @@ class PerformanceService {
   /// Employee saves/updates their weekly breakdown for a goal.
   /// Replaces only pending tasks so completed/missed ones are preserved.
   Future<void> createWeeklyTasks(
-      String goalId, List<WeeklyTaskModel> tasks) async {
+    String goalId,
+    List<WeeklyTaskModel> tasks,
+  ) async {
     final batch = _db.batch();
-    final existing =
-    await _tasks(goalId).where('status', isEqualTo: 'pending').get();
+    final existing = await _tasks(
+      goalId,
+    ).where('status', isEqualTo: 'pending').get();
     for (final doc in existing.docs) {
       batch.delete(doc.reference);
     }
@@ -189,11 +194,11 @@ class PerformanceService {
 
   /// Unscheduled tasks only — used by HR adhoc tab.
   Future<List<WeeklyTaskModel>> getUnscheduledTasksForGoal(
-      String goalId) async {
-    final snap = await _tasks(goalId)
-        .where('isUnscheduled', isEqualTo: true)
-        .orderBy('dueDate')
-        .get();
+    String goalId,
+  ) async {
+    final snap = await _tasks(
+      goalId,
+    ).where('isUnscheduled', isEqualTo: true).orderBy('dueDate').get();
     return snap.docs.map(WeeklyTaskModel.fromDoc).toList();
   }
 
@@ -203,7 +208,8 @@ class PerformanceService {
 
   /// Watch pending standalone tasks for an employee (real-time).
   Stream<List<WeeklyTaskModel>> watchStandaloneTasksForEmployee(
-      String employeeId) {
+    String employeeId,
+  ) {
     return _standalone
         .where('employeeId', isEqualTo: employeeId)
         .where('status', isEqualTo: TaskStatus.pending.name)
@@ -213,7 +219,8 @@ class PerformanceService {
 
   /// One-shot fetch of standalone tasks for an employee.
   Future<List<WeeklyTaskModel>> getStandaloneTasksForEmployee(
-      String employeeId) async {
+    String employeeId,
+  ) async {
     final snap = await _standalone
         .where('employeeId', isEqualTo: employeeId)
         .where('status', isEqualTo: TaskStatus.pending.name)
@@ -239,11 +246,12 @@ class PerformanceService {
   /// Tasks due in the current calendar week for this employee.
   /// Merges quarterly sub-collection tasks + standalone tasks.
   Future<List<WeeklyTaskModel>> getTasksForCurrentWeek(
-      String employeeId) async {
-    final now       = DateTime.now();
-    final monday    = now.subtract(Duration(days: now.weekday - 1));
+    String employeeId,
+  ) async {
+    final now = DateTime.now();
+    final monday = now.subtract(Duration(days: now.weekday - 1));
     final weekStart = DateTime(monday.year, monday.month, monday.day);
-    final weekEnd   = weekStart.add(const Duration(days: 7));
+    final weekEnd = weekStart.add(const Duration(days: 7));
 
     // 1 — Quarterly tasks
     List<WeeklyTaskModel> quarterlyTasks = [];
@@ -251,8 +259,10 @@ class PerformanceService {
       final snap = await _db
           .collectionGroup('weekly_tasks')
           .where('employeeId', isEqualTo: employeeId)
-          .where('dueDate',
-          isGreaterThanOrEqualTo: Timestamp.fromDate(weekStart))
+          .where(
+            'dueDate',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(weekStart),
+          )
           .where('dueDate', isLessThan: Timestamp.fromDate(weekEnd))
           .where('status', isEqualTo: TaskStatus.pending.name)
           .get();
@@ -262,8 +272,10 @@ class PerformanceService {
       final goals = await getGoalsForEmployee(employeeId);
       for (final goal in goals) {
         final snap = await _tasks(goal.id)
-            .where('dueDate',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(weekStart))
+            .where(
+              'dueDate',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(weekStart),
+            )
             .where('dueDate', isLessThan: Timestamp.fromDate(weekEnd))
             .get();
         for (final doc in snap.docs) {
@@ -285,12 +297,14 @@ class PerformanceService {
   // ============================================================
 
   Future<List<WeeklyTaskModel>> getTasksForMonth(
-      String employeeId, String monthStr) async {
-    final parts      = monthStr.split('-');
-    final year       = int.parse(parts[0]);
-    final month      = int.parse(parts[1]);
+    String employeeId,
+    String monthStr,
+  ) async {
+    final parts = monthStr.split('-');
+    final year = int.parse(parts[0]);
+    final month = int.parse(parts[1]);
     final monthStart = DateTime(year, month, 1);
-    final monthEnd   = DateTime(year, month + 1, 1);
+    final monthEnd = DateTime(year, month + 1, 1);
 
     // Quarterly tasks
     List<WeeklyTaskModel> all = [];
@@ -298,8 +312,10 @@ class PerformanceService {
       final snap = await _db
           .collectionGroup('weekly_tasks')
           .where('employeeId', isEqualTo: employeeId)
-          .where('dueDate',
-          isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
+          .where(
+            'dueDate',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart),
+          )
           .where('dueDate', isLessThan: Timestamp.fromDate(monthEnd))
           .get();
       all = snap.docs.map(WeeklyTaskModel.fromDoc).toList();
@@ -307,8 +323,10 @@ class PerformanceService {
       final goals = await getGoalsForEmployee(employeeId);
       for (final goal in goals) {
         final snap = await _tasks(goal.id)
-            .where('dueDate',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
+            .where(
+              'dueDate',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart),
+            )
             .where('dueDate', isLessThan: Timestamp.fromDate(monthEnd))
             .get();
         all.addAll(snap.docs.map(WeeklyTaskModel.fromDoc));
@@ -319,8 +337,10 @@ class PerformanceService {
     try {
       final snap = await _standalone
           .where('employeeId', isEqualTo: employeeId)
-          .where('dueDate',
-          isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
+          .where(
+            'dueDate',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart),
+          )
           .where('dueDate', isLessThan: Timestamp.fromDate(monthEnd))
           .get();
       all.addAll(snap.docs.map(WeeklyTaskModel.fromDoc));
@@ -341,7 +361,8 @@ class PerformanceService {
     required PerformanceRulesModel rules,
     String? attachmentType,
   }) async {
-    final isStandalone = attachmentType == 'currentWeek' ||
+    final isStandalone =
+        attachmentType == 'currentWeek' ||
         attachmentType == 'upcomingWeek' ||
         goalId.isEmpty;
 
@@ -356,7 +377,7 @@ class PerformanceService {
     }
 
     // Quarterly task — update and propagate progress to goal
-    final batch   = _db.batch();
+    final batch = _db.batch();
     final taskRef = _tasks(goalId).doc(taskId);
     final goalRef = _goals.doc(goalId);
 
@@ -369,16 +390,18 @@ class PerformanceService {
     // Only completion increases progress
     if (status == TaskStatus.completed) {
       final goalSnap = await goalRef.get();
-      final goal     = QuarterlyGoalModel.fromDoc(goalSnap);
+      final goal = QuarterlyGoalModel.fromDoc(goalSnap);
       final newProgress =
-      (goal.currentProgress + rules.completedTaskProgressPercent)
-          .clamp(0.0, 100.0);
+          (goal.currentProgress + rules.completedTaskProgressPercent).clamp(
+            0.0,
+            100.0,
+          );
       final newStatus = newProgress >= 100
           ? GoalStatus.completed
           : GoalStatus.inProgress;
       batch.update(goalRef, {
         'currentProgress': newProgress,
-        'status':          newStatus.name,
+        'status': newStatus.name,
       });
     }
 
@@ -400,25 +423,26 @@ class PerformanceService {
     required String monthStr,
     required PerformanceRulesModel rules,
   }) async {
-    final userDoc  = await _users.doc(employeeId).get();
+    final userDoc = await _users.doc(employeeId).get();
     final userData = userDoc.data() as Map<String, dynamic>;
     final double salary = (userData['salary'] ?? 0).toDouble();
 
     // Includes both quarterly and standalone tasks
     final tasks = await getTasksForMonth(employeeId, monthStr);
 
-    final completed =
-        tasks.where((t) => t.status == TaskStatus.completed).length;
-    final missed  = tasks.where((t) => t.status == TaskStatus.missed).length;
+    final completed = tasks
+        .where((t) => t.status == TaskStatus.completed)
+        .length;
+    final missed = tasks.where((t) => t.status == TaskStatus.missed).length;
     final weekend = tasks.where((t) => t.status == TaskStatus.weekend).length;
 
     final deductionAmount =
         missed * (rules.missedTaskDeductionPercent / 100) * salary;
 
-    final scorable =
-        tasks.where((t) => t.status != TaskStatus.weekend).length;
-    final performanceScore =
-    scorable > 0 ? (completed / scorable * 100).clamp(0.0, 100.0) : 0.0;
+    final scorable = tasks.where((t) => t.status != TaskStatus.weekend).length;
+    final performanceScore = scorable > 0
+        ? (completed / scorable * 100).clamp(0.0, 100.0)
+        : 0.0;
 
     double bonusAmount = 0;
     if (performanceScore >= rules.bonusThresholdScore &&
@@ -430,24 +454,24 @@ class PerformanceService {
 
     // Parse month string once — used for both the model and the
     // integer fields we now persist alongside it.
-    final parts    = monthStr.split('-');
-    final yearInt  = int.parse(parts[0]);
+    final parts = monthStr.split('-');
+    final yearInt = int.parse(parts[0]);
     final monthInt = int.parse(parts[1]);
 
     final docId = '${employeeId}_${monthStr.replaceAll('-', '_')}';
     final model = MonthlyDeductionModel(
-      id:                docId,
-      employeeId:        employeeId,
-      month:             monthStr,
+      id: docId,
+      employeeId: employeeId,
+      month: monthStr,
       totalTasksInMonth: tasks.length,
-      completedTasks:    completed,
-      missedTasks:       missed,
-      weekendTasks:      weekend,
-      deductionAmount:   deductionAmount,
-      bonusAmount:       bonusAmount,
-      performanceScore:  performanceScore,
-      salarySnapshot:    salary,
-      calculatedAt:      DateTime.now(),
+      completedTasks: completed,
+      missedTasks: missed,
+      weekendTasks: weekend,
+      deductionAmount: deductionAmount,
+      bonusAmount: bonusAmount,
+      performanceScore: performanceScore,
+      salarySnapshot: salary,
+      calculatedAt: DateTime.now(),
     );
 
     // FIX: persist monthNum + year as integers so the integer-
@@ -455,14 +479,14 @@ class PerformanceService {
     await _monthly.doc(docId).set({
       ...model.toMap(),
       'monthNum': monthInt,
-      'year':     yearInt,
+      'year': yearInt,
     });
 
     if (deductionAmount > 0 || bonusAmount > 0) {
       await _users.doc(employeeId).update({
         'lastSalaryAdjustment': bonusAmount - deductionAmount,
-        'lastAdjustmentMonth':  monthStr,
-        'lastAdjustmentAt':     Timestamp.fromDate(DateTime.now()),
+        'lastAdjustmentMonth': monthStr,
+        'lastAdjustmentAt': Timestamp.fromDate(DateTime.now()),
       });
     }
 
@@ -470,18 +494,17 @@ class PerformanceService {
   }
 
   Future<MonthlyDeductionModel?> getCurrentMonthDeduction(
-      String employeeId) async {
-    final now      = DateTime.now();
-    final monthStr =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}';
+    String employeeId,
+  ) async {
+    final now = DateTime.now();
+    final monthStr = '${now.year}-${now.month.toString().padLeft(2, '0')}';
     final docId = '${employeeId}_${monthStr.replaceAll('-', '_')}';
-    final doc   = await _monthly.doc(docId).get();
+    final doc = await _monthly.doc(docId).get();
     if (!doc.exists) return null;
     return MonthlyDeductionModel.fromDoc(doc);
   }
 
-  Stream<List<MonthlyDeductionModel>> watchMonthlyHistory(
-      String employeeId) {
+  Stream<List<MonthlyDeductionModel>> watchMonthlyHistory(String employeeId) {
     return _monthly
         .where('employeeId', isEqualTo: employeeId)
         .orderBy('month', descending: true)
@@ -502,7 +525,9 @@ class PerformanceService {
   }
 
   Future<void> savePerformanceRules(
-      PerformanceRulesModel rules, String updatedBy) async {
+    PerformanceRulesModel rules,
+    String updatedBy,
+  ) async {
     await _rules.doc('global').set({
       ...rules.toMap(),
       'updatedBy': updatedBy,
@@ -535,9 +560,9 @@ class PerformanceService {
   }
 
   Future<void> resolveBarrier(String barrierId) async {
-    await _barriers
-        .doc(barrierId)
-        .update({'status': BarrierStatus.resolved.name});
+    await _barriers.doc(barrierId).update({
+      'status': BarrierStatus.resolved.name,
+    });
   }
 
   // ============================================================
@@ -545,8 +570,7 @@ class PerformanceService {
   // ============================================================
 
   Future<List<Map<String, dynamic>>> getAllEmployees() async {
-    final snap =
-    await _users.where('role', isEqualTo: 'employee').get();
+    final snap = await _users.where('role', isEqualTo: 'employee').get();
     return snap.docs
         .map((d) => {'id': d.id, ...(d.data() as Map<String, dynamic>)})
         .toList();

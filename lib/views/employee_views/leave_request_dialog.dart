@@ -10,18 +10,20 @@ import '../../viewmodels/leave_viewmodel.dart';
 // ── Public entry point ────────────────────────────────────────────────────────
 
 Future<void> showLeaveRequestDialog(
-    BuildContext context, {
-      required String userId,
-      required String employeeName,
-      required String employeeRole,
-    }) async {
+  BuildContext context, {
+  required String userId,
+  required String employeeName,
+  required String employeeId,
+  required String employeeRole,
+}) async {
   await showDialog(
     context: context,
     barrierDismissible: false,
     builder: (_) => _LeaveRequestDialog(
-      userId:       userId,
+      userId: userId,
       employeeName: employeeName,
       employeeRole: employeeRole,
+      employeeId: employeeId,
     ),
   );
 }
@@ -32,11 +34,13 @@ class _LeaveRequestDialog extends StatefulWidget {
   final String userId;
   final String employeeName;
   final String employeeRole;
+  final String employeeId;
 
   const _LeaveRequestDialog({
     required this.userId,
     required this.employeeName,
     required this.employeeRole,
+    required this.employeeId,
   });
 
   @override
@@ -44,21 +48,19 @@ class _LeaveRequestDialog extends StatefulWidget {
 }
 
 class _LeaveRequestDialogState extends State<_LeaveRequestDialog> {
-  final _formKey    = GlobalKey<FormState>();
+  final _formKey = GlobalKey<FormState>();
   final _reasonCtrl = TextEditingController();
 
-  LeaveType     _type       = LeaveType.sick;
-  LeaveDuration _duration   = LeaveDuration.fullDay;
-  DateTime      _fromDate   = DateTime.now();
-  DateTime      _toDate     = DateTime.now();
-  bool          _submitting = false;
+  LeaveType _type = LeaveType.sick;
+  LeaveDuration _duration = LeaveDuration.fullDay;
+  DateTime _fromDate = DateTime.now();
+  DateTime _toDate = DateTime.now();
+  bool _submitting = false;
 
   // For half day, toDate always equals fromDate
   bool get _isHalfDay => _duration != LeaveDuration.fullDay;
 
-  int get _days => _isHalfDay
-      ? 1
-      : _toDate.difference(_fromDate).inDays + 1;
+  int get _days => _isHalfDay ? 1 : _toDate.difference(_fromDate).inDays + 1;
 
   double get _deductedDays => _isHalfDay ? 0.5 : _days.toDouble();
 
@@ -72,13 +74,13 @@ class _LeaveRequestDialogState extends State<_LeaveRequestDialog> {
 
   Future<void> _pickDate({required bool isFrom}) async {
     final initial = isFrom ? _fromDate : _toDate;
-    final first   = isFrom ? DateTime.now() : _fromDate;
+    final first = isFrom ? DateTime.now() : _fromDate;
 
     final picked = await showDatePicker(
       context: context,
       initialDate: initial.isBefore(first) ? first : initial,
-      firstDate:   first,
-      lastDate:    DateTime.now().add(const Duration(days: 365)),
+      firstDate: first,
+      lastDate: DateTime.now().add(const Duration(days: 365)),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
           colorScheme: const ColorScheme.light(primary: Color(0xFF2563EB)),
@@ -119,16 +121,17 @@ class _LeaveRequestDialogState extends State<_LeaveRequestDialog> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _submitting = true);
 
-    final vm      = context.read<LeaveViewModel>();
+    final vm = context.read<LeaveViewModel>();
     final success = await vm.submitLeave(
-      userId:       widget.userId,
+      userId: widget.userId,
       employeeName: widget.employeeName,
+      emp_id: widget.employeeId,
       employeeRole: widget.employeeRole,
-      type:         _type,
-      duration:     _duration,
-      fromDate:     _fromDate,
-      toDate:       _toDate,
-      reason:       _reasonCtrl.text,
+      type: _type,
+      duration: _duration,
+      fromDate: _fromDate,
+      toDate: _toDate,
+      reason: _reasonCtrl.text,
     );
 
     if (!mounted) return;
@@ -168,7 +171,6 @@ class _LeaveRequestDialogState extends State<_LeaveRequestDialog> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-
                 // ── Header ──────────────────────────────────────────────
                 Row(
                   children: [
@@ -178,22 +180,32 @@ class _LeaveRequestDialogState extends State<_LeaveRequestDialog> {
                         color: const Color(0xFFEFF6FF),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(Icons.calendar_today_outlined,
-                          color: Color(0xFF2563EB), size: 20),
+                      child: const Icon(
+                        Icons.calendar_today_outlined,
+                        color: Color(0xFF2563EB),
+                        size: 20,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     const Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Request Leave',
-                              style: TextStyle(
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF1E293B))),
-                          Text('Fill in the details below',
-                              style: TextStyle(
-                                  fontSize: 12, color: Color(0xFF64748B))),
+                          Text(
+                            'Request Leave',
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1E293B),
+                            ),
+                          ),
+                          Text(
+                            'Fill in the details below',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -216,10 +228,7 @@ class _LeaveRequestDialogState extends State<_LeaveRequestDialog> {
                     final selected = _type == t;
                     return GestureDetector(
                       onTap: () => setState(() => _type = t),
-                      child: _Chip(
-                        label: t.label,
-                        selected: selected,
-                      ),
+                      child: _Chip(label: t.label, selected: selected),
                     );
                   }).toList(),
                 ),
@@ -252,45 +261,49 @@ class _LeaveRequestDialogState extends State<_LeaveRequestDialog> {
                 const SizedBox(height: 16),
 
                 // ── Date range ───────────────────────────────────────────
-                Row(children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _FieldLabel(text: 'From Date'),
-                        const SizedBox(height: 6),
-                        _DateTile(
-                          date: fmt.format(_fromDate),
-                          onTap: () => _pickDate(isFrom: true),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Only show To Date for full day leaves
-                  if (!_isHalfDay) ...[
-                    const SizedBox(width: 12),
+                Row(
+                  children: [
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const _FieldLabel(text: 'To Date'),
+                          const _FieldLabel(text: 'From Date'),
                           const SizedBox(height: 6),
                           _DateTile(
-                            date: fmt.format(_toDate),
-                            onTap: () => _pickDate(isFrom: false),
+                            date: fmt.format(_fromDate),
+                            onTap: () => _pickDate(isFrom: true),
                           ),
                         ],
                       ),
                     ),
+                    // Only show To Date for full day leaves
+                    if (!_isHalfDay) ...[
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const _FieldLabel(text: 'To Date'),
+                            const SizedBox(height: 6),
+                            _DateTile(
+                              date: fmt.format(_toDate),
+                              onTap: () => _pickDate(isFrom: false),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
-                ]),
+                ),
                 const SizedBox(height: 8),
 
                 // Days summary pill
                 Center(
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 5),
+                      horizontal: 14,
+                      vertical: 5,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFEFF6FF),
                       borderRadius: BorderRadius.circular(20),
@@ -299,11 +312,12 @@ class _LeaveRequestDialogState extends State<_LeaveRequestDialog> {
                       _isHalfDay
                           ? '0.5 day deducted from balance'
                           : '$_days day${_days > 1 ? 's' : ''} selected'
-                          ' · $_deductedDays deducted',
+                                ' · $_deductedDays deducted',
                       style: const TextStyle(
-                          color: Color(0xFF2563EB),
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13),
+                        color: Color(0xFF2563EB),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
                 ),
@@ -318,21 +332,23 @@ class _LeaveRequestDialogState extends State<_LeaveRequestDialog> {
                   decoration: InputDecoration(
                     hintText: 'Describe your reason...',
                     hintStyle: const TextStyle(
-                        color: Color(0xFFCBD5E1), fontSize: 13),
+                      color: Color(0xFFCBD5E1),
+                      fontSize: 13,
+                    ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
-                      borderSide:
-                      const BorderSide(color: Color(0xFFE2E8F0)),
+                      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
-                      borderSide:
-                      const BorderSide(color: Color(0xFFE2E8F0)),
+                      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                       borderSide: const BorderSide(
-                          color: Color(0xFF2563EB), width: 2),
+                        color: Color(0xFF2563EB),
+                        width: 2,
+                      ),
                     ),
                     contentPadding: const EdgeInsets.all(12),
                   ),
@@ -352,19 +368,25 @@ class _LeaveRequestDialogState extends State<_LeaveRequestDialog> {
                       backgroundColor: const Color(0xFF2563EB),
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                     child: _submitting
                         ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                          color: Colors.white, strokeWidth: 2),
-                    )
-                        : const Text('Submit Request',
-                        style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold)),
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text(
+                            'Submit Request',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                   ),
                 ),
               ],
@@ -377,9 +399,12 @@ class _LeaveRequestDialogState extends State<_LeaveRequestDialog> {
 
   Color _durationColor(LeaveDuration d) {
     switch (d) {
-      case LeaveDuration.fullDay:    return const Color(0xFF2563EB);
-      case LeaveDuration.firstHalf:  return const Color(0xFF7C3AED);
-      case LeaveDuration.secondHalf: return const Color(0xFF0891B2);
+      case LeaveDuration.fullDay:
+        return const Color(0xFF2563EB);
+      case LeaveDuration.firstHalf:
+        return const Color(0xFF7C3AED);
+      case LeaveDuration.secondHalf:
+        return const Color(0xFF0891B2);
     }
   }
 }
@@ -396,9 +421,7 @@ class _HalfDayBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: isFirst
-            ? const Color(0xFFF5F3FF)
-            : const Color(0xFFECFEFF),
+        color: isFirst ? const Color(0xFFF5F3FF) : const Color(0xFFECFEFF),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: isFirst
@@ -411,9 +434,7 @@ class _HalfDayBanner extends StatelessWidget {
           Icon(
             isFirst ? Icons.wb_sunny_outlined : Icons.nights_stay_outlined,
             size: 16,
-            color: isFirst
-                ? const Color(0xFF7C3AED)
-                : const Color(0xFF0891B2),
+            color: isFirst ? const Color(0xFF7C3AED) : const Color(0xFF0891B2),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -440,8 +461,8 @@ class _HalfDayBanner extends StatelessWidget {
 
 class _Chip extends StatelessWidget {
   final String label;
-  final bool   selected;
-  final Color  selectedColor;
+  final bool selected;
+  final Color selectedColor;
 
   const _Chip({
     required this.label,
@@ -478,9 +499,10 @@ class _FieldLabel extends StatelessWidget {
   Widget build(BuildContext context) => Text(
     text,
     style: const TextStyle(
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-        color: Color(0xFF374151)),
+      fontSize: 13,
+      fontWeight: FontWeight.w600,
+      color: Color(0xFF374151),
+    ),
   );
 }
 
@@ -493,23 +515,30 @@ class _DateTile extends StatelessWidget {
   Widget build(BuildContext context) => GestureDetector(
     onTap: onTap,
     child: Container(
-      padding:
-      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
-      child: Row(children: [
-        const Icon(Icons.calendar_month_outlined,
-            color: Color(0xFF2563EB), size: 16),
-        const SizedBox(width: 8),
-        Text(date,
+      child: Row(
+        children: [
+          const Icon(
+            Icons.calendar_month_outlined,
+            color: Color(0xFF2563EB),
+            size: 16,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            date,
             style: const TextStyle(
-                fontSize: 13,
-                color: Color(0xFF1E293B),
-                fontWeight: FontWeight.w500)),
-      ]),
+              fontSize: 13,
+              color: Color(0xFF1E293B),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
     ),
   );
 }

@@ -79,7 +79,7 @@ class _EmployeeProfileViewState extends State<EmployeeProfileView>
 
       body: Column(
         children: [
-          /// PROFILE HEADER
+          // / PROFILE HEADER
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(24),
@@ -108,7 +108,7 @@ class _EmployeeProfileViewState extends State<EmployeeProfileView>
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  widget.employee.role ?? 'Employee',
+                  widget.employee.role,
                   style: const TextStyle(
                     fontSize: 16,
                     color: Color(0xFFCBD5E1),
@@ -116,7 +116,7 @@ class _EmployeeProfileViewState extends State<EmployeeProfileView>
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  widget.employee.department ?? 'No Department',
+                  widget.employee.department,
                   style: const TextStyle(
                     fontSize: 14,
                     color: Color(0xFF94A3B8),
@@ -174,6 +174,7 @@ class _EmployeeProfileViewState extends State<EmployeeProfileView>
                     userId: widget.employee.uid,
                     employeeName: widget.employee.name,
                     employeeRole: widget.employee.role ?? 'Employee',
+                    emp_id: widget.employee.emp_id,
                     isHR: _isHR,
                   ),
 

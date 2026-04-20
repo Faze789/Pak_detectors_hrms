@@ -38,7 +38,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     _tabController = TabController(length: 5, vsync: this);
 
     final now = DateTime.now();
-    _selectedYear  = now.year;
+    _selectedYear = now.year;
     _selectedMonth = now.month;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -64,7 +64,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
 
   // ── Month picker dialog ───────────────────────────────────────────────────
   Future<void> _pickMonth() async {
-    int tempYear  = _selectedYear;
+    int tempYear = _selectedYear;
     int tempMonth = _selectedMonth;
 
     await showDialog(
@@ -84,9 +84,13 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                       icon: const Icon(Icons.chevron_left),
                       onPressed: () => setSt(() => tempYear--),
                     ),
-                    Text('$tempYear',
-                        style: const TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text(
+                      '$tempYear',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     IconButton(
                       icon: const Icon(Icons.chevron_right),
                       onPressed: () => setSt(() {
@@ -99,8 +103,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                 GridView.builder(
                   shrinkWrap: true,
                   itemCount: 12,
-                  gridDelegate:
-                  const SliverGridDelegateWithFixedCrossAxisCount(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 4,
                     childAspectRatio: 1.4,
                   ),
@@ -108,8 +111,10 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                     final m = i + 1;
                     final isSelected =
                         m == tempMonth && tempYear == _selectedYear;
-                    final isFuture =
-                    DateTime(tempYear, m).isAfter(DateTime.now());
+                    final isFuture = DateTime(
+                      tempYear,
+                      m,
+                    ).isAfter(DateTime.now());
                     return GestureDetector(
                       onTap: isFuture ? null : () => setSt(() => tempMonth = m),
                       child: Container(
@@ -144,21 +149,22 @@ class _MyProfileScreenState extends State<MyProfileScreen>
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel')),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB)),
+                backgroundColor: const Color(0xFF2563EB),
+              ),
               onPressed: () {
                 setState(() {
-                  _selectedYear  = tempYear;
+                  _selectedYear = tempYear;
                   _selectedMonth = tempMonth;
                 });
                 _loadAttendance();
                 Navigator.pop(ctx);
               },
-              child:
-              const Text('Apply', style: TextStyle(color: Colors.white)),
+              child: const Text('Apply', style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
@@ -174,9 +180,9 @@ class _MyProfileScreenState extends State<MyProfileScreen>
         builder: (context, empVm, attVm, _) {
           final Employee? employee = empVm.employees.isNotEmpty
               ? empVm.employees.firstWhere(
-                (e) => e.uid == widget.userId,
-            orElse: () => empVm.employees.first,
-          )
+                  (e) => e.uid == widget.userId,
+                  orElse: () => empVm.employees.first,
+                )
               : null;
 
           return NestedScrollView(
@@ -208,23 +214,30 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                     indicatorColor: const Color(0xFF2563EB),
                     indicatorWeight: 3,
                     labelStyle: const TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 13),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
                     tabs: const [
                       Tab(
-                          icon: Icon(Icons.person_outline, size: 18),
-                          text: 'Profile'),
+                        icon: Icon(Icons.person_outline, size: 18),
+                        text: 'Profile',
+                      ),
                       Tab(
-                          icon: Icon(Icons.event_available_outlined, size: 18),
-                          text: 'Attendance'),
+                        icon: Icon(Icons.event_available_outlined, size: 18),
+                        text: 'Attendance',
+                      ),
                       Tab(
-                          icon: Icon(Icons.calendar_today_outlined, size: 18),
-                          text: 'Leaves'),
+                        icon: Icon(Icons.calendar_today_outlined, size: 18),
+                        text: 'Leaves',
+                      ),
                       Tab(
-                          icon: Icon(Icons.trending_up_outlined, size: 18),
-                          text: 'Performance'),
+                        icon: Icon(Icons.trending_up_outlined, size: 18),
+                        text: 'Performance',
+                      ),
                       Tab(
-                          icon: Icon(Icons.attach_money_outlined, size: 18),
-                          text: 'Salary'),
+                        icon: Icon(Icons.attach_money_outlined, size: 18),
+                        text: 'Salary',
+                      ),
                     ],
                   ),
                 ),
@@ -235,9 +248,10 @@ class _MyProfileScreenState extends State<MyProfileScreen>
               controller: _tabController,
               children: [
                 _ProfileTab(
-                    employee: employee,
-                    empVm: empVm,
-                    userId: widget.userId),
+                  employee: employee,
+                  empVm: empVm,
+                  userId: widget.userId,
+                ),
                 _AttendanceTab(
                   attVm: attVm,
                   userId: widget.userId,
@@ -249,6 +263,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                   userId: widget.userId,
                   employeeName: employee?.name ?? '',
                   employeeRole: employee?.role ?? '',
+                  emp_id: employee?.emp_id ?? '',
                   isHR: (employee?.role ?? '').toLowerCase() == 'hr',
                 ),
                 _PerformanceTab(),
@@ -273,10 +288,10 @@ class _ProfileHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final name       = employee?.name ?? '—';
-    final role       = employee?.role ?? '—';
+    final name = employee?.name ?? '—';
+    final role = employee?.role ?? '—';
     final department = employee?.department ?? '—';
-    final empId      = employee?.uid ?? '—';
+    final empId = employee?.uid ?? '—';
     final statusColor = employee?.status == EmployeeStatus.active
         ? Colors.greenAccent
         : Colors.orangeAccent;
@@ -305,17 +320,16 @@ class _ProfileHeader extends StatelessWidget {
                     colors: [Color(0xFF3B82F6), Color(0xFF8B5CF6)],
                   ),
                   border: Border.all(color: Colors.white, width: 3),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black26, blurRadius: 8)
-                  ],
+                  boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 8)],
                 ),
                 alignment: Alignment.center,
                 child: Text(
                   _initials(name),
                   style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold),
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
               const SizedBox(width: 16),
@@ -327,17 +341,22 @@ class _ProfileHeader extends StatelessWidget {
                     Row(
                       children: [
                         Flexible(
-                          child: Text(name,
-                              style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold),
-                              overflow: TextOverflow.ellipsis),
+                          child: Text(
+                            name,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                         const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 2),
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.white24,
                             borderRadius: BorderRadius.circular(20),
@@ -346,16 +365,20 @@ class _ProfileHeader extends StatelessWidget {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Container(
-                                  width: 7,
-                                  height: 7,
-                                  decoration: BoxDecoration(
-                                      color: statusColor,
-                                      shape: BoxShape.circle)),
+                                width: 7,
+                                height: 7,
+                                decoration: BoxDecoration(
+                                  color: statusColor,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
                               const SizedBox(width: 4),
                               Text(
                                 employee?.status.name ?? 'active',
                                 style: const TextStyle(
-                                    color: Colors.white, fontSize: 11),
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                ),
                               ),
                             ],
                           ),
@@ -363,17 +386,22 @@ class _ProfileHeader extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text(role,
-                        style: const TextStyle(
-                            color: Colors.white70, fontSize: 13)),
+                    Text(
+                      role,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                      ),
+                    ),
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 12,
                       children: [
+                        _HeaderChip(icon: Icons.badge_outlined, text: empId),
                         _HeaderChip(
-                            icon: Icons.badge_outlined, text: empId),
-                        _HeaderChip(
-                            icon: Icons.business_outlined, text: department),
+                          icon: Icons.business_outlined,
+                          text: department,
+                        ),
                       ],
                     ),
                   ],
@@ -405,8 +433,7 @@ class _HeaderChip extends StatelessWidget {
     children: [
       Icon(icon, color: Colors.white70, size: 13),
       const SizedBox(width: 4),
-      Text(text,
-          style: const TextStyle(color: Colors.white70, fontSize: 11)),
+      Text(text, style: const TextStyle(color: Colors.white70, fontSize: 11)),
     ],
   );
 }
@@ -464,17 +491,20 @@ class _ProfileTab extends StatelessWidget {
           icon: Icons.mail_outline,
           children: [
             _InfoRow(
-                icon: Icons.mail_outline,
-                label: 'Email',
-                value: employee!.email),
+              icon: Icons.mail_outline,
+              label: 'Email',
+              value: employee!.email,
+            ),
             _InfoRow(
-                icon: Icons.phone_outlined,
-                label: 'Phone',
-                value: employee!.phone),
+              icon: Icons.phone_outlined,
+              label: 'Phone',
+              value: employee!.phone,
+            ),
             _InfoRow(
-                icon: Icons.location_on_outlined,
-                label: 'Location',
-                value: employee!.location),
+              icon: Icons.location_on_outlined,
+              label: 'Location',
+              value: employee!.location,
+            ),
           ],
         ),
         const SizedBox(height: 16),
@@ -483,21 +513,25 @@ class _ProfileTab extends StatelessWidget {
           icon: Icons.work_outline,
           children: [
             _InfoRow(
-                icon: Icons.badge_outlined,
-                label: 'Employee ID',
-                value: employee!.uid),
+              icon: Icons.badge_outlined,
+              label: 'Employee ID',
+              value: employee!.uid,
+            ),
             _InfoRow(
-                icon: Icons.business_outlined,
-                label: 'Department',
-                value: employee!.department),
+              icon: Icons.business_outlined,
+              label: 'Department',
+              value: employee!.department,
+            ),
             _InfoRow(
-                icon: Icons.work_outline,
-                label: 'Job Title',
-                value: employee!.role),
+              icon: Icons.work_outline,
+              label: 'Job Title',
+              value: employee!.role,
+            ),
             _InfoRow(
-                icon: Icons.calendar_today_outlined,
-                label: 'Join Date',
-                value: employee!.joinDate),
+              icon: Icons.calendar_today_outlined,
+              label: 'Join Date',
+              value: employee!.joinDate,
+            ),
           ],
         ),
         const SizedBox(height: 16),
@@ -516,7 +550,7 @@ class _ProfileTab extends StatelessWidget {
               Expanded(
                 child: Text(
                   'Employment details like department and role are managed by HR. '
-                      'Contact your HR manager for changes.',
+                  'Contact your HR manager for changes.',
                   style: TextStyle(color: Color(0xFF1E40AF), fontSize: 12),
                 ),
               ),
@@ -549,12 +583,13 @@ class _AttendanceTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final monthLabel =
-    DateFormat.yMMMM().format(DateTime(selectedYear, selectedMonth));
+    final monthLabel = DateFormat.yMMMM().format(
+      DateTime(selectedYear, selectedMonth),
+    );
 
     final archiveKey =
         '${selectedYear}_${selectedMonth.toString().padLeft(2, '0')}';
-    final archive   = attVm.monthlyArchiveCache[archiveKey];
+    final archive = attVm.monthlyArchiveCache[archiveKey];
     final isLoading = attVm.state == ViewState.loading;
 
     int present = 0, absent = 0, workingDays = 0;
@@ -574,8 +609,9 @@ class _AttendanceTab extends StatelessWidget {
       }
     }
 
-    final percentage =
-    workingDays > 0 ? ((present / workingDays) * 100).round() : 0;
+    final percentage = workingDays > 0
+        ? ((present / workingDays) * 100).round()
+        : 0;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -583,11 +619,14 @@ class _AttendanceTab extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(monthLabel,
-                style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1E293B))),
+            Text(
+              monthLabel,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1E293B),
+              ),
+            ),
             OutlinedButton.icon(
               onPressed: onPickMonth,
               icon: const Icon(Icons.calendar_month_outlined, size: 16),
@@ -595,8 +634,10 @@ class _AttendanceTab extends StatelessWidget {
               style: OutlinedButton.styleFrom(
                 foregroundColor: const Color(0xFF2563EB),
                 side: const BorderSide(color: Color(0xFF2563EB)),
-                padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
               ),
             ),
           ],
@@ -605,64 +646,75 @@ class _AttendanceTab extends StatelessWidget {
 
         if (isLoading)
           const Center(
-              child: Padding(
-                  padding: EdgeInsets.all(40),
-                  child: CircularProgressIndicator()))
+            child: Padding(
+              padding: EdgeInsets.all(40),
+              child: CircularProgressIndicator(),
+            ),
+          )
         else if (archive == null)
           Center(
             child: Padding(
               padding: const EdgeInsets.all(40),
               child: Column(
                 children: [
-                  Icon(Icons.event_busy_outlined,
-                      size: 56, color: Colors.grey.shade400),
+                  Icon(
+                    Icons.event_busy_outlined,
+                    size: 56,
+                    color: Colors.grey.shade400,
+                  ),
                   const SizedBox(height: 12),
-                  Text('No records for $monthLabel',
-                      style: TextStyle(color: Colors.grey.shade500)),
+                  Text(
+                    'No records for $monthLabel',
+                    style: TextStyle(color: Colors.grey.shade500),
+                  ),
                 ],
               ),
             ),
           )
         else ...[
-            GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 2.9,
-              children: [
-                _StatTile(
-                    label: 'Working Days',
-                    value: '$workingDays',
-                    icon: Icons.calendar_today_outlined,
-                    color: const Color(0xFF64748B)),
-                _StatTile(
-                    label: 'Present',
-                    value: '$present',
-                    icon: Icons.check_circle_outline,
-                    color: const Color(0xFF10B981)),
-                _StatTile(
-                    label: 'Absent',
-                    value: '$absent',
-                    icon: Icons.cancel_outlined,
-                    color: const Color(0xFFEF4444)),
-                _StatTile(
-                    label: 'Attendance %',
-                    value: '$percentage%',
-                    icon: Icons.bar_chart_outlined,
-                    color: const Color(0xFF2563EB)),
-              ],
-            ),
-            const SizedBox(height: 20),
-            _SectionCard(
-              title: 'Day-wise Records',
-              icon: Icons.list_alt_outlined,
-              children: dayEntries.map((e) {
-                return _AttendanceDayTile(record: e.value);
-              }).toList(),
-            ),
-          ],
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 2,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 2.9,
+            children: [
+              _StatTile(
+                label: 'Working Days',
+                value: '$workingDays',
+                icon: Icons.calendar_today_outlined,
+                color: const Color(0xFF64748B),
+              ),
+              _StatTile(
+                label: 'Present',
+                value: '$present',
+                icon: Icons.check_circle_outline,
+                color: const Color(0xFF10B981),
+              ),
+              _StatTile(
+                label: 'Absent',
+                value: '$absent',
+                icon: Icons.cancel_outlined,
+                color: const Color(0xFFEF4444),
+              ),
+              _StatTile(
+                label: 'Attendance %',
+                value: '$percentage%',
+                icon: Icons.bar_chart_outlined,
+                color: const Color(0xFF2563EB),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          _SectionCard(
+            title: 'Day-wise Records',
+            icon: Icons.list_alt_outlined,
+            children: dayEntries.map((e) {
+              return _AttendanceDayTile(record: e.value);
+            }).toList(),
+          ),
+        ],
       ],
     );
   }
@@ -674,7 +726,7 @@ class _AttendanceDayTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final date     = DateFormat.yMMMd().format(record.date);
+    final date = DateFormat.yMMMd().format(record.date);
     final isAbsent = record.status == AttendanceStatus.absent;
     final isCheckedOut = record.status == AttendanceStatus.checkedOut;
 
@@ -684,29 +736,25 @@ class _AttendanceDayTile extends StatelessWidget {
     final checkOut = record.checkOutTime != null
         ? DateFormat.jm().format(record.checkOutTime!)
         : '—';
-    final workedHours =
-    isCheckedOut ? _fmtDuration(record.totalWorkDuration) : null;
+    final workedHours = isCheckedOut
+        ? _fmtDuration(record.totalWorkDuration)
+        : null;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color:
-        isAbsent ? const Color(0xFFFEF2F2) : const Color(0xFFF0FDF4),
+        color: isAbsent ? const Color(0xFFFEF2F2) : const Color(0xFFF0FDF4),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: isAbsent
-              ? const Color(0xFFFECACA)
-              : const Color(0xFFBBF7D0),
+          color: isAbsent ? const Color(0xFFFECACA) : const Color(0xFFBBF7D0),
         ),
       ),
       child: Row(
         children: [
           Icon(
             isAbsent ? Icons.cancel_outlined : Icons.check_circle_outline,
-            color: isAbsent
-                ? const Color(0xFFEF4444)
-                : const Color(0xFF10B981),
+            color: isAbsent ? const Color(0xFFEF4444) : const Color(0xFF10B981),
             size: 22,
           ),
           const SizedBox(width: 12),
@@ -714,16 +762,23 @@ class _AttendanceDayTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(date,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                        color: Color(0xFF1E293B))),
+                Text(
+                  date,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                    color: Color(0xFF1E293B),
+                  ),
+                ),
                 const SizedBox(height: 4),
                 if (!isAbsent)
-                  Text('In: $checkIn  •  Out: $checkOut',
-                      style: const TextStyle(
-                          fontSize: 12, color: Color(0xFF64748B))),
+                  Text(
+                    'In: $checkIn  •  Out: $checkOut',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -731,8 +786,7 @@ class _AttendanceDayTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Container(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: isAbsent
                       ? const Color(0xFFEF4444)
@@ -742,16 +796,21 @@ class _AttendanceDayTile extends StatelessWidget {
                 child: Text(
                   isAbsent ? 'Absent' : 'Present',
                   style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold),
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
               if (workedHours != null) ...[
                 const SizedBox(height: 4),
-                Text(workedHours,
-                    style: const TextStyle(
-                        fontSize: 11, color: Color(0xFF64748B))),
+                Text(
+                  workedHours,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
               ],
             ],
           ),
@@ -781,21 +840,27 @@ class _PerformanceTab extends StatelessWidget {
   Widget build(BuildContext context) => ListView(
     padding: const EdgeInsets.all(16),
     children: [
-      Row(children: [
-        Expanded(
+      Row(
+        children: [
+          Expanded(
             child: _StatTile(
-                label: 'Completed Reviews',
-                value: '2',
-                icon: Icons.check_circle_outline,
-                color: const Color(0xFF10B981))),
-        const SizedBox(width: 12),
-        Expanded(
+              label: 'Completed Reviews',
+              value: '2',
+              icon: Icons.check_circle_outline,
+              color: const Color(0xFF10B981),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
             child: _StatTile(
-                label: 'Status',
-                value: 'All Done',
-                icon: Icons.flag_outlined,
-                color: const Color(0xFF2563EB))),
-      ]),
+              label: 'Status',
+              value: 'All Done',
+              icon: Icons.flag_outlined,
+              color: const Color(0xFF2563EB),
+            ),
+          ),
+        ],
+      ),
       const SizedBox(height: 16),
       _SectionCard(
         title: 'Quarterly Reviews',
@@ -827,26 +892,33 @@ class _QuarterTile extends StatelessWidget {
             color: const Color(0xFFEFF6FF),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: const Icon(Icons.assessment_outlined,
-              color: Color(0xFF2563EB), size: 20),
+          child: const Icon(
+            Icons.assessment_outlined,
+            color: Color(0xFF2563EB),
+            size: 20,
+          ),
         ),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(data['quarter']!,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 14)),
-              Text('Review Date: ${data['date']}',
-                  style: const TextStyle(
-                      fontSize: 12, color: Color(0xFF64748B))),
+              Text(
+                data['quarter']!,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+              Text(
+                'Review Date: ${data['date']}',
+                style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+              ),
             ],
           ),
         ),
         Container(
-          padding:
-          const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
             color: const Color(0xFFD1FAE5),
             borderRadius: BorderRadius.circular(20),
@@ -854,14 +926,20 @@ class _QuarterTile extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.check_circle_outline,
-                  color: Color(0xFF059669), size: 13),
+              const Icon(
+                Icons.check_circle_outline,
+                color: Color(0xFF059669),
+                size: 13,
+              ),
               const SizedBox(width: 4),
-              Text(data['score']!,
-                  style: const TextStyle(
-                      color: Color(0xFF059669),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12)),
+              Text(
+                data['score']!,
+                style: const TextStyle(
+                  color: Color(0xFF059669),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
             ],
           ),
         ),
@@ -907,17 +985,16 @@ class _SalaryTabState extends State<_SalaryTab> {
           .orderBy('monthNum', descending: true)
           .get();
 
-      final list =
-      snapshot.docs.map((d) => PayslipModel.fromDoc(d)).toList();
+      final list = snapshot.docs.map((d) => PayslipModel.fromDoc(d)).toList();
 
       setState(() {
-        _payslips  = list;
-        _selected  = list.isNotEmpty ? list.first : null;
+        _payslips = list;
+        _selected = list.isNotEmpty ? list.first : null;
         _isLoading = false;
       });
     } catch (e) {
       setState(() {
-        _error     = e.toString();
+        _error = e.toString();
         _isLoading = false;
       });
     }
@@ -938,20 +1015,27 @@ class _SalaryTabState extends State<_SalaryTab> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline,
-                  color: Color(0xFFEF4444), size: 48),
+              const Icon(
+                Icons.error_outline,
+                color: Color(0xFFEF4444),
+                size: 48,
+              ),
               const SizedBox(height: 12),
-              const Text('Failed to load payslips',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text(
+                'Failed to load payslips',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 6),
-              Text(_error!,
-                  style: const TextStyle(
-                      fontSize: 12, color: Color(0xFF64748B)),
-                  textAlign: TextAlign.center),
+              Text(
+                _error!,
+                style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 16),
               ElevatedButton(
-                  onPressed: _loadPayslips,
-                  child: const Text('Retry')),
+                onPressed: _loadPayslips,
+                child: const Text('Retry'),
+              ),
             ],
           ),
         ),
@@ -966,12 +1050,16 @@ class _SalaryTabState extends State<_SalaryTab> {
           children: [
             Icon(Icons.receipt_long_outlined, size: 56, color: Colors.grey),
             SizedBox(height: 12),
-            Text('No payslips found',
-                style: TextStyle(color: Colors.grey, fontSize: 15)),
+            Text(
+              'No payslips found',
+              style: TextStyle(color: Colors.grey, fontSize: 15),
+            ),
             SizedBox(height: 6),
-            Text('Payslips will appear here once payroll is run by HR.',
-                style: TextStyle(color: Colors.grey, fontSize: 12),
-                textAlign: TextAlign.center),
+            Text(
+              'Payslips will appear here once payroll is run by HR.',
+              style: TextStyle(color: Colors.grey, fontSize: 12),
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
       );
@@ -980,9 +1068,9 @@ class _SalaryTabState extends State<_SalaryTab> {
     final p = _selected!;
 
     // ── Resolved values from PayslipModel ────────────────────────────────────
-    final double grossPay        = p.grossPay;
+    final double grossPay = p.grossPay;
     final double totalDeductions = p.totalDeductions;
-    final double netPay          = p.netPay;
+    final double netPay = p.netPay;
     final double totalAllowances = p.totalAllowances;
 
     // Status colour
@@ -1001,14 +1089,16 @@ class _SalaryTabState extends State<_SalaryTab> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-
         // ── Month selector chips ─────────────────────────────────────────────
         if (_payslips.length > 1) ...[
-          const Text('Select Payslip',
-              style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF64748B))),
+          const Text(
+            'Select Payslip',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF64748B),
+            ),
+          ),
           const SizedBox(height: 8),
           SizedBox(
             height: 38,
@@ -1017,15 +1107,18 @@ class _SalaryTabState extends State<_SalaryTab> {
               itemCount: _payslips.length,
               separatorBuilder: (_, __) => const SizedBox(width: 8),
               itemBuilder: (_, i) {
-                final ps        = _payslips[i];
+                final ps = _payslips[i];
                 final isSelected = ps.id == _selected!.id;
-                final label = DateFormat.yMMM()
-                    .format(DateTime(ps.year, ps.monthNum));
+                final label = DateFormat.yMMM().format(
+                  DateTime(ps.year, ps.monthNum),
+                );
                 return GestureDetector(
                   onTap: () => setState(() => _selected = ps),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 8),
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: isSelected
                           ? const Color(0xFF2563EB)
@@ -1037,14 +1130,16 @@ class _SalaryTabState extends State<_SalaryTab> {
                             : const Color(0xFFE2E8F0),
                       ),
                     ),
-                    child: Text(label,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: isSelected
-                              ? Colors.white
-                              : const Color(0xFF475569),
-                        )),
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: isSelected
+                            ? Colors.white
+                            : const Color(0xFF475569),
+                      ),
+                    ),
                   ),
                 );
               },
@@ -1057,14 +1152,16 @@ class _SalaryTabState extends State<_SalaryTab> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(p.month,
-                style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1E293B))),
+            Text(
+              p.month,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1E293B),
+              ),
+            ),
             Container(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                 color: statusColor.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(20),
@@ -1086,9 +1183,10 @@ class _SalaryTabState extends State<_SalaryTab> {
                   Text(
                     p.status.name.toUpperCase(),
                     style: TextStyle(
-                        color: statusColor,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold),
+                      color: statusColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ],
               ),
@@ -1098,27 +1196,34 @@ class _SalaryTabState extends State<_SalaryTab> {
         const SizedBox(height: 16),
 
         // ── Overview tiles ───────────────────────────────────────────────────
-        Row(children: [
-          Expanded(
+        Row(
+          children: [
+            Expanded(
               child: _SalaryOverviewTile(
-                  label: 'Gross Pay',
-                  value: grossPay,
-                  icon: Icons.trending_up,
-                  color: const Color(0xFF10B981))),
-          const SizedBox(width: 12),
-          Expanded(
+                label: 'Gross Pay',
+                value: grossPay,
+                icon: Icons.trending_up,
+                color: const Color(0xFF10B981),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
               child: _SalaryOverviewTile(
-                  label: 'Deductions',
-                  value: totalDeductions,
-                  icon: Icons.remove_circle_outline,
-                  color: const Color(0xFFEF4444))),
-        ]),
+                label: 'Deductions',
+                value: totalDeductions,
+                icon: Icons.remove_circle_outline,
+                color: const Color(0xFFEF4444),
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 12),
         _SalaryOverviewTile(
-            label: 'Net Pay',
-            value: netPay,
-            icon: Icons.account_balance_wallet_outlined,
-            color: const Color(0xFF2563EB)),
+          label: 'Net Pay',
+          value: netPay,
+          icon: Icons.account_balance_wallet_outlined,
+          color: const Color(0xFF2563EB),
+        ),
         const SizedBox(height: 16),
 
         // ── Earnings breakdown ───────────────────────────────────────────────
@@ -1127,32 +1232,37 @@ class _SalaryTabState extends State<_SalaryTab> {
           icon: Icons.trending_up_outlined,
           children: [
             _SalaryRow(
-                label: 'Basic Salary',
-                amount: p.basicSalary,
-                isDeduction: false),
+              label: 'Basic Salary',
+              amount: p.basicSalary,
+              isDeduction: false,
+            ),
 
             // Dynamic allowances from PayrollConfig
-            ...p.allowances.map((a) => _SalaryRow(
-              label: a.name,
-              amount: a.resolve(p.basicSalary),
-              isDeduction: false,
-              suffix: a.type == AllowanceType.percentOfBasic
-                  ? ' (${a.amount.toStringAsFixed(0)}%)'
-                  : null,
-            )),
+            ...p.allowances.map(
+              (a) => _SalaryRow(
+                label: a.name,
+                amount: a.resolve(p.basicSalary),
+                isDeduction: false,
+                suffix: a.type == AllowanceType.percentOfBasic
+                    ? ' (${a.amount.toStringAsFixed(0)}%)'
+                    : null,
+              ),
+            ),
 
             if (p.performanceBonus > 0)
               _SalaryRow(
-                  label: 'Performance Bonus',
-                  amount: p.performanceBonus,
-                  isDeduction: false),
+                label: 'Performance Bonus',
+                amount: p.performanceBonus,
+                isDeduction: false,
+              ),
 
             const Divider(height: 20),
             _SalaryRow(
-                label: 'Total Earnings',
-                amount: grossPay,
-                isDeduction: false,
-                isBold: true),
+              label: 'Total Earnings',
+              amount: grossPay,
+              isDeduction: false,
+              isBold: true,
+            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -1164,36 +1274,43 @@ class _SalaryTabState extends State<_SalaryTab> {
           children: [
             if (p.performanceDeduction > 0)
               _SalaryRow(
-                  label: 'Performance Deduction',
-                  amount: p.performanceDeduction,
-                  isDeduction: true),
+                label: 'Performance Deduction',
+                amount: p.performanceDeduction,
+                isDeduction: true,
+              ),
             if (p.loanDeduction > 0)
               _SalaryRow(
-                  label: 'Loan Deduction',
-                  amount: p.loanDeduction,
-                  isDeduction: true),
+                label: 'Loan Deduction',
+                amount: p.loanDeduction,
+                isDeduction: true,
+              ),
 
             if (totalDeductions == 0)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 child: Row(
                   children: [
-                    Icon(Icons.check_circle_outline,
-                        color: const Color(0xFF10B981), size: 16),
+                    Icon(
+                      Icons.check_circle_outline,
+                      color: const Color(0xFF10B981),
+                      size: 16,
+                    ),
                     const SizedBox(width: 8),
-                    const Text('No deductions this month',
-                        style: TextStyle(
-                            fontSize: 13, color: Color(0xFF10B981))),
+                    const Text(
+                      'No deductions this month',
+                      style: TextStyle(fontSize: 13, color: Color(0xFF10B981)),
+                    ),
                   ],
                 ),
               ),
 
             const Divider(height: 20),
             _SalaryRow(
-                label: 'Total Deductions',
-                amount: totalDeductions,
-                isDeduction: true,
-                isBold: true),
+              label: 'Total Deductions',
+              amount: totalDeductions,
+              isDeduction: true,
+              isBold: true,
+            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -1204,25 +1321,29 @@ class _SalaryTabState extends State<_SalaryTab> {
           icon: Icons.bar_chart_outlined,
           children: [
             _PerformanceRow(
-                label: 'Total Tasks',
-                value: '${p.totalTasksInMonth}',
-                icon: Icons.task_outlined,
-                color: const Color(0xFF64748B)),
+              label: 'Total Tasks',
+              value: '${p.totalTasksInMonth}',
+              icon: Icons.task_outlined,
+              color: const Color(0xFF64748B),
+            ),
             _PerformanceRow(
-                label: 'Completed',
-                value: '${p.completedTasks}',
-                icon: Icons.check_circle_outline,
-                color: const Color(0xFF10B981)),
+              label: 'Completed',
+              value: '${p.completedTasks}',
+              icon: Icons.check_circle_outline,
+              color: const Color(0xFF10B981),
+            ),
             _PerformanceRow(
-                label: 'Missed',
-                value: '${p.missedTasks}',
-                icon: Icons.cancel_outlined,
-                color: const Color(0xFFEF4444)),
+              label: 'Missed',
+              value: '${p.missedTasks}',
+              icon: Icons.cancel_outlined,
+              color: const Color(0xFFEF4444),
+            ),
             _PerformanceRow(
-                label: 'Weekend Tasks',
-                value: '${p.weekendTasks}',
-                icon: Icons.weekend_outlined,
-                color: const Color(0xFF8B5CF6)),
+              label: 'Weekend Tasks',
+              value: '${p.weekendTasks}',
+              icon: Icons.weekend_outlined,
+              color: const Color(0xFF8B5CF6),
+            ),
             const Divider(height: 20),
             // Performance score bar
             Column(
@@ -1231,19 +1352,21 @@ class _SalaryTabState extends State<_SalaryTab> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Performance Score',
-                        style: TextStyle(
-                            fontSize: 13, color: Color(0xFF475569))),
+                    const Text(
+                      'Performance Score',
+                      style: TextStyle(fontSize: 13, color: Color(0xFF475569)),
+                    ),
                     Text(
                       '${p.performanceScore.toStringAsFixed(1)}%',
                       style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: p.performanceScore >= 80
-                              ? const Color(0xFF10B981)
-                              : p.performanceScore >= 50
-                              ? const Color(0xFFF59E0B)
-                              : const Color(0xFFEF4444)),
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: p.performanceScore >= 80
+                            ? const Color(0xFF10B981)
+                            : p.performanceScore >= 50
+                            ? const Color(0xFFF59E0B)
+                            : const Color(0xFFEF4444),
+                      ),
                     ),
                   ],
                 ),
@@ -1275,26 +1398,26 @@ class _SalaryTabState extends State<_SalaryTab> {
           icon: Icons.receipt_long_outlined,
           children: [
             _InfoRow(
-                icon: Icons.calendar_today_outlined,
-                label: 'Generated At',
-                value: DateFormat.yMMMd()
-                    .add_jm()
-                    .format(p.generatedAt)),
+              icon: Icons.calendar_today_outlined,
+              label: 'Generated At',
+              value: DateFormat.yMMMd().add_jm().format(p.generatedAt),
+            ),
             if (p.approvedAt != null)
               _InfoRow(
-                  icon: Icons.verified_outlined,
-                  label: 'Approved At',
-                  value: DateFormat.yMMMd()
-                      .add_jm()
-                      .format(p.approvedAt!)),
+                icon: Icons.verified_outlined,
+                label: 'Approved At',
+                value: DateFormat.yMMMd().add_jm().format(p.approvedAt!),
+              ),
             _InfoRow(
-                icon: Icons.badge_outlined,
-                label: 'Employee',
-                value: p.employeeName),
+              icon: Icons.badge_outlined,
+              label: 'Employee',
+              value: p.employeeName,
+            ),
             _InfoRow(
-                icon: Icons.work_outline,
-                label: 'Role',
-                value: p.employeeRole),
+              icon: Icons.work_outline,
+              label: 'Role',
+              value: p.employeeRole,
+            ),
           ],
         ),
         const SizedBox(height: 16),
@@ -1309,11 +1432,12 @@ class _PerformanceRow extends StatelessWidget {
   final String value;
   final IconData icon;
   final Color color;
-  const _PerformanceRow(
-      {required this.label,
-        required this.value,
-        required this.icon,
-        required this.color});
+  const _PerformanceRow({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -1323,14 +1447,19 @@ class _PerformanceRow extends StatelessWidget {
         Icon(icon, color: color, size: 16),
         const SizedBox(width: 10),
         Expanded(
-            child: Text(label,
-                style: const TextStyle(
-                    fontSize: 13, color: Color(0xFF475569)))),
-        Text(value,
-            style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: color)),
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 13, color: Color(0xFF475569)),
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
       ],
     ),
   );
@@ -1345,11 +1474,12 @@ class _SalaryOverviewTile extends StatelessWidget {
   final double value;
   final IconData icon;
   final Color color;
-  const _SalaryOverviewTile(
-      {required this.label,
-        required this.value,
-        required this.icon,
-        required this.color});
+  const _SalaryOverviewTile({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) => Container(
@@ -1359,27 +1489,30 @@ class _SalaryOverviewTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       border: Border(left: BorderSide(color: color, width: 4)),
       boxShadow: [
-        BoxShadow(
-            color: Colors.black.withOpacity(0.04), blurRadius: 6)
+        BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6),
       ],
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(children: [
-          Icon(icon, color: color, size: 18),
-          const SizedBox(width: 6),
-          Text(label,
-              style: const TextStyle(
-                  fontSize: 12, color: Color(0xFF64748B))),
-        ]),
+        Row(
+          children: [
+            Icon(icon, color: color, size: 18),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+            ),
+          ],
+        ),
         const SizedBox(height: 6),
         Text(
           'Rs ${NumberFormat('#,##0').format(value)}',
           style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: color),
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
         ),
       ],
     ),
@@ -1396,12 +1529,13 @@ class _SalaryRow extends StatelessWidget {
   final bool isDeduction;
   final bool isBold;
   final String? suffix;
-  const _SalaryRow(
-      {required this.label,
-        required this.amount,
-        required this.isDeduction,
-        this.isBold = false,
-        this.suffix});
+  const _SalaryRow({
+    required this.label,
+    required this.amount,
+    required this.isDeduction,
+    this.isBold = false,
+    this.suffix,
+  });
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -1413,20 +1547,21 @@ class _SalaryRow extends StatelessWidget {
           child: Text(
             suffix != null ? '$label$suffix' : label,
             style: TextStyle(
-                fontSize: 13,
-                fontWeight:
-                isBold ? FontWeight.bold : FontWeight.normal,
-                color: const Color(0xFF475569)),
+              fontSize: 13,
+              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+              color: const Color(0xFF475569),
+            ),
           ),
         ),
         Text(
           '${isDeduction ? '-' : ''}Rs ${NumberFormat('#,##0').format(amount)}',
           style: TextStyle(
-              fontSize: 13,
-              fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
-              color: isDeduction
-                  ? const Color(0xFFEF4444)
-                  : const Color(0xFF10B981)),
+            fontSize: 13,
+            fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+            color: isDeduction
+                ? const Color(0xFFEF4444)
+                : const Color(0xFF10B981),
+          ),
         ),
       ],
     ),
@@ -1441,10 +1576,11 @@ class _SectionCard extends StatelessWidget {
   final String title;
   final IconData icon;
   final List<Widget> children;
-  const _SectionCard(
-      {required this.title,
-        required this.icon,
-        required this.children});
+  const _SectionCard({
+    required this.title,
+    required this.icon,
+    required this.children,
+  });
 
   @override
   Widget build(BuildContext context) => Container(
@@ -1452,34 +1588,34 @@ class _SectionCard extends StatelessWidget {
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
       boxShadow: [
-        BoxShadow(
-            color: Colors.black.withOpacity(0.05), blurRadius: 8)
+        BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8),
       ],
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          padding: const EdgeInsets.symmetric(
-              horizontal: 16, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: const BoxDecoration(
             color: Color(0xFFF8FAFC),
             borderRadius: BorderRadius.only(
               topLeft: Radius.circular(12),
               topRight: Radius.circular(12),
             ),
-            border: Border(
-                bottom: BorderSide(color: Color(0xFFE2E8F0))),
+            border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
           ),
           child: Row(
             children: [
               Icon(icon, color: const Color(0xFF2563EB), size: 18),
               const SizedBox(width: 8),
-              Text(title,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: Color(0xFF1E293B))),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: Color(0xFF1E293B),
+                ),
+              ),
             ],
           ),
         ),
@@ -1496,8 +1632,11 @@ class _InfoRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
-  const _InfoRow(
-      {required this.icon, required this.label, required this.value});
+  const _InfoRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -1518,15 +1657,19 @@ class _InfoRow extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label,
-                  style: const TextStyle(
-                      fontSize: 11, color: Color(0xFF94A3B8))),
+              Text(
+                label,
+                style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+              ),
               const SizedBox(height: 2),
-              Text(value,
-                  style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF1E293B))),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1E293B),
+                ),
+              ),
             ],
           ),
         ),
@@ -1540,11 +1683,12 @@ class _StatTile extends StatelessWidget {
   final String value;
   final IconData icon;
   final Color color;
-  const _StatTile(
-      {required this.label,
-        required this.value,
-        required this.icon,
-        required this.color});
+  const _StatTile({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) => Container(
@@ -1554,30 +1698,35 @@ class _StatTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       border: Border(left: BorderSide(color: color, width: 4)),
       boxShadow: [
-        BoxShadow(
-            color: Colors.black.withOpacity(0.04), blurRadius: 6)
+        BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6),
       ],
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Row(children: [
-          Icon(icon, color: color, size: 16),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(label,
-                style: const TextStyle(
-                    fontSize: 11, color: Color(0xFF64748B)),
-                overflow: TextOverflow.ellipsis),
-          ),
-        ]),
+        Row(
+          children: [
+            Icon(icon, color: color, size: 16),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label,
+                style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 6),
-        Text(value,
-            style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: color)),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
       ],
     ),
   );

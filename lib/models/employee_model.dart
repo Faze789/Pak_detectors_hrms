@@ -13,6 +13,7 @@ class Employee {
   final String department;
   final String joinDate;
   final double salary;
+  final String emp_id;
 
   // ── Leave Quotas ──────────────────────────────────────────────────────────
   final int annualLeaveQuota;
@@ -39,6 +40,7 @@ class Employee {
     required this.department,
     required this.joinDate,
     required this.salary,
+    required this.emp_id,
     this.annualLeaveQuota = 4,
     this.sickLeaveQuota = 3,
     this.casualLeaveQuota = 6,
@@ -53,23 +55,24 @@ class Employee {
 
   factory Employee.fromMap(Map<String, dynamic> map, {String? uid}) {
     return Employee(
-      uid:        uid ?? map['uid'] ?? '',
-      name:       map['name']       ?? '',
-      role:       map['role']       ?? '',
-      location:   map['location']   ?? '',
-      status:     _statusFromString(map['status'] ?? 'active'),
-      email:      map['email']      ?? '',
-      phone:      map['phone']      ?? '',
+      uid: uid ?? map['uid'] ?? '',
+      name: map['name'] ?? '',
+      role: map['role'] ?? '',
+      location: map['location'] ?? '',
+      status: _statusFromString(map['status'] ?? 'active'),
+      email: map['email'] ?? '',
+      phone: map['phone'] ?? '',
       department: map['department'] ?? '',
-      joinDate:   map['joinDate']   ?? '',
-      salary:     (map['salary']    ?? 0).toDouble(),
-      annualLeaveQuota:  (map['annualLeaveQuota']  ?? 4).toInt(),
-      sickLeaveQuota:    (map['sickLeaveQuota']    ?? 3).toInt(),
-      casualLeaveQuota:  (map['casualLeaveQuota']  ?? 6).toInt(),
-      unpaidLeaveQuota:  (map['unpaidLeaveQuota']  ?? 0).toInt(),
-      defaultBranchId:           map['defaultBranchId']           as String?,
-      defaultBranchName:         map['defaultBranchName']         as String?,
-      currentAssignedBranch:     map['currentAssignedBranch']     as String?,
+      joinDate: map['joinDate'] ?? '',
+      salary: (map['salary'] ?? 0).toDouble(),
+      emp_id: map['emp_id'] ?? '',
+      annualLeaveQuota: (map['annualLeaveQuota'] ?? 4).toInt(),
+      sickLeaveQuota: (map['sickLeaveQuota'] ?? 3).toInt(),
+      casualLeaveQuota: (map['casualLeaveQuota'] ?? 6).toInt(),
+      unpaidLeaveQuota: (map['unpaidLeaveQuota'] ?? 0).toInt(),
+      defaultBranchId: map['defaultBranchId'] as String?,
+      defaultBranchName: map['defaultBranchName'] as String?,
+      currentAssignedBranch: map['currentAssignedBranch'] as String?,
       currentAssignedBranchName: map['currentAssignedBranchName'] as String?,
       branchAssignmentExpiry: map['branchAssignmentExpiry'] != null
           ? (map['branchAssignmentExpiry'] as Timestamp).toDate()
@@ -80,25 +83,29 @@ class Employee {
 
   Map<String, dynamic> toMap() {
     return {
-      'uid':        uid,
-      'name':       name,
-      'role':       role,
-      'location':   location,
-      'status':     status.name,
-      'email':      email,
-      'phone':      phone,
+      'uid': uid,
+      'name': name,
+      'role': role,
+      'location': location,
+      'status': status.name,
+      'email': email,
+      'phone': phone,
       'department': department,
-      'joinDate':   joinDate,
-      'salary':     salary,
-      'annualLeaveQuota':  annualLeaveQuota,
-      'sickLeaveQuota':    sickLeaveQuota,
-      'casualLeaveQuota':  casualLeaveQuota,
-      'unpaidLeaveQuota':  unpaidLeaveQuota,
-      if (defaultBranchId   != null) 'defaultBranchId':   defaultBranchId,
+      'joinDate': joinDate,
+      'salary': salary,
+      'emp_id': emp_id,
+      'annualLeaveQuota': annualLeaveQuota,
+      'sickLeaveQuota': sickLeaveQuota,
+      'casualLeaveQuota': casualLeaveQuota,
+      'unpaidLeaveQuota': unpaidLeaveQuota,
+      if (defaultBranchId != null) 'defaultBranchId': defaultBranchId,
       if (defaultBranchName != null) 'defaultBranchName': defaultBranchName,
-      if (currentAssignedBranch     != null) 'currentAssignedBranch':     currentAssignedBranch,
-      if (currentAssignedBranchName != null) 'currentAssignedBranchName': currentAssignedBranchName,
-      if (branchAssignmentExpiry    != null) 'branchAssignmentExpiry':    Timestamp.fromDate(branchAssignmentExpiry!),
+      if (currentAssignedBranch != null)
+        'currentAssignedBranch': currentAssignedBranch,
+      if (currentAssignedBranchName != null)
+        'currentAssignedBranchName': currentAssignedBranchName,
+      if (branchAssignmentExpiry != null)
+        'branchAssignmentExpiry': Timestamp.fromDate(branchAssignmentExpiry!),
       'fieldDuty': fieldDuty,
     };
   }
@@ -126,6 +133,7 @@ class Employee {
     String? department,
     String? joinDate,
     double? salary,
+    String? emp_id,
     int? annualLeaveQuota,
     int? sickLeaveQuota,
     int? casualLeaveQuota,
@@ -138,35 +146,43 @@ class Employee {
     bool? fieldDuty,
   }) {
     return Employee(
-      uid:        uid        ?? this.uid,
-      name:       name       ?? this.name,
-      role:       role       ?? this.role,
-      location:   location   ?? this.location,
-      status:     status     ?? this.status,
-      email:      email      ?? this.email,
-      phone:      phone      ?? this.phone,
+      uid: uid ?? this.uid,
+      name: name ?? this.name,
+      role: role ?? this.role,
+      location: location ?? this.location,
+      status: status ?? this.status,
+      email: email ?? this.email,
+      phone: phone ?? this.phone,
       department: department ?? this.department,
-      joinDate:   joinDate   ?? this.joinDate,
-      salary:     salary     ?? this.salary,
-      annualLeaveQuota:  annualLeaveQuota  ?? this.annualLeaveQuota,
-      sickLeaveQuota:    sickLeaveQuota    ?? this.sickLeaveQuota,
-      casualLeaveQuota:  casualLeaveQuota  ?? this.casualLeaveQuota,
-      unpaidLeaveQuota:  unpaidLeaveQuota  ?? this.unpaidLeaveQuota,
-      defaultBranchId:           defaultBranchId           ?? this.defaultBranchId,
-      defaultBranchName:         defaultBranchName         ?? this.defaultBranchName,
-      currentAssignedBranch:     currentAssignedBranch     ?? this.currentAssignedBranch,
-      currentAssignedBranchName: currentAssignedBranchName ?? this.currentAssignedBranchName,
-      branchAssignmentExpiry:    branchAssignmentExpiry    ?? this.branchAssignmentExpiry,
-      fieldDuty:  fieldDuty  ?? this.fieldDuty,
+      joinDate: joinDate ?? this.joinDate,
+      salary: salary ?? this.salary,
+      emp_id: emp_id ?? this.emp_id,
+      annualLeaveQuota: annualLeaveQuota ?? this.annualLeaveQuota,
+      sickLeaveQuota: sickLeaveQuota ?? this.sickLeaveQuota,
+      casualLeaveQuota: casualLeaveQuota ?? this.casualLeaveQuota,
+      unpaidLeaveQuota: unpaidLeaveQuota ?? this.unpaidLeaveQuota,
+      defaultBranchId: defaultBranchId ?? this.defaultBranchId,
+      defaultBranchName: defaultBranchName ?? this.defaultBranchName,
+      currentAssignedBranch:
+          currentAssignedBranch ?? this.currentAssignedBranch,
+      currentAssignedBranchName:
+          currentAssignedBranchName ?? this.currentAssignedBranchName,
+      branchAssignmentExpiry:
+          branchAssignmentExpiry ?? this.branchAssignmentExpiry,
+      fieldDuty: fieldDuty ?? this.fieldDuty,
     );
   }
 
   static EmployeeStatus _statusFromString(String status) {
     switch (status.toLowerCase()) {
-      case 'active':   return EmployeeStatus.active;
-      case 'leave':    return EmployeeStatus.leave;
-      case 'inactive': return EmployeeStatus.inactive;
-      default:         return EmployeeStatus.active;
+      case 'active':
+        return EmployeeStatus.active;
+      case 'leave':
+        return EmployeeStatus.leave;
+      case 'inactive':
+        return EmployeeStatus.inactive;
+      default:
+        return EmployeeStatus.active;
     }
   }
 }

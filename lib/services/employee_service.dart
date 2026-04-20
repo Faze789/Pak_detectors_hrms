@@ -2,10 +2,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/employee_model.dart';
 
 class EmployeeService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  // final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  final CollectionReference _usersCollection =
-  FirebaseFirestore.instance.collection('users');
+  final CollectionReference _usersCollection = FirebaseFirestore.instance
+      .collection('users');
 
   /// Get all employees (HR role)
   Future<List<Employee>> getEmployees() async {
@@ -15,10 +15,12 @@ class EmployeeService {
           .get();
 
       return snapshot.docs
-          .map((doc) => Employee.fromMap(
-        doc.data() as Map<String, dynamic>,
-        uid: doc.id,
-      ))
+          .map(
+            (doc) => Employee.fromMap(
+              doc.data() as Map<String, dynamic>,
+              uid: doc.id,
+            ),
+          )
           .toList();
     } catch (e) {
       print("Error fetching employees: $e");
@@ -69,12 +71,9 @@ class EmployeeService {
   /// Update employee
   Future<Employee?> updateEmployee(Employee employee) async {
     try {
-      await _usersCollection
-          .doc(employee.uid)
-          .update(employee.toMap());
+      await _usersCollection.doc(employee.uid).update(employee.toMap());
 
-      final updatedDoc =
-      await _usersCollection.doc(employee.uid).get();
+      final updatedDoc = await _usersCollection.doc(employee.uid).get();
 
       return Employee.fromMap(
         updatedDoc.data() as Map<String, dynamic>,
@@ -105,14 +104,18 @@ class EmployeeService {
       final lowerQuery = query.toLowerCase();
 
       return snapshot.docs
-          .map((doc) => Employee.fromMap(
-        doc.data() as Map<String, dynamic>,
-        uid: doc.id,
-      ))
-          .where((emp) =>
-      emp.name.toLowerCase().contains(lowerQuery) ||
-          emp.email.toLowerCase().contains(lowerQuery) ||
-          emp.department.toLowerCase().contains(lowerQuery))
+          .map(
+            (doc) => Employee.fromMap(
+              doc.data() as Map<String, dynamic>,
+              uid: doc.id,
+            ),
+          )
+          .where(
+            (emp) =>
+                emp.name.toLowerCase().contains(lowerQuery) ||
+                emp.email.toLowerCase().contains(lowerQuery) ||
+                emp.department.toLowerCase().contains(lowerQuery),
+          )
           .toList();
     } catch (e) {
       print("Error searching employees: $e");
@@ -129,10 +132,12 @@ class EmployeeService {
           .get();
 
       return snapshot.docs
-          .map((doc) => Employee.fromMap(
-        doc.data() as Map<String, dynamic>,
-        uid: doc.id,
-      ))
+          .map(
+            (doc) => Employee.fromMap(
+              doc.data() as Map<String, dynamic>,
+              uid: doc.id,
+            ),
+          )
           .toList();
     } catch (e) {
       print("Error fetching by department: $e");
@@ -149,10 +154,12 @@ class EmployeeService {
           .get();
 
       return snapshot.docs
-          .map((doc) => Employee.fromMap(
-        doc.data() as Map<String, dynamic>,
-        uid: doc.id,
-      ))
+          .map(
+            (doc) => Employee.fromMap(
+              doc.data() as Map<String, dynamic>,
+              uid: doc.id,
+            ),
+          )
           .toList();
     } catch (e) {
       print("Error fetching by status: $e");
@@ -166,12 +173,14 @@ class EmployeeService {
         .where('role', isEqualTo: 'employee')
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs
-          .map((doc) => Employee.fromMap(
-        doc.data() as Map<String, dynamic>,
-        uid: doc.id,
-      ))
-          .toList();
-    });
+          return snapshot.docs
+              .map(
+                (doc) => Employee.fromMap(
+                  doc.data() as Map<String, dynamic>,
+                  uid: doc.id,
+                ),
+              )
+              .toList();
+        });
   }
 }

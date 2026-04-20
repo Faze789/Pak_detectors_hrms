@@ -20,21 +20,25 @@ class AuthService {
   Future<void> initialize() async {
     User? user = _auth.currentUser;
     if (user != null) {
-      DocumentSnapshot doc =
-      await _firestore.collection('users').doc(user.uid).get();
+      DocumentSnapshot doc = await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .get();
       if (doc.exists) {
-        _currentUser =
-            UserModel.fromMap(user.uid, doc.data() as Map<String, dynamic>);
+        _currentUser = UserModel.fromMap(
+          user.uid,
+          doc.data() as Map<String, dynamic>,
+        );
         await _saveToPrefs(_currentUser!);
       }
     } else {
       SharedPreferences prefs = await SharedPreferences.getInstance();
       if (prefs.containsKey('name')) {
         _currentUser = UserModel(
-          uid:   '',
-          name:  prefs.getString('name')!,
+          uid: '',
+          name: prefs.getString('name')!,
           email: prefs.getString('email')!,
-          role:  prefs.getString('role')!,
+          role: prefs.getString('role')!,
         );
       }
     }
@@ -48,20 +52,24 @@ class AuthService {
   }) async {
     try {
       UserCredential cred = await _auth.createUserWithEmailAndPassword(
-          email: email, password: password);
+        email: email,
+        password: password,
+      );
 
       await _firestore.collection('users').doc(cred.user!.uid).set({
-        'name':      name,
-        'email':     email,
-        'role':      role,
+        'name': name,
+        'employee_id'
+                'email':
+            email,
+        'role': role,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
       _currentUser = UserModel(
-        uid:   cred.user!.uid,
-        name:  name,
+        uid: cred.user!.uid,
+        name: name,
         email: email,
-        role:  role,
+        role: role,
       );
 
       await _saveToPrefs(_currentUser!);
@@ -79,17 +87,23 @@ class AuthService {
   }) async {
     try {
       UserCredential cred = await _auth.signInWithEmailAndPassword(
-          email: email, password: password);
+        email: email,
+        password: password,
+      );
 
-      DocumentSnapshot doc =
-      await _firestore.collection('users').doc(cred.user!.uid).get();
+      DocumentSnapshot doc = await _firestore
+          .collection('users')
+          .doc(cred.user!.uid)
+          .get();
 
       if (!doc.exists) {
         return {'success': false, 'message': 'User not found'};
       }
 
       _currentUser = UserModel.fromMap(
-          cred.user!.uid, doc.data() as Map<String, dynamic>);
+        cred.user!.uid,
+        doc.data() as Map<String, dynamic>,
+      );
 
       await _saveToPrefs(_currentUser!);
       return {'success': true, 'user': _currentUser!};

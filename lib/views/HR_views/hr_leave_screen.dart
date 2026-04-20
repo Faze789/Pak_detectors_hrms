@@ -150,8 +150,8 @@ class _HRLeaveScreenState extends State<HRLeaveScreen> {
           physics: const NeverScrollableScrollPhysics(),
           crossAxisCount: crossCount,
           crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 2.8,
+          mainAxisSpacing: 20,
+          childAspectRatio: 1.5,
           children: cards.map((c) => _StatCard(data: c)).toList(),
         );
       },
@@ -330,6 +330,7 @@ class _HRLeaveScreenState extends State<HRLeaveScreen> {
                 columns: const [
                   DataColumn(label: Text('EMPLOYEE')),
                   DataColumn(label: Text('ROLE')),
+                  DataColumn(label: Text('EMP ID')),
                   DataColumn(label: Text('TYPE')),
                   DataColumn(label: Text('FROM')),
                   DataColumn(label: Text('TO')),
@@ -358,6 +359,7 @@ class _HRLeaveScreenState extends State<HRLeaveScreen> {
                                 ),
                               ),
                             ),
+                            const DataCell(Text('')),
                             const DataCell(Text('')),
                             const DataCell(Text('')),
                             const DataCell(Text('')),
@@ -429,6 +431,10 @@ class _HRLeaveScreenState extends State<HRLeaveScreen> {
             l.employeeRole,
             style: const TextStyle(color: Color(0xFF64748B)),
           ),
+        ),
+
+        DataCell(
+          Text(l.emp_id, style: const TextStyle(color: Color(0xFF64748B))),
         ),
 
         // Type

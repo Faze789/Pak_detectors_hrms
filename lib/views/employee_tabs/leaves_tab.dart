@@ -10,6 +10,7 @@ class LeavesTab extends StatelessWidget {
   final String userId;
   final String employeeName;
   final String employeeRole;
+  final String emp_id;
   final bool isHR;
 
   // ── Leave quotas from employee model ──────────────────────────
@@ -22,6 +23,7 @@ class LeavesTab extends StatelessWidget {
     super.key,
     required this.userId,
     required this.employeeName,
+    required this.emp_id,
     required this.employeeRole,
     this.isHR = false,
     this.annualLeaveQuota = 4,
@@ -170,6 +172,7 @@ class LeavesTab extends StatelessWidget {
                           userId: userId,
                           employeeName: employeeName,
                           employeeRole: employeeRole,
+                          employeeId: emp_id,
                         ),
                         icon: const Icon(Icons.send_outlined, size: 15),
                         label: const Text('Request Leave'),

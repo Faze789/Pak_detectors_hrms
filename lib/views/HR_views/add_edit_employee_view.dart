@@ -8,9 +8,15 @@ enum EmployeeFormMode { add, edit }
 
 class AddEditEmployeeView extends StatefulWidget {
   final EmployeeFormMode mode;
+  final Employee? employee_id;
   final Employee? employee;
 
-  const AddEditEmployeeView({super.key, required this.mode, this.employee});
+  const AddEditEmployeeView({
+    super.key,
+    required this.mode,
+    this.employee,
+    this.employee_id,
+  });
 
   @override
   State<AddEditEmployeeView> createState() => _AddEditEmployeeViewState();
@@ -19,6 +25,7 @@ class AddEditEmployeeView extends StatefulWidget {
 class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
   final _formKey = GlobalKey<FormState>();
 
+  late TextEditingController emp_id_controller;
   late TextEditingController nameController;
   late TextEditingController roleController;
   late TextEditingController departmentController;
@@ -39,6 +46,9 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
   void initState() {
     super.initState();
     nameController = TextEditingController(text: widget.employee?.name ?? '');
+    emp_id_controller = TextEditingController(
+      text: widget.employee?.emp_id ?? '',
+    );
     roleController = TextEditingController(text: widget.employee?.role ?? '');
     departmentController = TextEditingController(
       text: widget.employee?.department ?? '',
@@ -70,6 +80,7 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
 
   @override
   void dispose() {
+    emp_id_controller.dispose();
     nameController.dispose();
     roleController.dispose();
     departmentController.dispose();
@@ -91,6 +102,7 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
 
     if (isEdit) {
       final updatedEmployee = widget.employee!.copyWith(
+        emp_id: emp_id_controller.text.trim(),
         name: nameController.text.trim(),
         role: roleController.text.trim(),
         department: departmentController.text.trim(),
@@ -108,6 +120,7 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
     } else {
       final newEmployee = Employee(
         uid: '',
+        emp_id: emp_id_controller.text.trim(),
         name: nameController.text.trim(),
         role: roleController.text.trim(),
         department: departmentController.text.trim(),
@@ -117,7 +130,6 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
         status: status,
         joinDate: '',
         salary: double.tryParse(salaryController.text.trim()) ?? 0.0,
-        // New employees get default quotas; HR can edit after creation
         annualLeaveQuota: 4,
         sickLeaveQuota: 3,
         casualLeaveQuota: 6,
@@ -160,6 +172,15 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // ── Basic Info ───────────────────────────────────────────
+                  TextFormField(
+                    controller: emp_id_controller,
+                    decoration: const InputDecoration(
+                      labelText: 'Employee ID',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (v) => v!.isEmpty ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 16),
                   TextFormField(
                     controller: nameController,
                     decoration: const InputDecoration(

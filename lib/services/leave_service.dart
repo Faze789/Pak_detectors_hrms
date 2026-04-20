@@ -11,8 +11,8 @@ class LeaveService {
   final FirebaseMessaging _fcm;
 
   LeaveService({FirebaseFirestore? db, FirebaseMessaging? fcm})
-      : _db  = db  ?? FirebaseFirestore.instance,
-        _fcm = fcm ?? FirebaseMessaging.instance;
+    : _db = db ?? FirebaseFirestore.instance,
+      _fcm = fcm ?? FirebaseMessaging.instance;
 
   CollectionReference<Map<String, dynamic>> get _leaves =>
       _db.collection('leaves');
@@ -45,19 +45,20 @@ class LeaveService {
         : 0.5;
 
     final model = LeaveModel(
-      id:           docRef.id,
-      userId:       leave.userId,
+      id: docRef.id,
+      userId: leave.userId,
       employeeName: leave.employeeName,
       employeeRole: leave.employeeRole,
-      type:         leave.type,
-      duration:     leave.duration,
-      fromDate:     leave.fromDate,
-      toDate:       toDate,
-      days:         toDate.difference(leave.fromDate).inDays + 1,
+      emp_id: leave.emp_id,
+      type: leave.type,
+      duration: leave.duration,
+      fromDate: leave.fromDate,
+      toDate: toDate,
+      days: toDate.difference(leave.fromDate).inDays + 1,
       deductedDays: deductedDays,
-      reason:       leave.reason,
-      status:       LeaveStatus.pending,
-      submittedAt:  DateTime.now(),
+      reason: leave.reason,
+      status: LeaveStatus.pending,
+      submittedAt: DateTime.now(),
     );
 
     await docRef.set(model.toMap());
@@ -68,7 +69,8 @@ class LeaveService {
 
     await _notify(
       title: '📋 New Leave Request',
-      body:  '${leave.employeeName} requested ${leave.type.label} ($durationLabel)',
+      body:
+          '${leave.employeeName} requested ${leave.type.label} ($durationLabel)',
     );
 
     return model;
@@ -77,17 +79,17 @@ class LeaveService {
   // ── Approve leave ─────────────────────────────────────────────────────────
 
   Future<void> approveLeave(
-      String leaveId,
-      String employeeUserId, {
-        String? note,
-      }) async {
+    String leaveId,
+    String employeeUserId, {
+    String? note,
+  }) async {
     await _leaves.doc(leaveId).update({
       'status': LeaveStatus.approved.value,
       if (note != null && note.isNotEmpty) 'hrNote': note,
     });
     await _notify(
       title: '✅ Leave Approved',
-      body:  note != null && note.isNotEmpty
+      body: note != null && note.isNotEmpty
           ? 'Your leave has been approved. Note: $note'
           : 'Your leave request has been approved by HR.',
     );
@@ -96,17 +98,17 @@ class LeaveService {
   // ── Reject leave ──────────────────────────────────────────────────────────
 
   Future<void> rejectLeave(
-      String leaveId,
-      String employeeUserId, {
-        String? note,
-      }) async {
+    String leaveId,
+    String employeeUserId, {
+    String? note,
+  }) async {
     await _leaves.doc(leaveId).update({
       'status': LeaveStatus.rejected.value,
       if (note != null && note.isNotEmpty) 'hrNote': note,
     });
     await _notify(
       title: '❌ Leave Rejected',
-      body:  note != null && note.isNotEmpty
+      body: note != null && note.isNotEmpty
           ? 'Your leave was rejected: $note'
           : 'Your leave request has been rejected by HR.',
     );
@@ -115,9 +117,7 @@ class LeaveService {
   // ── Cancel leave (employee can cancel their own pending leave) ────────────
 
   Future<void> cancelLeave(String leaveId) async {
-    await _leaves.doc(leaveId).update({
-      'status': LeaveStatus.cancelled.value,
-    });
+    await _leaves.doc(leaveId).update({'status': LeaveStatus.cancelled.value});
   }
 
   // ── Streams ───────────────────────────────────────────────────────────────
@@ -127,9 +127,11 @@ class LeaveService {
         .where('userId', isEqualTo: userId)
         .orderBy('submittedAt', descending: true)
         .snapshots()
-        .map((snap) => snap.docs
-        .map((d) => LeaveModel.fromMap(d.data(), id: d.id))
-        .toList());
+        .map(
+          (snap) => snap.docs
+              .map((d) => LeaveModel.fromMap(d.data(), id: d.id))
+              .toList(),
+        );
   }
 
   Stream<List<LeaveModel>> streamPendingLeaves() {
@@ -137,24 +139,26 @@ class LeaveService {
         .where('status', isEqualTo: LeaveStatus.pending.value)
         .orderBy('submittedAt', descending: true)
         .snapshots()
-        .map((snap) => snap.docs
-        .map((d) => LeaveModel.fromMap(d.data(), id: d.id))
-        .toList());
+        .map(
+          (snap) => snap.docs
+              .map((d) => LeaveModel.fromMap(d.data(), id: d.id))
+              .toList(),
+        );
   }
 
   Stream<List<LeaveModel>> streamAllLeaves() {
     return _leaves
         .orderBy('submittedAt', descending: true)
         .snapshots()
-        .map((snap) => snap.docs
-        .map((d) => LeaveModel.fromMap(d.data(), id: d.id))
-        .toList());
+        .map(
+          (snap) => snap.docs
+              .map((d) => LeaveModel.fromMap(d.data(), id: d.id))
+              .toList(),
+        );
   }
 
   Future<List<LeaveModel>> getAllLeaves() async {
-    final snap = await _leaves
-        .orderBy('submittedAt', descending: true)
-        .get();
+    final snap = await _leaves.orderBy('submittedAt', descending: true).get();
     return snap.docs
         .map((d) => LeaveModel.fromMap(d.data(), id: d.id))
         .toList();
@@ -169,10 +173,10 @@ class LeaveService {
   }) async {
     final dayStart = DateTime(date.year, date.month, date.day);
     final snap = await _leaves
-        .where('userId',    isEqualTo: userId)
-        .where('status',    isEqualTo: LeaveStatus.approved.value)
+        .where('userId', isEqualTo: userId)
+        .where('status', isEqualTo: LeaveStatus.approved.value)
         .where('startDate', isLessThanOrEqualTo: Timestamp.fromDate(dayStart))
-        .where('endDate',   isGreaterThanOrEqualTo: Timestamp.fromDate(dayStart))
+        .where('endDate', isGreaterThanOrEqualTo: Timestamp.fromDate(dayStart))
         .limit(1)
         .get();
 
@@ -182,10 +186,7 @@ class LeaveService {
 
   // ── Private notify ────────────────────────────────────────────────────────
 
-  Future<void> _notify({
-    required String title,
-    required String body,
-  }) async {
+  Future<void> _notify({required String title, required String body}) async {
     try {
       await showNotification(title: title, body: body);
     } catch (_) {}
