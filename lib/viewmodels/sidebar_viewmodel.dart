@@ -27,10 +27,7 @@ class SidebarSection extends NavigationElement {
   final String title;
   final List<SidebarItem> items;
 
-  const SidebarSection({
-    required this.title,
-    required this.items,
-  });
+  const SidebarSection({required this.title, required this.items});
 }
 
 class SidebarProvider {
@@ -55,6 +52,11 @@ class SidebarProvider {
           id: 'employees',
           label: 'Employees',
           icon: Icons.people_outlined,
+        ),
+        SidebarItem(
+          id: 'Assign Task',
+          label: 'Assign Task',
+          icon: Icons.assignment_outlined,
         ),
         SidebarItem(
           id: 'recruitment',
@@ -115,11 +117,7 @@ class SidebarProvider {
           label: 'Settings',
           icon: Icons.settings_outlined,
         ),
-        SidebarItem(
-          id: 'help',
-          label: 'Help Center',
-          icon: Icons.help_outline,
-        ),
+        SidebarItem(id: 'help', label: 'Help Center', icon: Icons.help_outline),
       ],
     ),
   ];
@@ -171,11 +169,7 @@ class SidebarProvider {
           label: 'Settings',
           icon: Icons.settings_outlined,
         ),
-        SidebarItem(
-          id: 'help',
-          label: 'Help Center',
-          icon: Icons.help_outline,
-        ),
+        SidebarItem(id: 'help', label: 'Help Center', icon: Icons.help_outline),
       ],
     ),
   ];

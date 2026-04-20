@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:hrms_app/views/HR_views/AssignTaskByHR.dart';
 import 'package:hrms_app/views/HR_views/employee_screen.dart';
 import 'package:hrms_app/views/HR_views/hr_attendance_screen.dart';
 import 'package:hrms_app/views/HR_views/hr_branch_management.dart';
@@ -71,6 +72,11 @@ class _HRDashboardWithSidebarState extends State<HRDashboardWithSidebar> {
         return const HRDashboardScreen();
       case 'employees':
         return const EmployeeListView();
+
+      // will implement this feature tomorrow
+
+      case 'assign-task-employee-by-hr':
+        return const AssignTaskByHR();
       // case 'payroll':
       //   return const PayrollScreen();
       case 'attendance':

@@ -320,7 +320,6 @@ class _SidebarContentState extends State<SidebarContent> {
                 ),
                 const SizedBox(height: 8),
               ],
-
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(

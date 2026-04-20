@@ -51,6 +51,7 @@ class _HRDashboardScreenState extends State<HRDashboardScreen> {
 
     Future.microtask(() async {
       await employeeVM.loadEmployees('');
+      if (!mounted) return;
       _dashVM.startListening();
       await _loadTodayArchive();
     });
