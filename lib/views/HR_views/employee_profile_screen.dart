@@ -6,7 +6,6 @@ import '../../viewmodels/attendance_viewmodel.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/document_viewmodel.dart';
 import '../../viewmodels/leave_viewmodel.dart';
-import '../../viewmodels/payroll_viewmodel.dart';
 import '../../widgets/avatar_widget.dart';
 import '../../widgets/status_badge.dart';
 import '../employee_tabs/attendance_tab.dart';

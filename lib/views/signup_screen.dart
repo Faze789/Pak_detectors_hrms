@@ -38,7 +38,6 @@ class _SignupScreenState extends State<SignupScreen> {
 
   void _handleSignup(AuthViewModel authViewModel) async {
     if (_formKey.currentState?.validate() ?? false) {
-      // Verify passwords match
       if (_passwordController.text != _confirmPasswordController.text) {
         _showErrorDialog('Passwords do not match');
         return;
