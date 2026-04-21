@@ -14,6 +14,7 @@ import 'package:hrms_app/viewmodels/employee_viewmodel.dart';
 import 'package:hrms_app/viewmodels/leave_viewmodel.dart';
 import 'package:hrms_app/viewmodels/performance_viewmodel.dart';
 import 'package:hrms_app/viewmodels/recruitment_viewmodel.dart';
+import 'package:hrms_app/viewmodels/task_viewmodel.dart';
 import 'package:hrms_app/views/HR_views/apply_screen.dart';
 import 'package:hrms_app/views/HR_views/employee_screen.dart';
 import 'package:provider/provider.dart';
@@ -186,6 +187,7 @@ class HRMSApp extends StatelessWidget {
           update: (ctx, authVM, prev) =>
               prev ?? EmployeeViewModel(authViewModel: authVM),
         ),
+        ChangeNotifierProvider(create: (_) => TaskViewModel()),
         ChangeNotifierProvider(create: (_) => AttendanceViewModel()),
         ChangeNotifierProvider(create: (_) => BranchViewModel()),
         Provider<PayrollService>(create: (_) => PayrollService()),
