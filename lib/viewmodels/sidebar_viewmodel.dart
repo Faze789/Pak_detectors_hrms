@@ -54,7 +54,7 @@ class SidebarProvider {
           icon: Icons.people_outlined,
         ),
         SidebarItem(
-          id: 'Assign Task',
+          id: 'assign-task-employee-by-hr',
           label: 'Assign Task',
           icon: Icons.assignment_outlined,
         ),

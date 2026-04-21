@@ -73,7 +73,7 @@ class EmployeeViewModel extends ChangeNotifier {
       if (currentUser.role == 'hr') {
         final snapshot = await _firestore
             .collection('users')
-            .where('role', isEqualTo: 'employee')
+            .where('role', whereIn: ['employee', 'project lead'])
             .get();
 
         _employees = snapshot.docs
