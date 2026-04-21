@@ -13,6 +13,21 @@ class Assign_TASK_TO_LEAD_FORM extends StatefulWidget {
 class _assign_task_formState extends State<Assign_TASK_TO_LEAD_FORM> {
   @override
   Widget build(BuildContext context) {
-    return Container();
+    return Scaffold(
+      appBar: AppBar(title: const Text('Assign Task to Lead')),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Assigning task to: ${widget.lead.name}',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
   }
 }
