@@ -31,10 +31,10 @@ class TaskViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Load team members under a specific lead
-  Future<void> loadMembersByLeadId(String leadId) async {
+  /// Load team members whose lead_id matches the lead's emp_id
+  Future<void> loadMembersByLeadId(String leadEmpId) async {
     try {
-      _members = await _service.getMembersByLeadId(leadId);
+      _members = await _service.getMembersByLeadId(leadEmpId);
     } catch (e) {
       _members = [];
     }

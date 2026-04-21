@@ -33,10 +33,16 @@ class TaskService {
     return docs;
   }
 
-  /// Fetch team members assigned to a specific lead
-  Future<List<Map<String, dynamic>>> getMembersByLeadId(String leadId) async {
-    final snapshot = await _users.where('leadId', isEqualTo: leadId).get();
-    return snapshot.docs.map((doc) => doc.data()).toList();
+  /// Fetch team members whose lead_id matches the lead's emp_id
+  Future<List<Map<String, dynamic>>> getMembersByLeadId(String leadEmpId) async {
+    final snapshot = await _users
+        .where('lead_id', isEqualTo: leadEmpId)
+        .get();
+    return snapshot.docs.map((doc) {
+      final data = doc.data();
+      data['uid'] = doc.id;
+      return data;
+    }).toList();
   }
 
   /// Save a new task to Firestore

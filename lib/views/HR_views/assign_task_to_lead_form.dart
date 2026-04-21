@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hrms_app/models/employee_model.dart';
-import 'package:hrms_app/services/task_service.dart';
 import 'package:hrms_app/viewmodels/task_viewmodel.dart';
-import 'package:provider/provider.dart' show ReadContext;
+import 'package:provider/provider.dart';
 
 class Assign_TASK_TO_LEAD_FORM extends StatefulWidget {
   final Employee lead;
@@ -18,6 +17,7 @@ class _assign_task_formState extends State<Assign_TASK_TO_LEAD_FORM> {
   final _titleCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   String? _selectedDuration;
+  Map<String, dynamic>? _selectedMember;
   bool _submitting = false;
 
   final _durations = [
@@ -226,6 +226,93 @@ class _assign_task_formState extends State<Assign_TASK_TO_LEAD_FORM> {
                     ),
                   ],
                 ),
+              ),
+              const SizedBox(height: 28),
+
+              // ── Team Members Dropdown ───────────────────────────
+              Consumer<TaskViewModel>(
+                builder: (context, taskVm, _) {
+                  final members = taskVm.members;
+
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: DropdownButtonFormField<Map<String, dynamic>>(
+                      value: _selectedMember,
+                      decoration: InputDecoration(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
+                        border: InputBorder.none,
+                        hintText: 'All members under ${widget.lead.name}',
+                        hintStyle: const TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF94A3B8),
+                        ),
+                        prefixIcon: const Icon(
+                          Icons.person_outline,
+                          size: 20,
+                          color: Color(0xFF94A3B8),
+                        ),
+                      ),
+                      icon: const Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        color: Color(0xFF64748B),
+                      ),
+                      dropdownColor: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      isExpanded: true,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF334155),
+                      ),
+                      items: members.isEmpty
+                          ? []
+                          : members.map((m) {
+                              return DropdownMenuItem<Map<String, dynamic>>(
+                                value: m,
+                                child: Row(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 14,
+                                      backgroundColor: const Color(0xFFDBEAFE),
+                                      child: Text(
+                                        (m['name'] ?? '?')[0].toUpperCase(),
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF2563EB),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        m['name'] ?? 'Unknown',
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    Text(
+                                      m['emp_id'] ?? '',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Color(0xFF94A3B8),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                      onChanged: (v) => setState(() => _selectedMember = v),
+                      validator: (v) =>
+                          v == null ? 'Please select a team member' : null,
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: 28),
 
