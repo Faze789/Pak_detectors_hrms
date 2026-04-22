@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hrms_app/views/employee_views/attendance_screen.dart';
 import 'package:hrms_app/views/employee_views/employee_payroll_screen.dart';
+import 'package:hrms_app/views/employee_views/EmployeeGoalsScreen.dart';
 import 'package:hrms_app/views/employee_views/my_profile_screen.dart';
 import 'package:hrms_app/views/meetings_screens/employee_meetings_screen.dart';
 import 'package:hrms_app/views/performance_screens/employee_performance_screen.dart';
@@ -44,6 +45,8 @@ class _EmployeeDashboardWithSidebarState
     switch (activeTab) {
       case 'employee-dashboard':
         return const EmployeeDashboardScreen();
+      case 'employee-goals':
+        return EmployeeGoalsScreen();
       case 'attendance-clock':
         return const AttendanceScreen();
       case 'my-profile':

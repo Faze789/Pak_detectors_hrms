@@ -55,6 +55,35 @@ class TaskService {
     return docs;
   }
 
+  /// Fetch tasks where lead_id matches the given emp_id (case-insensitive)
+  Future<List<Map<String, dynamic>>> getTasksByLeadId(String leadEmpId) async {
+    final snap = await _tasks.get();
+    final lowerLeadId = leadEmpId.toLowerCase();
+
+    final docs = snap.docs
+        .where((d) {
+          final docLeadId = (d.data()['lead_id'] ?? '').toString().toLowerCase();
+          return docLeadId == lowerLeadId;
+        })
+        .map((d) {
+          final data = d.data();
+          data['id'] = d.id;
+          return data;
+        })
+        .toList();
+
+    docs.sort((a, b) {
+      final aTime = a['createdAt'] as Timestamp?;
+      final bTime = b['createdAt'] as Timestamp?;
+      if (aTime == null && bTime == null) return 0;
+      if (aTime == null) return 1;
+      if (bTime == null) return -1;
+      return bTime.compareTo(aTime);
+    });
+
+    return docs;
+  }
+
   /// Fetch team members whose lead_id matches the lead's emp_id
   /// Uses case-insensitive comparison since Firestore values may differ in casing
   Future<List<Map<String, dynamic>>> getMembersByLeadId(

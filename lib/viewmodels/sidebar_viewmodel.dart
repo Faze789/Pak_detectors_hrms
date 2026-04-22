@@ -134,6 +134,11 @@ class SidebarProvider {
           icon: Icons.home_outlined,
         ),
         const SidebarItem(
+          id: 'employee-goals',
+          label: 'My Goals',
+          icon: Icons.flag_outlined,
+        ),
+        const SidebarItem(
           id: 'my-profile',
           label: 'My Profile',
           icon: Icons.person_outline,

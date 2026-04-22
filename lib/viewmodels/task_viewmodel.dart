@@ -53,6 +53,23 @@ class TaskViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Load tasks where lead_id matches the logged-in lead's emp_id
+  Future<void> loadTasksByLeadId(String leadEmpId) async {
+    isLoading = true;
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      _tasks = await _service.getTasksByLeadId(leadEmpId);
+    } catch (e) {
+      errorMessage = 'Failed to load tasks: $e';
+      _tasks = [];
+    }
+
+    isLoading = false;
+    notifyListeners();
+  }
+
   /// Load team members whose lead_id matches the lead's emp_id
   Future<void> loadMembersByLeadId(String leadEmpId) async {
     debugPrint('[TaskVM] loadMembersByLeadId called with: "$leadEmpId"');
@@ -93,7 +110,7 @@ class TaskViewModel extends ChangeNotifier {
         duration: duration,
       );
       await loadTasksForLead(lead_id);
-      _submitting = true;
+      _submitting = false;
       notifyListeners();
       return true;
     } catch (e) {
