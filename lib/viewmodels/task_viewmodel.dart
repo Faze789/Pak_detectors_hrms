@@ -11,6 +11,10 @@ class TaskViewModel extends ChangeNotifier {
   bool isLoading = false;
   String? errorMessage;
 
+  bool _submitting = false;
+
+  bool get get_submitting => _submitting;
+
   List<Map<String, dynamic>> get tasks => _tasks;
   List<Map<String, dynamic>> get members => _members;
 
@@ -31,11 +35,35 @@ class TaskViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Fetch all tasks
+
+  Future<void> loadAllTasks() async {
+    isLoading = true;
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      _tasks = await _service.getAllTasks();
+    } catch (e) {
+      errorMessage = 'Failed to load tasks: $e';
+      _tasks = [];
+    }
+
+    isLoading = false;
+    notifyListeners();
+  }
+
   /// Load team members whose lead_id matches the lead's emp_id
   Future<void> loadMembersByLeadId(String leadEmpId) async {
+    debugPrint('[TaskVM] loadMembersByLeadId called with: "$leadEmpId"');
     try {
       _members = await _service.getMembersByLeadId(leadEmpId);
+      debugPrint('[TaskVM] Members found: ${_members.length}');
+      for (final m in _members) {
+        debugPrint('[TaskVM]   - ${m['name']} (lead_id: ${m['lead_id']})');
+      }
     } catch (e) {
+      debugPrint('[TaskVM] ERROR loading members: $e');
       _members = [];
     }
     notifyListeners();
@@ -43,26 +71,34 @@ class TaskViewModel extends ChangeNotifier {
 
   /// Submit a new task and refresh the list
   Future<bool> assignTask({
-    required String empId,
+    List<Map<String, dynamic>>? members,
+    required String lead_id,
     required String leadName,
     required String department,
     required String title,
     required String description,
     required String duration,
   }) async {
+    _submitting = true;
+    notifyListeners();
+
     try {
       await _service.createTask(
-        empId: empId,
+        members: members,
+        lead_id: lead_id,
         leadName: leadName,
         department: department,
         title: title,
         description: description,
         duration: duration,
       );
-      await loadTasksForLead(empId);
+      await loadTasksForLead(lead_id);
+      _submitting = true;
+      notifyListeners();
       return true;
     } catch (e) {
       errorMessage = 'Failed to assign task: $e';
+      _submitting = false;
       notifyListeners();
       return false;
     }

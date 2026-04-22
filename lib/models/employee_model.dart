@@ -14,6 +14,9 @@ class Employee {
   final String joinDate;
   final double salary;
   final String emp_id;
+  String? project_title;
+  String? project_description;
+  String? project_duration;
 
   // ── Leave Quotas ──────────────────────────────────────────────────────────
   final int annualLeaveQuota;
@@ -51,6 +54,9 @@ class Employee {
     this.currentAssignedBranchName,
     this.branchAssignmentExpiry,
     this.fieldDuty = false,
+    this.project_title = '',
+    this.project_description = '',
+    this.project_duration = '',
   });
 
   factory Employee.fromMap(Map<String, dynamic> map, {String? uid}) {
@@ -66,6 +72,10 @@ class Employee {
       joinDate: map['joinDate'] ?? '',
       salary: (map['salary'] ?? 0).toDouble(),
       emp_id: map['emp_id'] ?? '',
+      project_title: map['project_title'] ?? '',
+      project_description: map['project_description'] ?? '',
+      project_duration: map['project_duration'] ?? '',
+
       annualLeaveQuota: (map['annualLeaveQuota'] ?? 4).toInt(),
       sickLeaveQuota: (map['sickLeaveQuota'] ?? 3).toInt(),
       casualLeaveQuota: (map['casualLeaveQuota'] ?? 6).toInt(),
@@ -94,6 +104,9 @@ class Employee {
       'joinDate': joinDate,
       'salary': salary,
       'emp_id': emp_id,
+      'project_title': project_title,
+      'project_description': project_description,
+      'project_duration': project_duration,
       'annualLeaveQuota': annualLeaveQuota,
       'sickLeaveQuota': sickLeaveQuota,
       'casualLeaveQuota': casualLeaveQuota,

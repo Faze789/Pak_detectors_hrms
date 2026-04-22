@@ -11,6 +11,28 @@ class TaskService {
   CollectionReference<Map<String, dynamic>> get _users =>
       _db.collection('users');
 
+  /// Fetch all tasks from Firestore
+  Future<List<Map<String, dynamic>>> getAllTasks() async {
+    final snap = await _tasks.get();
+
+    final docs = snap.docs.map((d) {
+      final data = d.data();
+      data['id'] = d.id;
+      return data;
+    }).toList();
+
+    docs.sort((a, b) {
+      final aTime = a['createdAt'] as Timestamp?;
+      final bTime = b['createdAt'] as Timestamp?;
+      if (aTime == null && bTime == null) return 0;
+      if (aTime == null) return 1;
+      if (bTime == null) return -1;
+      return bTime.compareTo(aTime);
+    });
+
+    return docs;
+  }
+
   /// Fetch all tasks assigned to a specific lead by emp_id
   Future<List<Map<String, dynamic>>> getTasksByEmpId(String empId) async {
     final snap = await _tasks.where('emp_id', isEqualTo: empId).get();
@@ -34,28 +56,51 @@ class TaskService {
   }
 
   /// Fetch team members whose lead_id matches the lead's emp_id
-  Future<List<Map<String, dynamic>>> getMembersByLeadId(String leadEmpId) async {
-    final snapshot = await _users
-        .where('lead_id', isEqualTo: leadEmpId)
-        .get();
-    return snapshot.docs.map((doc) {
-      final data = doc.data();
-      data['uid'] = doc.id;
-      return data;
-    }).toList();
+  /// Uses case-insensitive comparison since Firestore values may differ in casing
+  Future<List<Map<String, dynamic>>> getMembersByLeadId(
+    String leadEmpId,
+  ) async {
+    final snapshot = await _users.get();
+    final lowerLeadId = leadEmpId.toLowerCase();
+    return snapshot.docs
+        .where((doc) {
+          final data = doc.data();
+          final docLeadId = (data['lead_id'] ?? '').toString().toLowerCase();
+          return docLeadId == lowerLeadId;
+        })
+        .map((doc) {
+          final data = doc.data();
+          data['uid'] = doc.id;
+          return data;
+        })
+        .toList();
   }
 
   /// Save a new task to Firestore
+  /// Members are saved as: {1: {name: "...", emp_id: "..."}, 2: {...}}
   Future<void> createTask({
-    required String empId,
+    List<Map<String, dynamic>>? members,
+    required String lead_id,
     required String leadName,
     required String department,
     required String title,
     required String description,
     required String duration,
   }) async {
+    // Format members as numbered map: {1: {name, emp_id}, 2: {name, emp_id}}
+    final Map<String, dynamic> membersMap = {};
+    if (members != null) {
+      for (int i = 0; i < members.length; i++) {
+        membersMap['${i + 1}'] = {
+          'name': members[i]['name'] ?? '',
+          'emp_id': members[i]['emp_id'] ?? '',
+        };
+      }
+    }
+
     await _tasks.add({
-      'emp_id': empId,
+      'members': membersMap,
+      'lead_id': lead_id,
       'leadName': leadName,
       'department': department,
       'title': title,
