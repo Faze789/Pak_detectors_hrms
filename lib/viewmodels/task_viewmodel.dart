@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/task_service.dart';
 
 class TaskViewModel extends ChangeNotifier {
@@ -8,6 +9,7 @@ class TaskViewModel extends ChangeNotifier {
 
   List<Map<String, dynamic>> _tasks = [];
   List<Map<String, dynamic>> _members = [];
+  List<Map<String, dynamic>> _taskHistory = [];
   bool isLoading = false;
   String? errorMessage;
 
@@ -17,6 +19,7 @@ class TaskViewModel extends ChangeNotifier {
 
   List<Map<String, dynamic>> get tasks => _tasks;
   List<Map<String, dynamic>> get members => _members;
+  List<Map<String, dynamic>> get taskHistory => _taskHistory;
 
   /// Load all tasks for a specific lead by emp_id
   Future<void> loadTasksForLead(String empId) async {
@@ -119,5 +122,68 @@ class TaskViewModel extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  /// Edit an existing task: saves old version to history, updates document
+  Future<bool> editTask({
+    required String taskId,
+    required Map<String, dynamic> currentData,
+    required String newTitle,
+    required String newDescription,
+    required String newDuration,
+    required String newStatus,
+    required String modifiedBy,
+    required String modifiedByRole,
+  }) async {
+    _submitting = true;
+    notifyListeners();
+
+    try {
+      await _service.updateTask(
+        taskId: taskId,
+        currentData: currentData,
+        newTitle: newTitle,
+        newDescription: newDescription,
+        newDuration: newDuration,
+        newStatus: newStatus,
+        modifiedBy: modifiedBy,
+        modifiedByRole: modifiedByRole,
+      );
+
+      // Create notification for the lead in Firestore
+      final leadEmpId = currentData['lead_id'] ?? '';
+      if (leadEmpId.isNotEmpty) {
+        await FirebaseFirestore.instance.collection('task_notifications').add({
+          'lead_id': leadEmpId,
+          'taskId': taskId,
+          'title': 'Task Modified',
+          'body': '"$newTitle" was updated by $modifiedBy ($modifiedByRole)',
+          'modifiedBy': modifiedBy,
+          'modifiedByRole': modifiedByRole,
+          'createdAt': FieldValue.serverTimestamp(),
+          'read': false,
+        });
+      }
+
+      _submitting = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      errorMessage = 'Failed to update task: $e';
+      _submitting = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Load version history for a specific task
+  Future<void> loadTaskHistory(String taskId) async {
+    try {
+      _taskHistory = await _service.getTaskHistory(taskId);
+    } catch (e) {
+      debugPrint('[TaskVM] Error loading history: $e');
+      _taskHistory = [];
+    }
+    notifyListeners();
   }
 }

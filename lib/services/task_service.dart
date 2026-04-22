@@ -137,6 +137,78 @@ class TaskService {
       'duration': duration,
       'status': 'pending',
       'createdAt': FieldValue.serverTimestamp(),
+      'version': 1,
     });
+  }
+
+  /// Update a task: saves the current version to history subcollection,
+  /// then updates the main document with new values.
+  Future<void> updateTask({
+    required String taskId,
+    required Map<String, dynamic> currentData,
+    required String newTitle,
+    required String newDescription,
+    required String newDuration,
+    required String newStatus,
+    required String modifiedBy,
+    required String modifiedByRole,
+  }) async {
+    final taskRef = _tasks.doc(taskId);
+    final currentVersion = (currentData['version'] ?? 1) as int;
+
+    // Save current version to history subcollection
+    await taskRef.collection('history').add({
+      'title': currentData['title'] ?? '',
+      'description': currentData['description'] ?? '',
+      'duration': currentData['duration'] ?? '',
+      'status': currentData['status'] ?? '',
+      'lead_id': currentData['lead_id'] ?? '',
+      'leadName': currentData['leadName'] ?? '',
+      'department': currentData['department'] ?? '',
+      'members': currentData['members'] ?? {},
+      'version': currentVersion,
+      'savedAt': FieldValue.serverTimestamp(),
+      'savedBy': modifiedBy,
+    });
+
+    // Update the main task document with new values
+    await taskRef.update({
+      'title': newTitle,
+      'description': newDescription,
+      'duration': newDuration,
+      'status': newStatus,
+      'version': currentVersion + 1,
+      'lastModifiedAt': FieldValue.serverTimestamp(),
+      'lastModifiedBy': modifiedBy,
+      'lastModifiedByRole': modifiedByRole,
+    });
+  }
+
+  /// Fetch version history for a task (sorted oldest first)
+  Future<List<Map<String, dynamic>>> getTaskHistory(String taskId) async {
+    final snap = await _tasks
+        .doc(taskId)
+        .collection('history')
+        .orderBy('version', descending: false)
+        .get();
+
+    return snap.docs.map((d) {
+      final data = d.data();
+      data['id'] = d.id;
+      return data;
+    }).toList();
+  }
+
+  /// Fetch the FCM token for a user by their emp_id (case-insensitive)
+  Future<String?> getFcmTokenByEmpId(String empId) async {
+    final snap = await _users.get();
+    final lowerEmpId = empId.toLowerCase();
+    for (final doc in snap.docs) {
+      final data = doc.data();
+      if ((data['emp_id'] ?? '').toString().toLowerCase() == lowerEmpId) {
+        return data['fcmToken'] as String?;
+      }
+    }
+    return null;
   }
 }

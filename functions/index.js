@@ -1,12 +1,11 @@
 // functions/index.js
 //
 // FUNCTIONS:
-//  1. markAbsentAtCutoff     → scheduled 12:01 PM Mon–Fri
-//  2. markAbsentHalfDay      → scheduled 2:01 PM Mon–Fri
-//  3. onBarrierCreated       → Firestore trigger on barriers/{barrierId}
-//     Sends FCM push notifications to recipient + CC list via
-//     Firebase Admin SDK (HTTP v1 API) — works for all app states
-//     (foreground, background, and fully closed).
+//  1. markAbsentAtCutoff            → scheduled 12:01 PM Mon–Fri
+//  2. markAbsentHalfDay             → scheduled 2:01 PM Mon–Fri
+//  3. onBarrierCreated              → Firestore trigger on barriers/{barrierId}
+//  4. onTaskNotificationCreated     → Firestore trigger on task_notifications/{notifId}
+//     Sends FCM push to the lead when their task is modified.
 
 const { setGlobalOptions }    = require("firebase-functions");
 const { onSchedule }          = require("firebase-functions/v2/scheduler");
@@ -201,6 +200,84 @@ exports.onBarrierCreated = onDocumentCreated(
       `${sendResults.filter((r) => r.status === "sent").length} sent, ` +
       `${sendResults.filter((r) => r.status === "failed").length} failed.`
     );
+  }
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TASK NOTIFICATION — triggers when a task_notifications doc is created
+// Sends FCM push to the lead when their task is modified.
+// ─────────────────────────────────────────────────────────────────────────────
+exports.onTaskNotificationCreated = onDocumentCreated(
+  "task_notifications/{notifId}",
+  async (event) => {
+    const notif   = event.data.data();
+    const notifId = event.params.notifId;
+
+    logger.info(`[onTaskNotificationCreated] New task notification: ${notifId}`);
+
+    const leadEmpId = (notif.lead_id ?? "").toLowerCase();
+    if (!leadEmpId) {
+      logger.warn("[onTaskNotificationCreated] No lead_id — skipping.");
+      return;
+    }
+
+    // Find the lead's user doc by emp_id (case-insensitive)
+    const usersSnap = await db.collection("users").get();
+    let leadToken = null;
+    let leadUid   = null;
+    for (const doc of usersSnap.docs) {
+      const data = doc.data();
+      if ((data.emp_id ?? "").toLowerCase() === leadEmpId) {
+        leadToken = data.fcmToken ?? null;
+        leadUid   = doc.id;
+        break;
+      }
+    }
+
+    if (!leadToken) {
+      logger.warn(`[onTaskNotificationCreated] No FCM token for lead ${notif.lead_id}.`);
+      return;
+    }
+
+    const title = notif.title ?? "Task Updated";
+    const body  = notif.body  ?? "One of your tasks was modified.";
+
+    try {
+      const result = await messaging.send({
+        token: leadToken,
+        notification: { title, body },
+        data: {
+          type:       "task_modified",
+          taskId:     notif.taskId    ?? "",
+          modifiedBy: notif.modifiedBy ?? "",
+          timestamp:  new Date().toISOString(),
+        },
+        android: {
+          priority: "high",
+          notification: {
+            channelId: "task_updates",
+            sound:     "default",
+            priority:  "high",
+          },
+        },
+        apns: {
+          payload: {
+            aps: { alert: { title, body }, sound: "default" },
+          },
+          headers: { "apns-priority": "10" },
+        },
+      });
+      logger.info(`[onTaskNotificationCreated] Lead ${leadUid} notified. FCM ID: ${result}`);
+    } catch (e) {
+      logger.error(`[onTaskNotificationCreated] Failed: ${e.message}`);
+      if (
+        e.code === "messaging/registration-token-not-registered" ||
+        e.code === "messaging/invalid-registration-token"
+      ) {
+        await db.collection("users").doc(leadUid).update({ fcmToken: null });
+        logger.info(`[onTaskNotificationCreated] Cleared stale token for ${leadUid}`);
+      }
+    }
   }
 );
 

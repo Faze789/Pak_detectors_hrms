@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:hrms_app/viewmodels/task_viewmodel.dart';
+import 'package:hrms_app/widgets/edit_task_dialog.dart';
 import 'package:provider/provider.dart';
 
 class CheckAssignedTasks extends StatefulWidget {
@@ -405,6 +406,63 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                       );
                     }),
                   const SizedBox(height: 20),
+
+                  // Edit & History buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.of(context).pop(); // close bottom sheet
+                            showDialog(
+                              context: context,
+                              builder: (_) => EditTaskDialog(
+                                task: task,
+                                modifiedBy: 'HR',
+                                modifiedByRole: 'hr',
+                                onSaved: () {
+                                  context.read<TaskViewModel>().loadAllTasks();
+                                },
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.edit_outlined,
+                              size: 16, color: Colors.white),
+                          label: const Text('Edit',
+                              style: TextStyle(color: Colors.white)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2563EB),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.of(context).pop(); // close bottom sheet
+                            showTaskHistorySheet(context, task);
+                          },
+                          icon: const Icon(Icons.history_rounded,
+                              size: 16, color: Color(0xFF2563EB)),
+                          label: const Text('History',
+                              style: TextStyle(color: Color(0xFF2563EB))),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            side:
+                                const BorderSide(color: Color(0xFF2563EB)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
                 ],
               ),
             );
