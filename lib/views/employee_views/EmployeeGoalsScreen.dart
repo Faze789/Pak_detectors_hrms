@@ -99,7 +99,9 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                   Text(
                     taskVm.errorMessage!,
                     style: const TextStyle(
-                        fontSize: 14, color: Color(0xFF64748B)),
+                      fontSize: 14,
+                      color: Color(0xFF64748B),
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 16),
@@ -215,8 +217,7 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
       final dateStr = approvedAt != null
           ? '${approvedAt.toDate().day}/${approvedAt.toDate().month}/${approvedAt.toDate().year}'
           : '';
-      statusLabel =
-          dateStr.isNotEmpty ? 'Approved since $dateStr' : 'Approved';
+      statusLabel = dateStr.isNotEmpty ? 'Approved since $dateStr' : 'Approved';
       statusBg = const Color(0xFFD1FAE5);
       statusFg = const Color(0xFF065F46);
     } else {
@@ -236,9 +237,7 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isApproved
-              ? const Color(0xFFA7F3D0)
-              : const Color(0xFFE2E8F0),
+          color: isApproved ? const Color(0xFFA7F3D0) : const Color(0xFFE2E8F0),
         ),
         boxShadow: [
           BoxShadow(
@@ -263,7 +262,9 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                   Flexible(
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: statusBg,
                         borderRadius: BorderRadius.circular(6),
@@ -274,8 +275,11 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                           if (isApproved)
                             const Padding(
                               padding: EdgeInsets.only(right: 4),
-                              child: Icon(Icons.check_circle,
-                                  size: 12, color: Color(0xFF065F46)),
+                              child: Icon(
+                                Icons.check_circle,
+                                size: 12,
+                                color: Color(0xFF065F46),
+                              ),
                             ),
                           Flexible(
                             child: Text(
@@ -296,7 +300,9 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                   // Duration
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFEFF6FF),
                       borderRadius: BorderRadius.circular(6),
@@ -304,8 +310,11 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.schedule_outlined,
-                            size: 12, color: Color(0xFF2563EB)),
+                        const Icon(
+                          Icons.schedule_outlined,
+                          size: 12,
+                          color: Color(0xFF2563EB),
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           task['duration'] ?? '',
@@ -322,9 +331,13 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                   // Options menu (only if not yet approved)
                   if (!isApproved) _buildOptionsMenu(task),
                   if (isApproved)
-                    Text(dateStr,
-                        style: const TextStyle(
-                            fontSize: 11, color: Color(0xFF94A3B8))),
+                    Text(
+                      dateStr,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF94A3B8),
+                      ),
+                    ),
                 ],
               ),
               const SizedBox(height: 12),
@@ -356,11 +369,15 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
               // Department + Members
               Row(
                 children: [
-                  _chipWidget(
-                      Icons.business_outlined, task['department'] ?? ''),
+                  // _chipWidget(
+                  //   Icons.business_outlined,
+                  //   task['department'] ?? '',
+                  // ),
                   const SizedBox(width: 8),
                   _chipWidget(
-                      Icons.group_outlined, '${members.length} members'),
+                    Icons.group_outlined,
+                    '${members.length} members',
+                  ),
                 ],
               ),
             ],
@@ -399,8 +416,11 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
           value: 'approve',
           child: Row(
             children: [
-              Icon(Icons.check_circle_outline,
-                  size: 16, color: Color(0xFF16A34A)),
+              Icon(
+                Icons.check_circle_outline,
+                size: 16,
+                color: Color(0xFF16A34A),
+              ),
               SizedBox(width: 8),
               Text('Approve'),
             ],
@@ -412,21 +432,23 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
 
   // ─── Approve Task ───────────────────────────────────────────────────────────
 
-  Future<void> _approveTask(Map<String, dynamic> task,
-      {String? newDescription}) async {
+  Future<void> _approveTask(
+    Map<String, dynamic> task, {
+    String? newDescription,
+  }) async {
     final user = context.read<AuthViewModel>().currentUser;
     final leadName = user?.name ?? 'Lead';
 
     final success = await context.read<TaskViewModel>().editTask(
-          taskId: task['id'],
-          currentData: task,
-          newTitle: task['title'] ?? '',
-          newDescription: newDescription ?? task['description'] ?? '',
-          newDuration: task['duration'] ?? '',
-          newStatus: 'approved',
-          modifiedBy: leadName,
-          modifiedByRole: 'project lead',
-        );
+      taskId: task['id'],
+      currentData: task,
+      newTitle: task['title'] ?? '',
+      newDescription: newDescription ?? task['description'] ?? '',
+      newDuration: task['duration'] ?? '',
+      newStatus: 'approved',
+      modifiedBy: leadName,
+      modifiedByRole: 'project lead',
+    );
 
     if (!mounted) return;
 
@@ -441,8 +463,9 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(context.read<TaskViewModel>().errorMessage ??
-              'Failed to approve'),
+          content: Text(
+            context.read<TaskViewModel>().errorMessage ?? 'Failed to approve',
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -451,14 +474,18 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
 
   // ─── Bottom Sheet (Task Details + Editable Description + Approve) ───────────
 
-  void _showTaskDetails(BuildContext context, Map<String, dynamic> task,
-      {bool startInEditMode = false}) {
+  void _showTaskDetails(
+    BuildContext context,
+    Map<String, dynamic> task, {
+    bool startInEditMode = false,
+  }) {
     final members = task['members'] as Map<String, dynamic>? ?? {};
     final isAlreadyApproved = task['status'] == 'approved';
 
     bool isEditing = startInEditMode && !isAlreadyApproved;
-    final descController =
-        TextEditingController(text: task['description'] ?? '');
+    final descController = TextEditingController(
+      text: task['description'] ?? '',
+    );
 
     showModalBottomSheet(
       context: context,
@@ -481,8 +508,7 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                   final approvedAt = task['approvedAt'] as Timestamp?;
                   if (approvedAt != null) {
                     final d = approvedAt.toDate();
-                    approvedDateStr =
-                        '${d.day}/${d.month}/${d.year}';
+                    approvedDateStr = '${d.day}/${d.month}/${d.year}';
                   }
                 }
 
@@ -522,11 +548,17 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                         runSpacing: 8,
                         children: [
                           _detailChip(
-                              Icons.person_outline, task['leadName'] ?? ''),
+                            Icons.person_outline,
+                            task['leadName'] ?? '',
+                          ),
                           _detailChip(
-                              Icons.business_outlined, task['department'] ?? ''),
+                            Icons.business_outlined,
+                            task['department'] ?? '',
+                          ),
                           _detailChip(
-                              Icons.schedule_outlined, task['duration'] ?? ''),
+                            Icons.schedule_outlined,
+                            task['duration'] ?? '',
+                          ),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -539,18 +571,19 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                           decoration: BoxDecoration(
                             color: const Color(0xFFD1FAE5),
                             borderRadius: BorderRadius.circular(10),
-                            border:
-                                Border.all(color: const Color(0xFFA7F3D0)),
+                            border: Border.all(color: const Color(0xFFA7F3D0)),
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.check_circle,
-                                  size: 20, color: Color(0xFF065F46)),
+                              const Icon(
+                                Icons.check_circle,
+                                size: 20,
+                                color: Color(0xFF065F46),
+                              ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       approvedDateStr != null
@@ -579,7 +612,9 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                       else
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 5),
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFFFEF3C7),
                             borderRadius: BorderRadius.circular(6),
@@ -614,8 +649,11 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                               child: const Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.edit_outlined,
-                                      size: 14, color: Color(0xFF2563EB)),
+                                  Icon(
+                                    Icons.edit_outlined,
+                                    size: 14,
+                                    color: Color(0xFF2563EB),
+                                  ),
                                   SizedBox(width: 4),
                                   Text(
                                     'Edit',
@@ -631,8 +669,7 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                           if (isEditing)
                             GestureDetector(
                               onTap: () {
-                                descController.text =
-                                    task['description'] ?? '';
+                                descController.text = task['description'] ?? '';
                                 setSheetState(() => isEditing = false);
                               },
                               child: const Text(
@@ -655,24 +692,30 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                           decoration: InputDecoration(
                             hintText: 'Update description...',
                             hintStyle: const TextStyle(
-                                fontSize: 13, color: Color(0xFFCBD5E1)),
+                              fontSize: 13,
+                              color: Color(0xFFCBD5E1),
+                            ),
                             filled: true,
                             fillColor: const Color(0xFFF8FAFC),
                             contentPadding: const EdgeInsets.all(14),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
                               borderSide: const BorderSide(
-                                  color: Color(0xFF2563EB)),
+                                color: Color(0xFF2563EB),
+                              ),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
                               borderSide: const BorderSide(
-                                  color: Color(0xFF2563EB)),
+                                color: Color(0xFF2563EB),
+                              ),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
                               borderSide: const BorderSide(
-                                  color: Color(0xFF2563EB), width: 1.5),
+                                color: Color(0xFF2563EB),
+                                width: 1.5,
+                              ),
                             ),
                           ),
                         )
@@ -680,7 +723,9 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                         Text(
                           task['description'] ?? 'No description',
                           style: const TextStyle(
-                              fontSize: 14, color: Color(0xFF64748B)),
+                            fontSize: 14,
+                            color: Color(0xFF64748B),
+                          ),
                         ),
                       const SizedBox(height: 20),
 
@@ -696,9 +741,13 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                       const SizedBox(height: 10),
 
                       if (members.isEmpty)
-                        const Text('No members assigned',
-                            style: TextStyle(
-                                fontSize: 13, color: Color(0xFF94A3B8)))
+                        const Text(
+                          'No members assigned',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFF94A3B8),
+                          ),
+                        )
                       else
                         ...members.entries.map((entry) {
                           final m = entry.value as Map<String, dynamic>;
@@ -714,12 +763,14 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   alignment: Alignment.center,
-                                  child: Text(entry.key,
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFF2563EB),
-                                      )),
+                                  child: Text(
+                                    entry.key,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF2563EB),
+                                    ),
+                                  ),
                                 ),
                                 const SizedBox(width: 10),
                                 CircleAvatar(
@@ -736,26 +787,32 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                                 ),
                                 const SizedBox(width: 10),
                                 Expanded(
-                                  child: Text(m['name'] ?? 'Unknown',
-                                      style: const TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                        color: Color(0xFF1E293B),
-                                      )),
+                                  child: Text(
+                                    m['name'] ?? 'Unknown',
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF1E293B),
+                                    ),
+                                  ),
                                 ),
                                 Container(
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 3),
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: const Color(0xFFF1F5F9),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
-                                  child: Text(m['emp_id'] ?? '',
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                        color: Color(0xFF64748B),
-                                      )),
+                                  child: Text(
+                                    m['emp_id'] ?? '',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF64748B),
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
@@ -780,16 +837,23 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                                         : null,
                                   );
                                 },
-                                icon: const Icon(Icons.check_circle,
-                                    size: 18, color: Colors.white),
-                                label: const Text('Approve',
-                                    style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w700)),
+                                icon: const Icon(
+                                  Icons.check_circle,
+                                  size: 18,
+                                  color: Colors.white,
+                                ),
+                                label: const Text(
+                                  'Approve',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF16A34A),
                                   padding: const EdgeInsets.symmetric(
-                                      vertical: 14),
+                                    vertical: 14,
+                                  ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(10),
                                   ),
@@ -804,16 +868,22 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                                   Navigator.of(sheetContext).pop();
                                   showTaskHistorySheet(context, task);
                                 },
-                                icon: const Icon(Icons.history_rounded,
-                                    size: 16, color: Color(0xFF2563EB)),
-                                label: const Text('History',
-                                    style:
-                                        TextStyle(color: Color(0xFF2563EB))),
+                                icon: const Icon(
+                                  Icons.history_rounded,
+                                  size: 16,
+                                  color: Color(0xFF2563EB),
+                                ),
+                                label: const Text(
+                                  'History',
+                                  style: TextStyle(color: Color(0xFF2563EB)),
+                                ),
                                 style: OutlinedButton.styleFrom(
                                   padding: const EdgeInsets.symmetric(
-                                      vertical: 14),
+                                    vertical: 14,
+                                  ),
                                   side: const BorderSide(
-                                      color: Color(0xFF2563EB)),
+                                    color: Color(0xFF2563EB),
+                                  ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(10),
                                   ),
@@ -831,15 +901,18 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                               Navigator.of(sheetContext).pop();
                               showTaskHistorySheet(context, task);
                             },
-                            icon: const Icon(Icons.history_rounded,
-                                size: 16, color: Color(0xFF2563EB)),
-                            label: const Text('View History',
-                                style: TextStyle(color: Color(0xFF2563EB))),
+                            icon: const Icon(
+                              Icons.history_rounded,
+                              size: 16,
+                              color: Color(0xFF2563EB),
+                            ),
+                            label: const Text(
+                              'View History',
+                              style: TextStyle(color: Color(0xFF2563EB)),
+                            ),
                             style: OutlinedButton.styleFrom(
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 14),
-                              side:
-                                  const BorderSide(color: Color(0xFF2563EB)),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              side: const BorderSide(color: Color(0xFF2563EB)),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(10),
                               ),
@@ -872,12 +945,14 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
         children: [
           Icon(icon, size: 13, color: const Color(0xFF64748B)),
           const SizedBox(width: 4),
-          Text(text,
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF64748B),
-              )),
+          Text(
+            text,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF64748B),
+            ),
+          ),
         ],
       ),
     );
@@ -895,12 +970,14 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
         children: [
           Icon(icon, size: 14, color: const Color(0xFF2563EB)),
           const SizedBox(width: 5),
-          Text(text,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF2563EB),
-              )),
+          Text(
+            text,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF2563EB),
+            ),
+          ),
         ],
       ),
     );
