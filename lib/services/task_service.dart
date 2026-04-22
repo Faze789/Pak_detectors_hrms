@@ -172,7 +172,7 @@ class TaskService {
     });
 
     // Update the main task document with new values
-    await taskRef.update({
+    final updateData = <String, dynamic>{
       'title': newTitle,
       'description': newDescription,
       'duration': newDuration,
@@ -181,7 +181,14 @@ class TaskService {
       'lastModifiedAt': FieldValue.serverTimestamp(),
       'lastModifiedBy': modifiedBy,
       'lastModifiedByRole': modifiedByRole,
-    });
+    };
+
+    // Save approval timestamp when task is approved
+    if (newStatus == 'approved') {
+      updateData['approvedAt'] = FieldValue.serverTimestamp();
+    }
+
+    await taskRef.update(updateData);
   }
 
   /// Fetch version history for a task (sorted oldest first)
