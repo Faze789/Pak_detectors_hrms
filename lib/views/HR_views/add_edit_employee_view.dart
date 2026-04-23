@@ -37,6 +37,7 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
   late TextEditingController sickLeaveCtrl;
   late TextEditingController casualLeaveCtrl;
   late TextEditingController unpaidLeaveCtrl;
+  late TextEditingController jobDescriptionCtrl;
 
   EmployeeStatus status = EmployeeStatus.active;
 
@@ -75,6 +76,9 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
     unpaidLeaveCtrl = TextEditingController(
       text: widget.employee?.unpaidLeaveQuota.toString() ?? '0',
     );
+    jobDescriptionCtrl = TextEditingController(
+      text: widget.employee?.jobDescription ?? '',
+    );
     status = widget.employee?.status ?? EmployeeStatus.active;
   }
 
@@ -92,6 +96,7 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
     sickLeaveCtrl.dispose();
     casualLeaveCtrl.dispose();
     unpaidLeaveCtrl.dispose();
+    jobDescriptionCtrl.dispose();
     super.dispose();
   }
 
@@ -115,6 +120,7 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
         sickLeaveQuota: int.tryParse(sickLeaveCtrl.text.trim()) ?? 3,
         casualLeaveQuota: int.tryParse(casualLeaveCtrl.text.trim()) ?? 6,
         unpaidLeaveQuota: int.tryParse(unpaidLeaveCtrl.text.trim()) ?? 0,
+        jobDescription: jobDescriptionCtrl.text.trim(),
       );
       vm.updateEmployee(updatedEmployee);
     } else {
@@ -134,6 +140,7 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
         sickLeaveQuota: 3,
         casualLeaveQuota: 6,
         unpaidLeaveQuota: 0,
+        jobDescription: jobDescriptionCtrl.text.trim(),
       );
       vm.addEmployee(newEmployee);
     }
@@ -320,6 +327,21 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
                       ],
                     ),
                   ],
+
+                  // ── Job Description ────────────────────────────────────
+                  const SizedBox(height: 24),
+                  const Divider(),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: jobDescriptionCtrl,
+                    maxLines: 4,
+                    decoration: const InputDecoration(
+                      labelText: 'Job Description',
+                      hintText: 'Enter job description...',
+                      border: OutlineInputBorder(),
+                      alignLabelWithHint: true,
+                    ),
+                  ),
 
                   const SizedBox(height: 24),
 

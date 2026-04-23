@@ -4,29 +4,32 @@ import 'package:hrms_app/viewmodels/task_viewmodel.dart';
 import 'package:hrms_app/views/HR_views/CheckAssignedTasks.dart';
 import 'package:provider/provider.dart';
 
-class Assign_TASK_TO_LEAD_FORM extends StatefulWidget {
+class AssignTaskToLeadForm extends StatefulWidget {
   final Employee lead;
 
-  const Assign_TASK_TO_LEAD_FORM({super.key, required this.lead});
+  const AssignTaskToLeadForm({super.key, required this.lead});
 
   @override
-  State<Assign_TASK_TO_LEAD_FORM> createState() => _assign_task_formState();
+  State<AssignTaskToLeadForm> createState() => _AssignTaskToLeadFormState();
 }
 
-class _assign_task_formState extends State<Assign_TASK_TO_LEAD_FORM> {
+class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
   final _formKey = GlobalKey<FormState>();
   final _titleCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
 
   String? _selectedDuration;
+  bool _isPrimary = true;
+  final Set<String> _selectedMemberUids = {};
+  bool _membersInitialized = false;
 
-  final _durations = [
-    'Weekly',
-    'Bi-Weekly',
-    'Monthly',
-    'Bi-Monthly',
-    'Quarterly',
-  ];
+  final Map<String, int> _durations = {
+    'Weekly': 7,
+    'Bi-Weekly': 14,
+    'Monthly': 30,
+    'Every 2 Months': 60,
+    'Quarterly': 90,
+  };
 
   @override
   void initState() {
@@ -34,8 +37,8 @@ class _assign_task_formState extends State<Assign_TASK_TO_LEAD_FORM> {
     Future.microtask(() {
       if (!mounted) return;
       final taskVm = context.read<TaskViewModel>();
-      taskVm.loadTasksForLead(widget.lead.emp_id);
       taskVm.loadMembersByLeadId(widget.lead.emp_id);
+      taskVm.loadUnassignedEmployees();
     });
   }
 
@@ -76,6 +79,14 @@ class _assign_task_formState extends State<Assign_TASK_TO_LEAD_FORM> {
       ),
       body: Consumer<TaskViewModel>(
         builder: (context, taskVm, _) {
+          // Auto-select all members on first load
+          if (!_membersInitialized && taskVm.members.isNotEmpty) {
+            _membersInitialized = true;
+            for (final m in taskVm.members) {
+              _selectedMemberUids.add(m['uid'] ?? m['emp_id'] ?? '');
+            }
+          }
+
           return SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: Form(
@@ -93,7 +104,7 @@ class _assign_task_formState extends State<Assign_TASK_TO_LEAD_FORM> {
                       border: Border.all(color: const Color(0xFFDBEAFE)),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF3B82F6).withOpacity(0.04),
+                          color: const Color(0xFF3B82F6).withValues(alpha: 0.04),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         ),
@@ -198,7 +209,7 @@ class _assign_task_formState extends State<Assign_TASK_TO_LEAD_FORM> {
                   ),
                   const SizedBox(height: 28),
 
-                  // ── Team Members (View Only) ───────────────────────────
+                  // ── Current Team Members ──────────────────────────────
                   _buildLabel('Team Members'),
                   const SizedBox(height: 8),
                   Container(
@@ -207,58 +218,152 @@ class _assign_task_formState extends State<Assign_TASK_TO_LEAD_FORM> {
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: const Color(0xFFE2E8F0)),
                     ),
-                    child: PopupMenuButton<Map<String, dynamic>>(
-                      offset: const Offset(0, 50),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      position: PopupMenuPosition.under,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 14,
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Row(
+                    child: taskVm.members.isEmpty
+                        ? const Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Row(
                               children: [
-                                const Icon(
+                                Icon(
                                   Icons.group_outlined,
                                   size: 20,
                                   color: Color(0xFF94A3B8),
                                 ),
-                                const SizedBox(width: 12),
+                                SizedBox(width: 12),
                                 Text(
-                                  taskVm.members.isEmpty
-                                      ? 'No members available'
-                                      : 'View ${taskVm.members.length} Team Members',
-                                  style: const TextStyle(
+                                  'No team members yet',
+                                  style: TextStyle(
                                     fontSize: 14,
-                                    color: Color(0xFF64748B),
+                                    color: Color(0xFF94A3B8),
                                   ),
                                 ),
                               ],
                             ),
-                            const Icon(
-                              Icons.keyboard_arrow_down_rounded,
-                              color: Color(0xFF64748B),
-                            ),
-                          ],
-                        ),
+                          )
+                        : Column(
+                            children: taskVm.members.map((m) {
+                              final id = m['uid'] ?? m['emp_id'] ?? '';
+                              final isSelected = _selectedMemberUids.contains(
+                                id,
+                              );
+                              return CheckboxListTile(
+                                value: isSelected,
+                                activeColor: const Color(0xFF2563EB),
+                                title: Text(
+                                  m['name'] ?? 'Unknown',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF1E293B),
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  m['emp_id'] ?? '',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF94A3B8),
+                                  ),
+                                ),
+                                onChanged: (v) {
+                                  setState(() {
+                                    if (v == true) {
+                                      _selectedMemberUids.add(id);
+                                    } else {
+                                      _selectedMemberUids.remove(id);
+                                    }
+                                  });
+                                },
+                              );
+                            }).toList(),
+                          ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // ── Available (Unassigned) Employees ───────────────────
+                  if (taskVm.unassignedEmployees.isNotEmpty) ...[
+                    _buildLabel('Available Employees (No Lead Assigned)'),
+                    const SizedBox(height: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFD1FAE5)),
                       ),
-                      itemBuilder: (context) => taskVm.members.map((m) {
-                        return PopupMenuItem<Map<String, dynamic>>(
-                          enabled: false, // Prevents selection/tapping
-                          child: Text(
-                            m['name'] ?? 'Unknown',
-                            style: const TextStyle(
-                              color: Color(0xFF1E293B),
-                              fontSize: 14,
+                      child: Column(
+                        children: taskVm.unassignedEmployees.map((m) {
+                          final id = m['uid'] ?? m['emp_id'] ?? '';
+                          final isSelected = _selectedMemberUids.contains(id);
+                          return CheckboxListTile(
+                            value: isSelected,
+                            activeColor: const Color(0xFF16A34A),
+                            title: Text(
+                              m['name'] ?? 'Unknown',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1E293B),
+                              ),
+                            ),
+                            subtitle: Text(
+                              '${m['emp_id'] ?? ''} · ${m['role'] ?? ''}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF94A3B8),
+                              ),
+                            ),
+                            onChanged: (v) {
+                              setState(() {
+                                if (v == true) {
+                                  _selectedMemberUids.add(id);
+                                } else {
+                                  _selectedMemberUids.remove(id);
+                                }
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+
+                  // ── Task Type (Primary / Secondary) ────────────────────
+                  _buildLabel('Task Type'),
+                  const SizedBox(height: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: RadioGroup<bool>(
+                      groupValue: _isPrimary,
+                      onChanged: (v) => setState(() => _isPrimary = v!),
+                      child: Column(
+                        children: [
+                          RadioListTile<bool>(
+                            value: true,
+                            activeColor: const Color(0xFF2563EB),
+                            title: const Text(
+                              'Primary',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
-                        );
-                      }).toList(),
+                          RadioListTile<bool>(
+                            value: false,
+                            activeColor: const Color(0xFF2563EB),
+                            title: const Text(
+                              'Secondary',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 28),
@@ -288,44 +393,40 @@ class _assign_task_formState extends State<Assign_TASK_TO_LEAD_FORM> {
                       border: Border.all(color: const Color(0xFFE2E8F0)),
                     ),
                     child: DropdownButtonFormField<String>(
-                      value: _selectedDuration,
+                      initialValue: _selectedDuration,
+                      isExpanded: true,
                       decoration: const InputDecoration(
+                        border: InputBorder.none,
                         contentPadding: EdgeInsets.symmetric(
                           horizontal: 16,
                           vertical: 14,
                         ),
-                        border: InputBorder.none,
                         hintText: 'Select duration',
                         hintStyle: TextStyle(
                           fontSize: 14,
                           color: Color(0xFF94A3B8),
                         ),
-                        prefixIcon: Icon(
-                          Icons.schedule_outlined,
-                          size: 20,
-                          color: Color(0xFF94A3B8),
-                        ),
                       ),
-                      icon: const Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        color: Color(0xFF64748B),
-                      ),
-                      dropdownColor: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: Color(0xFF334155),
-                      ),
-                      items: _durations
-                          .map(
-                            (d) => DropdownMenuItem(value: d, child: Text(d)),
-                          )
-                          .toList(),
-                      onChanged: (v) => setState(() => _selectedDuration = v),
-                      validator: (v) =>
-                          v == null ? 'Please select a duration' : null,
+                      items: _durations.keys.map((key) {
+                        return DropdownMenuItem<String>(
+                          value: key,
+                          child: Text(key),
+                        );
+                      }).toList(),
+                      validator: (v) {
+                        if (v == null || v.isEmpty) {
+                          return 'Please select a duration';
+                        }
+                        return null;
+                      },
+                      onChanged: (v) {
+                        setState(() {
+                          _selectedDuration = v;
+                        });
+                      },
                     ),
                   ),
+
                   const SizedBox(height: 20),
 
                   // ── Task Title ───────────────────────────────────────
@@ -367,19 +468,14 @@ class _assign_task_formState extends State<Assign_TASK_TO_LEAD_FORM> {
                     width: double.infinity,
                     height: 52,
                     child: ElevatedButton(
-                      onPressed: taskVm.get_submitting
+                      onPressed: taskVm.isSubmitting
                           ? null
-                          : () {
-                              if (!_formKey.currentState!.validate()) {
-                                lead.project_title = _titleCtrl.text.trim();
-                                lead.project_description = _descCtrl.text
-                                    .trim();
-                                lead.project_duration = _selectedDuration!;
-
+                          : () async {
+                              if (_selectedMemberUids.isEmpty) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
                                     content: Text(
-                                      'Please fill all required fields.',
+                                      'Please select at least one member',
                                     ),
                                     backgroundColor: Color(0xFFEF4444),
                                     behavior: SnackBarBehavior.floating,
@@ -387,40 +483,67 @@ class _assign_task_formState extends State<Assign_TASK_TO_LEAD_FORM> {
                                 );
                                 return;
                               }
+                              if (!_formKey.currentState!.validate()) {
+                                return;
+                              }
 
-                              taskVm
-                                  .assignTask(
-                                    lead_id: widget.lead.emp_id,
-                                    leadName: widget.lead.name,
-                                    department: widget.lead.department,
-                                    title: _titleCtrl.text.trim(),
-                                    description: _descCtrl.text.trim(),
-                                    duration: _selectedDuration!,
-                                    members: taskVm.members,
+                              // Save lead_id for any selected unassigned employees
+                              for (final emp in taskVm.unassignedEmployees) {
+                                final id = emp['uid'] ?? emp['emp_id'] ?? '';
+                                if (_selectedMemberUids.contains(id) &&
+                                    (emp['uid'] ?? '').isNotEmpty) {
+                                  await taskVm.assignEmployeeToLead(
+                                    emp['uid'],
+                                    widget.lead.emp_id,
+                                  );
+                                }
+                              }
+
+                              // Combine both lists and filter by selection
+                              final allEmployees = [
+                                ...taskVm.members,
+                                ...taskVm.unassignedEmployees,
+                              ];
+                              final selectedMembers = allEmployees
+                                  .where(
+                                    (m) => _selectedMemberUids.contains(
+                                      m['uid'] ?? m['emp_id'] ?? '',
+                                    ),
                                   )
-                                  .then((success) {
-                                    if (!mounted) return;
-                                    if (success) {
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                            'Task assigned successfully',
-                                          ),
-                                          backgroundColor: Color(0xFF10B981),
-                                          behavior: SnackBarBehavior.floating,
-                                        ),
-                                      );
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              CheckAssignedTasks(),
-                                        ),
-                                      );
-                                    }
-                                  });
+                                  .toList();
+
+                              final success = await taskVm.assignTask(
+                                lead_id: widget.lead.emp_id,
+                                leadName: widget.lead.name,
+                                department: widget.lead.department,
+                                title: _titleCtrl.text.trim(),
+                                description: _descCtrl.text.trim(),
+                                duration: _selectedDuration!,
+                                members: selectedMembers,
+                                taskType: _isPrimary
+                                    ? 'primary'
+                                    : 'secondary',
+                              );
+
+                              if (!context.mounted) return;
+                              if (success) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Task assigned successfully',
+                                    ),
+                                    backgroundColor: Color(0xFF10B981),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        CheckAssignedTasks(),
+                                  ),
+                                );
+                              }
                             },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF2563EB),
@@ -431,7 +554,7 @@ class _assign_task_formState extends State<Assign_TASK_TO_LEAD_FORM> {
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
-                      child: taskVm.get_submitting
+                      child: taskVm.isSubmitting
                           ? const SizedBox(
                               width: 22,
                               height: 22,

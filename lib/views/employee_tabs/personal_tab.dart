@@ -64,6 +64,30 @@ class PersonalTab extends StatelessWidget {
                 'Monthly Salary',
                 '\$${employee.salary.toStringAsFixed(2)}',
               ),
+              if (employee.jobDescription != null &&
+                  employee.jobDescription!.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                const Divider(color: Color(0xFFE2E8F0)),
+                const SizedBox(height: 12),
+                const Text(
+                  'Job Description',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  employee.jobDescription!,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF0F172A),
+                    height: 1.5,
+                  ),
+                ),
+              ],
             ],
           ),
         ),

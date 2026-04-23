@@ -9,16 +9,18 @@ class TaskViewModel extends ChangeNotifier {
 
   List<Map<String, dynamic>> _tasks = [];
   List<Map<String, dynamic>> _members = [];
+  List<Map<String, dynamic>> _unassignedEmployees = [];
   List<Map<String, dynamic>> _taskHistory = [];
   bool isLoading = false;
   String? errorMessage;
 
   bool _submitting = false;
 
-  bool get get_submitting => _submitting;
+  bool get isSubmitting => _submitting;
 
   List<Map<String, dynamic>> get tasks => _tasks;
   List<Map<String, dynamic>> get members => _members;
+  List<Map<String, dynamic>> get unassignedEmployees => _unassignedEmployees;
   List<Map<String, dynamic>> get taskHistory => _taskHistory;
 
   /// Load all tasks for a specific lead by emp_id
@@ -89,6 +91,59 @@ class TaskViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Load tasks where the employee is listed as a member
+  Future<void> loadTasksForEmployee(String empId) async {
+    isLoading = true;
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      _tasks = await _service.getTasksByMemberEmpId(empId);
+    } catch (e) {
+      errorMessage = 'Failed to load tasks: $e';
+      _tasks = [];
+    }
+
+    isLoading = false;
+    notifyListeners();
+  }
+
+  /// Load employees that have no lead_id (available to assign)
+  Future<void> loadUnassignedEmployees() async {
+    try {
+      _unassignedEmployees = await _service.getUnassignedEmployees();
+    } catch (e) {
+      debugPrint('[TaskVM] ERROR loading unassigned employees: $e');
+      _unassignedEmployees = [];
+    }
+    notifyListeners();
+  }
+
+  /// Assign lead_id to an employee's document and refresh both lists
+  Future<bool> assignEmployeeToLead(
+    String employeeUid,
+    String leadEmpId,
+  ) async {
+    try {
+      await _service.assignLeadToEmployee(employeeUid, leadEmpId);
+      return true;
+    } catch (e) {
+      errorMessage = 'Failed to assign employee to lead: $e';
+      return false;
+    }
+  }
+
+  /// Remove lead_id from an employee's document
+  Future<bool> removeEmployeeFromLead(String employeeUid) async {
+    try {
+      await _service.removeLeadFromEmployee(employeeUid);
+      return true;
+    } catch (e) {
+      errorMessage = 'Failed to remove employee from lead: $e';
+      return false;
+    }
+  }
+
   /// Submit a new task and refresh the list
   Future<bool> assignTask({
     List<Map<String, dynamic>>? members,
@@ -98,6 +153,7 @@ class TaskViewModel extends ChangeNotifier {
     required String title,
     required String description,
     required String duration,
+    String taskType = 'primary',
   }) async {
     _submitting = true;
     notifyListeners();
@@ -111,7 +167,20 @@ class TaskViewModel extends ChangeNotifier {
         title: title,
         description: description,
         duration: duration,
+        taskType: taskType,
       );
+
+      // Notify the lead about the new task assignment
+      if (lead_id.isNotEmpty) {
+        await FirebaseFirestore.instance.collection('task_notifications').add({
+          'lead_id': lead_id,
+          'title': 'New Task Assigned',
+          'body': '"$title" has been assigned to you by HR',
+          'createdAt': FieldValue.serverTimestamp(),
+          'read': false,
+        });
+      }
+
       await loadTasksForLead(lead_id);
       _submitting = false;
       notifyListeners();
@@ -165,12 +234,53 @@ class TaskViewModel extends ChangeNotifier {
         });
       }
 
+      // If approved, notify all task members
+      if (newStatus == 'approved') {
+        final members = currentData['members'] as Map<String, dynamic>? ?? {};
+        for (final entry in members.values) {
+          if (entry is Map<String, dynamic>) {
+            final memberEmpId = entry['emp_id'] ?? '';
+            if (memberEmpId.isNotEmpty) {
+              await FirebaseFirestore.instance
+                  .collection('task_notifications')
+                  .add({
+                    'lead_id': memberEmpId,
+                    'taskId': taskId,
+                    'title': 'Task Approved',
+                    'body':
+                        '"$newTitle" has been approved by $modifiedBy ($modifiedByRole)',
+                    'modifiedBy': modifiedBy,
+                    'modifiedByRole': modifiedByRole,
+                    'createdAt': FieldValue.serverTimestamp(),
+                    'read': false,
+                  });
+            }
+          }
+        }
+      }
+
       _submitting = false;
       notifyListeners();
       return true;
     } catch (e) {
       errorMessage = 'Failed to update task: $e';
       _submitting = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Update the members map on a task (for lead add/remove members)
+  Future<bool> updateTaskMembers({
+    required String taskId,
+    required Map<String, dynamic> membersMap,
+  }) async {
+    try {
+      await _service.updateTaskMembers(taskId: taskId, membersMap: membersMap);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      errorMessage = 'Failed to update members: $e';
       notifyListeners();
       return false;
     }

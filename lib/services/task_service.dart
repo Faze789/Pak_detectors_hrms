@@ -62,7 +62,9 @@ class TaskService {
 
     final docs = snap.docs
         .where((d) {
-          final docLeadId = (d.data()['lead_id'] ?? '').toString().toLowerCase();
+          final docLeadId = (d.data()['lead_id'] ?? '')
+              .toString()
+              .toLowerCase();
           return docLeadId == lowerLeadId;
         })
         .map((d) {
@@ -71,6 +73,39 @@ class TaskService {
           return data;
         })
         .toList();
+
+    docs.sort((a, b) {
+      final aTime = a['createdAt'] as Timestamp?;
+      final bTime = b['createdAt'] as Timestamp?;
+      if (aTime == null && bTime == null) return 0;
+      if (aTime == null) return 1;
+      if (bTime == null) return -1;
+      return bTime.compareTo(aTime);
+    });
+
+    return docs;
+  }
+
+  /// Fetch tasks where the given emp_id appears in the members map
+  Future<List<Map<String, dynamic>>> getTasksByMemberEmpId(
+      String empId) async {
+    final snap = await _tasks.get();
+    final lowerEmpId = empId.toLowerCase();
+
+    final docs = snap.docs.where((d) {
+      final data = d.data();
+      final members = data['members'] as Map<String, dynamic>? ?? {};
+      return members.values.any((m) {
+        if (m is Map<String, dynamic>) {
+          return (m['emp_id'] ?? '').toString().toLowerCase() == lowerEmpId;
+        }
+        return false;
+      });
+    }).map((d) {
+      final data = d.data();
+      data['id'] = d.id;
+      return data;
+    }).toList();
 
     docs.sort((a, b) {
       final aTime = a['createdAt'] as Timestamp?;
@@ -115,6 +150,7 @@ class TaskService {
     required String title,
     required String description,
     required String duration,
+    required String taskType,
   }) async {
     // Format members as numbered map: {1: {name, emp_id}, 2: {name, emp_id}}
     final Map<String, dynamic> membersMap = {};
@@ -127,6 +163,10 @@ class TaskService {
       }
     }
 
+    // Calculate deadline from duration
+    final durationDays = _durationToDays(duration);
+    final deadline = DateTime.now().add(Duration(days: durationDays));
+
     await _tasks.add({
       'members': membersMap,
       'lead_id': lead_id,
@@ -136,9 +176,29 @@ class TaskService {
       'description': description,
       'duration': duration,
       'status': 'pending',
+      'taskType': taskType,
       'createdAt': FieldValue.serverTimestamp(),
+      'deadline': Timestamp.fromDate(deadline),
       'version': 1,
     });
+  }
+
+  /// Convert duration string to number of days
+  static int _durationToDays(String duration) {
+    switch (duration.toLowerCase()) {
+      case 'weekly':
+        return 7;
+      case 'bi-weekly':
+        return 14;
+      case 'monthly':
+        return 30;
+      case 'bi-monthly':
+        return 60;
+      case 'quarterly':
+        return 90;
+      default:
+        return 30;
+    }
   }
 
   /// Update a task: saves the current version to history subcollection,
@@ -183,6 +243,9 @@ class TaskService {
       'lastModifiedByRole': modifiedByRole,
     };
 
+    // Save previous description so both screens can show old vs new
+    updateData['previousDescription'] = currentData['description'] ?? '';
+
     // Save approval timestamp when task is approved
     if (newStatus == 'approved') {
       updateData['approvedAt'] = FieldValue.serverTimestamp();
@@ -204,6 +267,51 @@ class TaskService {
       data['id'] = d.id;
       return data;
     }).toList();
+  }
+
+  /// Update members map on a task document
+  Future<void> updateTaskMembers({
+    required String taskId,
+    required Map<String, dynamic> membersMap,
+  }) async {
+    await _tasks.doc(taskId).update({'members': membersMap});
+  }
+
+  /// Fetch employees that have no lead_id (unassigned to any lead)
+  /// Excludes HR users since they manage, not participate
+  Future<List<Map<String, dynamic>>> getUnassignedEmployees() async {
+    final snapshot = await _users.get();
+
+    return snapshot.docs
+        .where((doc) {
+          final data = doc.data();
+
+          final role = (data['role'] ?? '').toString().toLowerCase();
+          final leadId = (data['lead_id'] ?? '').toString().trim();
+
+          return leadId.isEmpty &&
+              !role.contains('hr') &&
+              !role.contains('project lead');
+        })
+        .map((doc) {
+          final data = doc.data();
+          data['uid'] = doc.id;
+          return data;
+        })
+        .toList();
+  }
+
+  /// Assign a lead_id to an employee's user document
+  Future<void> assignLeadToEmployee(
+    String employeeUid,
+    String leadEmpId,
+  ) async {
+    await _users.doc(employeeUid).update({'lead_id': leadEmpId});
+  }
+
+  /// Remove lead_id from an employee's user document
+  Future<void> removeLeadFromEmployee(String employeeUid) async {
+    await _users.doc(employeeUid).update({'lead_id': ''});
   }
 
   /// Fetch the FCM token for a user by their emp_id (case-insensitive)

@@ -64,7 +64,10 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                   const SizedBox(height: 12),
                   Text(
                     taskVm.errorMessage!,
-                    style: const TextStyle(fontSize: 14, color: Color(0xFF64748B)),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF64748B),
+                    ),
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -77,7 +80,11 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.assignment_outlined, size: 56, color: Color(0xFFCBD5E1)),
+                  Icon(
+                    Icons.assignment_outlined,
+                    size: 56,
+                    color: Color(0xFFCBD5E1),
+                  ),
                   SizedBox(height: 12),
                   Text(
                     'No tasks assigned yet',
@@ -117,11 +124,19 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
   Widget _buildTaskCard(BuildContext context, Map<String, dynamic> task) {
     final status = task['status'] ?? 'pending';
     final isCompleted = status == 'completed';
+    final isApproved = status == 'approved';
     final members = task['members'] as Map<String, dynamic>? ?? {};
     final createdAt = task['createdAt'] as Timestamp?;
     final dateStr = createdAt != null
         ? '${createdAt.toDate().day}/${createdAt.toDate().month}/${createdAt.toDate().year}'
         : '';
+
+    // Calculate remaining days
+    final deadline = task['deadline'] as Timestamp?;
+    final int? remainingDays = deadline
+        ?.toDate()
+        .difference(DateTime.now())
+        .inDays;
 
     return Container(
       decoration: BoxDecoration(
@@ -148,7 +163,10 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: isCompleted
                           ? const Color(0xFFD1FAE5)
@@ -197,10 +215,7 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                 task['description'] ?? '',
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF64748B),
-                ),
+                style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
               ),
               const Spacer(),
 
@@ -233,21 +248,65 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              // Remaining days
+              if (remainingDays != null && !isApproved && !isCompleted) ...[
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.timer_outlined,
+                      size: 13,
+                      color: remainingDays <= 0
+                          ? const Color(0xFFDC2626)
+                          : remainingDays <= 3
+                          ? const Color(0xFFD97706)
+                          : const Color(0xFF16A34A),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      remainingDays > 0
+                          ? '$remainingDays day${remainingDays == 1 ? '' : 's'} left'
+                          : remainingDays == 0
+                          ? 'Due today'
+                          : 'Overdue by ${-remainingDays} day${remainingDays == -1 ? '' : 's'}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: remainingDays <= 0
+                            ? const Color(0xFFDC2626)
+                            : remainingDays <= 3
+                            ? const Color(0xFFD97706)
+                            : const Color(0xFF16A34A),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 6),
 
               // Members count + date
               Row(
                 children: [
-                  const Icon(Icons.group_outlined, size: 14, color: Color(0xFF94A3B8)),
+                  const Icon(
+                    Icons.group_outlined,
+                    size: 14,
+                    color: Color(0xFF94A3B8),
+                  ),
                   const SizedBox(width: 4),
                   Text(
                     '${members.length} members',
-                    style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFF94A3B8),
+                    ),
                   ),
                   const Spacer(),
                   Text(
                     dateStr,
-                    style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFF94A3B8),
+                    ),
                   ),
                 ],
               ),
@@ -311,20 +370,68 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                     runSpacing: 8,
                     children: [
                       _infoChip(Icons.person_outline, task['leadName'] ?? ''),
-                      _infoChip(Icons.business_outlined, task['department'] ?? ''),
-                      _infoChip(Icons.schedule_outlined, task['duration'] ?? ''),
+                      _infoChip(
+                        Icons.business_outlined,
+                        task['department'] ?? '',
+                      ),
+                      _infoChip(
+                        Icons.schedule_outlined,
+                        task['duration'] ?? '',
+                      ),
                       _infoChip(
                         Icons.flag_outlined,
                         (task['status'] ?? 'pending').toString().toUpperCase(),
                       ),
+                      if (task['taskType'] != null)
+                        _infoChip(
+                          Icons.category_outlined,
+                          (task['taskType'] as String).toUpperCase(),
+                        ),
                     ],
                   ),
                   const SizedBox(height: 20),
 
+                  // Previous Description (if task was modified)
+                  if (task['previousDescription'] != null &&
+                      task['previousDescription'].toString().isNotEmpty &&
+                      task['previousDescription'] != task['description']) ...[
+                    const Text(
+                      'Previous Description',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF94A3B8),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF2F2),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFFECACA)),
+                      ),
+                      child: Text(
+                        task['previousDescription'],
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF991B1B),
+                          decoration: TextDecoration.lineThrough,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
                   // Description
-                  const Text(
-                    'Description',
-                    style: TextStyle(
+                  Text(
+                    task['previousDescription'] != null &&
+                            task['previousDescription'].toString().isNotEmpty &&
+                            task['previousDescription'] != task['description']
+                        ? 'Modified Description'
+                        : 'Description',
+                    style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                       color: Color(0xFF475569),
@@ -333,7 +440,10 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                   const SizedBox(height: 6),
                   Text(
                     task['description'] ?? 'No description',
-                    style: const TextStyle(fontSize: 14, color: Color(0xFF64748B)),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF64748B),
+                    ),
                   ),
                   const SizedBox(height: 20),
 
@@ -426,10 +536,15 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                               ),
                             );
                           },
-                          icon: const Icon(Icons.edit_outlined,
-                              size: 16, color: Colors.white),
-                          label: const Text('Edit',
-                              style: TextStyle(color: Colors.white)),
+                          icon: const Icon(
+                            Icons.edit_outlined,
+                            size: 16,
+                            color: Colors.white,
+                          ),
+                          label: const Text(
+                            'Edit',
+                            style: TextStyle(color: Colors.white),
+                          ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF2563EB),
                             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -446,14 +561,18 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                             Navigator.of(context).pop(); // close bottom sheet
                             showTaskHistorySheet(context, task);
                           },
-                          icon: const Icon(Icons.history_rounded,
-                              size: 16, color: Color(0xFF2563EB)),
-                          label: const Text('History',
-                              style: TextStyle(color: Color(0xFF2563EB))),
+                          icon: const Icon(
+                            Icons.history_rounded,
+                            size: 16,
+                            color: Color(0xFF2563EB),
+                          ),
+                          label: const Text(
+                            'History',
+                            style: TextStyle(color: Color(0xFF2563EB)),
+                          ),
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 12),
-                            side:
-                                const BorderSide(color: Color(0xFF2563EB)),
+                            side: const BorderSide(color: Color(0xFF2563EB)),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
                             ),

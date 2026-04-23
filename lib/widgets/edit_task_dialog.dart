@@ -201,7 +201,7 @@ class _EditTaskDialogState extends State<EditTaskDialog> {
                     children: [
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: taskVm.get_submitting
+                          onPressed: taskVm.isSubmitting
                               ? null
                               : () => Navigator.of(context).pop(),
                           style: OutlinedButton.styleFrom(
@@ -224,7 +224,7 @@ class _EditTaskDialogState extends State<EditTaskDialog> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: taskVm.get_submitting ? null : _save,
+                          onPressed: taskVm.isSubmitting ? null : _save,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF2563EB),
                             padding: const EdgeInsets.symmetric(vertical: 14),
@@ -232,7 +232,7 @@ class _EditTaskDialogState extends State<EditTaskDialog> {
                               borderRadius: BorderRadius.circular(10),
                             ),
                           ),
-                          child: taskVm.get_submitting
+                          child: taskVm.isSubmitting
                               ? const SizedBox(
                                   width: 20,
                                   height: 20,

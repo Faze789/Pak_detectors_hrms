@@ -15,6 +15,7 @@ class EmployeeGoalsScreen extends StatefulWidget {
 class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
   String? _empId;
   bool _fetchingEmpId = true;
+  bool _isLead = false;
 
   @override
   void initState() {
@@ -22,30 +23,47 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
     Future.microtask(() async {
       if (!mounted) return;
       final user = context.read<AuthViewModel>().currentUser;
-      if (user != null && user.role.toLowerCase().contains('lead')) {
-        final doc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .get();
-        final empId = doc.data()?['emp_id'] ?? '';
-        if (!mounted) return;
-        setState(() {
-          _empId = empId;
-          _fetchingEmpId = false;
-        });
-        if (empId.isNotEmpty) {
-          context.read<TaskViewModel>().loadTasksByLeadId(empId);
-        }
-      } else {
+      if (user == null) {
         if (!mounted) return;
         setState(() => _fetchingEmpId = false);
+        return;
+      }
+
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      final empId = doc.data()?['emp_id'] ?? '';
+      final isLead = user.role.toLowerCase().contains('lead');
+
+      if (!mounted) return;
+      setState(() {
+        _empId = empId;
+        _isLead = isLead;
+        _fetchingEmpId = false;
+      });
+
+      if (empId.isNotEmpty) {
+        final taskVm = context.read<TaskViewModel>();
+        if (isLead) {
+          taskVm.loadTasksByLeadId(empId);
+          taskVm.loadMembersByLeadId(empId);
+          taskVm.loadUnassignedEmployees();
+        } else {
+          // Regular employee — load tasks where they are a member
+          taskVm.loadTasksForEmployee(empId);
+        }
       }
     });
   }
 
   void _refreshTasks() {
-    if (_empId != null) {
-      context.read<TaskViewModel>().loadTasksByLeadId(_empId!);
+    if (_empId == null) return;
+    final taskVm = context.read<TaskViewModel>();
+    if (_isLead) {
+      taskVm.loadTasksByLeadId(_empId!);
+    } else {
+      taskVm.loadTasksForEmployee(_empId!);
     }
   }
 
@@ -59,22 +77,11 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
       );
     }
 
-    if (user == null || !user.role.toLowerCase().contains('lead')) {
+    if (user == null) {
       return const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.lock_outline, size: 56, color: Color(0xFFCBD5E1)),
-            SizedBox(height: 12),
-            Text(
-              'Only Project Leads can view assigned goals',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF94A3B8),
-              ),
-            ),
-          ],
+        child: Text(
+          'Please log in to view goals',
+          style: TextStyle(fontSize: 16, color: Color(0xFF94A3B8)),
         ),
       );
     }
@@ -180,9 +187,12 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
               // Task list
               Expanded(
                 child: RefreshIndicator(
-                  onRefresh: () => _empId != null
-                      ? taskVm.loadTasksByLeadId(_empId!)
-                      : Future.value(),
+                  onRefresh: () {
+                    if (_empId == null) return Future.value();
+                    return _isLead
+                        ? taskVm.loadTasksByLeadId(_empId!)
+                        : taskVm.loadTasksForEmployee(_empId!);
+                  },
                   child: ListView.builder(
                     padding: const EdgeInsets.all(16),
                     physics: const AlwaysScrollableScrollPhysics(),
@@ -230,6 +240,13 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
     final dateStr = createdAt != null
         ? '${createdAt.toDate().day}/${createdAt.toDate().month}/${createdAt.toDate().year}'
         : '';
+
+    // Calculate remaining days
+    final deadline = task['deadline'] as Timestamp?;
+    final int? remainingDays = deadline
+        ?.toDate()
+        .difference(DateTime.now())
+        .inDays;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -329,8 +346,8 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                   ),
                   const Spacer(),
                   // Options menu (only if not yet approved)
-                  if (!isApproved) _buildOptionsMenu(task),
-                  if (isApproved)
+                  if (_isLead && !isApproved) _buildOptionsMenu(task),
+                  if (!_isLead || isApproved)
                     Text(
                       dateStr,
                       style: const TextStyle(
@@ -364,20 +381,90 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                   height: 1.4,
                 ),
               ),
+
+              // Remaining days countdown
+              if (remainingDays != null && !isApproved) ...[
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.timer_outlined,
+                      size: 13,
+                      color: remainingDays <= 0
+                          ? const Color(0xFFDC2626)
+                          : remainingDays <= 3
+                          ? const Color(0xFFD97706)
+                          : const Color(0xFF16A34A),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      remainingDays > 0
+                          ? '$remainingDays day${remainingDays == 1 ? '' : 's'} left'
+                          : remainingDays == 0
+                          ? 'Due today'
+                          : 'Overdue by ${-remainingDays} day${remainingDays == -1 ? '' : 's'}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: remainingDays <= 0
+                            ? const Color(0xFFDC2626)
+                            : remainingDays <= 3
+                            ? const Color(0xFFD97706)
+                            : const Color(0xFF16A34A),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 12),
 
-              // Department + Members
+              // Lead info (for employees)
+              if (!_isLead && task['leadName'] != null) ...[
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 12,
+                      backgroundColor: const Color(0xFFDBEAFE),
+                      child: Text(
+                        (task['leadName'] ?? '?')[0].toUpperCase(),
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF2563EB),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Lead: ${task['leadName']}',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF334155),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+              ],
+
+              // Members + Task type
               Row(
                 children: [
-                  // _chipWidget(
-                  //   Icons.business_outlined,
-                  //   task['department'] ?? '',
-                  // ),
-                  const SizedBox(width: 8),
                   _chipWidget(
                     Icons.group_outlined,
                     '${members.length} members',
                   ),
+                  if (task['taskType'] != null) ...[
+                    const SizedBox(width: 8),
+                    _chipWidget(
+                      Icons.category_outlined,
+                      (task['taskType'] as String).toUpperCase(),
+                    ),
+                  ],
                 ],
               ),
             ],
@@ -559,6 +646,11 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                             Icons.schedule_outlined,
                             task['duration'] ?? '',
                           ),
+                          if (task['taskType'] != null)
+                            _detailChip(
+                              Icons.category_outlined,
+                              (task['taskType'] as String).toUpperCase(),
+                            ),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -630,19 +722,60 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                         ),
                       const SizedBox(height: 20),
 
+                      // Previous Description (if task was modified)
+                      if (task['previousDescription'] != null &&
+                          task['previousDescription'].toString().isNotEmpty &&
+                          task['previousDescription'] !=
+                              task['description']) ...[
+                        const Text(
+                          'Previous Description',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF94A3B8),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF2F2),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFFECACA)),
+                          ),
+                          child: Text(
+                            task['previousDescription'],
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Color(0xFF991B1B),
+                              decoration: TextDecoration.lineThrough,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
                       // Description — editable or read-only
                       Row(
                         children: [
-                          const Text(
-                            'Description',
-                            style: TextStyle(
+                          Text(
+                            task['previousDescription'] != null &&
+                                    task['previousDescription']
+                                        .toString()
+                                        .isNotEmpty &&
+                                    task['previousDescription'] !=
+                                        task['description']
+                                ? 'Modified Description'
+                                : 'Description',
+                            style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
                               color: Color(0xFF475569),
                             ),
                           ),
                           const Spacer(),
-                          if (!isAlreadyApproved && !isEditing)
+                          if (_isLead && !isAlreadyApproved && !isEditing)
                             GestureDetector(
                               onTap: () =>
                                   setSheetState(() => isEditing = true),
@@ -818,10 +951,39 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                             ),
                           );
                         }),
+                      // Manage Members button (lead only, not approved)
+                      if (_isLead && !isAlreadyApproved) ...[
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              Navigator.of(sheetContext).pop();
+                              _showManageMembersDialog(context, task);
+                            },
+                            icon: const Icon(
+                              Icons.group_add_outlined,
+                              size: 16,
+                              color: Color(0xFF2563EB),
+                            ),
+                            label: const Text(
+                              'Manage Members',
+                              style: TextStyle(color: Color(0xFF2563EB)),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              side: const BorderSide(color: Color(0xFF2563EB)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 20),
 
-                      // Action buttons
-                      if (!isAlreadyApproved)
+                      // Action buttons (lead: approve+history, employee: history only)
+                      if (_isLead && !isAlreadyApproved)
                         Row(
                           children: [
                             // Approve button
@@ -893,7 +1055,7 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                           ],
                         )
                       else
-                        // Already approved — only show History
+                        // Employee view OR already approved — show History
                         SizedBox(
                           width: double.infinity,
                           child: OutlinedButton.icon(
@@ -924,6 +1086,232 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                   ),
                 );
               },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ─── Manage Members Dialog ─────────────────────────────────────────────────
+
+  void _showManageMembersDialog(
+    BuildContext context,
+    Map<String, dynamic> task,
+  ) {
+    final taskVm = context.read<TaskViewModel>();
+    final teamMembers = taskVm.members; // employees with this lead_id
+    final unassigned = taskVm.unassignedEmployees; // employees with no lead_id
+    final currentMembers = task['members'] as Map<String, dynamic>? ?? {};
+    final leadEmpId = task['lead_id'] ?? '';
+
+    // Build set of currently assigned emp_ids (on this task)
+    final Set<String> selectedIds = {};
+    for (final entry in currentMembers.values) {
+      if (entry is Map<String, dynamic>) {
+        selectedIds.add(entry['emp_id'] ?? '');
+      }
+    }
+
+    // Track which unassigned emp_ids were originally NOT in the team
+    final Set<String> originalUnassignedIds = unassigned
+        .map((m) => (m['emp_id'] ?? '') as String)
+        .toSet();
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: const Text(
+                'Manage Members',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    // Current team members
+                    if (teamMembers.isNotEmpty) ...[
+                      const Padding(
+                        padding: EdgeInsets.only(left: 16, top: 8, bottom: 4),
+                        child: Text(
+                          'Team Members',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF2563EB),
+                          ),
+                        ),
+                      ),
+                      ...teamMembers.map((m) {
+                        final empId = m['emp_id'] ?? '';
+                        final isSelected = selectedIds.contains(empId);
+                        return CheckboxListTile(
+                          value: isSelected,
+                          activeColor: const Color(0xFF2563EB),
+                          title: Text(
+                            m['name'] ?? 'Unknown',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          subtitle: Text(
+                            empId,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF94A3B8),
+                            ),
+                          ),
+                          onChanged: (v) {
+                            setDialogState(() {
+                              if (v == true) {
+                                selectedIds.add(empId);
+                              } else {
+                                selectedIds.remove(empId);
+                              }
+                            });
+                          },
+                        );
+                      }),
+                    ],
+
+                    // Unassigned employees
+                    if (unassigned.isNotEmpty) ...[
+                      const Divider(),
+                      const Padding(
+                        padding: EdgeInsets.only(left: 16, top: 4, bottom: 4),
+                        child: Text(
+                          'Available Employees (No Lead)',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF16A34A),
+                          ),
+                        ),
+                      ),
+                      ...unassigned.map((m) {
+                        final empId = m['emp_id'] ?? '';
+                        final isSelected = selectedIds.contains(empId);
+                        return CheckboxListTile(
+                          value: isSelected,
+                          activeColor: const Color(0xFF16A34A),
+                          title: Text(
+                            m['name'] ?? 'Unknown',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          subtitle: Text(
+                            '$empId · ${m['role'] ?? ''}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF94A3B8),
+                            ),
+                          ),
+                          onChanged: (v) {
+                            setDialogState(() {
+                              if (v == true) {
+                                selectedIds.add(empId);
+                              } else {
+                                selectedIds.remove(empId);
+                              }
+                            });
+                          },
+                        );
+                      }),
+                    ],
+
+                    if (teamMembers.isEmpty && unassigned.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text('No employees available'),
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(color: Color(0xFF64748B)),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    // Save lead_id for newly selected unassigned employees
+                    for (final emp in unassigned) {
+                      final empId = emp['emp_id'] ?? '';
+                      final uid = emp['uid'] ?? '';
+                      if (selectedIds.contains(empId) &&
+                          originalUnassignedIds.contains(empId) &&
+                          uid.isNotEmpty) {
+                        await taskVm.assignEmployeeToLead(uid, leadEmpId);
+                      }
+                    }
+
+                    // Build new members map from all sources
+                    final allEmployees = [...teamMembers, ...unassigned];
+                    final Map<String, dynamic> newMembersMap = {};
+                    int index = 1;
+                    for (final m in allEmployees) {
+                      final empId = m['emp_id'] ?? '';
+                      if (selectedIds.contains(empId)) {
+                        newMembersMap['$index'] = {
+                          'name': m['name'] ?? '',
+                          'emp_id': empId,
+                        };
+                        index++;
+                      }
+                    }
+
+                    final success = await taskVm.updateTaskMembers(
+                      taskId: task['id'],
+                      membersMap: newMembersMap,
+                    );
+
+                    if (!context.mounted) return;
+                    Navigator.of(dialogContext).pop();
+
+                    if (success) {
+                      // Refresh members and unassigned lists
+                      if (_empId != null) {
+                        taskVm.loadMembersByLeadId(_empId!);
+                        taskVm.loadUnassignedEmployees();
+                      }
+                      _refreshTasks();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Members updated'),
+                          backgroundColor: Color(0xFF16A34A),
+                        ),
+                      );
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: const Text(
+                    'Save',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
             );
           },
         );

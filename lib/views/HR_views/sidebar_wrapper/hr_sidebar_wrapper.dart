@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:hrms_app/views/HR_views/AssignTaskByHR.dart';
-import 'package:hrms_app/views/HR_views/CheckAssignedTasks.dart';
 import 'package:hrms_app/views/HR_views/employee_screen.dart';
 import 'package:hrms_app/views/HR_views/hr_attendance_screen.dart';
 import 'package:hrms_app/views/HR_views/hr_branch_management.dart';

@@ -17,6 +17,7 @@ class Employee {
   String? project_title;
   String? project_description;
   String? project_duration;
+  String? jobDescription;
 
   // ── Leave Quotas ──────────────────────────────────────────────────────────
   final int annualLeaveQuota;
@@ -57,6 +58,7 @@ class Employee {
     this.project_title = '',
     this.project_description = '',
     this.project_duration = '',
+    this.jobDescription,
   });
 
   factory Employee.fromMap(Map<String, dynamic> map, {String? uid}) {
@@ -75,6 +77,7 @@ class Employee {
       project_title: map['project_title'] ?? '',
       project_description: map['project_description'] ?? '',
       project_duration: map['project_duration'] ?? '',
+      jobDescription: map['jobDescription'] as String?,
 
       annualLeaveQuota: (map['annualLeaveQuota'] ?? 4).toInt(),
       sickLeaveQuota: (map['sickLeaveQuota'] ?? 3).toInt(),
@@ -107,6 +110,7 @@ class Employee {
       'project_title': project_title,
       'project_description': project_description,
       'project_duration': project_duration,
+      if (jobDescription != null) 'jobDescription': jobDescription,
       'annualLeaveQuota': annualLeaveQuota,
       'sickLeaveQuota': sickLeaveQuota,
       'casualLeaveQuota': casualLeaveQuota,
@@ -157,6 +161,7 @@ class Employee {
     String? currentAssignedBranchName,
     DateTime? branchAssignmentExpiry,
     bool? fieldDuty,
+    String? jobDescription,
   }) {
     return Employee(
       uid: uid ?? this.uid,
@@ -183,6 +188,7 @@ class Employee {
       branchAssignmentExpiry:
           branchAssignmentExpiry ?? this.branchAssignmentExpiry,
       fieldDuty: fieldDuty ?? this.fieldDuty,
+      jobDescription: jobDescription ?? this.jobDescription,
     );
   }
 

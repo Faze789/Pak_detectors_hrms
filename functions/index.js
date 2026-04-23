@@ -6,15 +6,17 @@
 //  3. onBarrierCreated              → Firestore trigger on barriers/{barrierId}
 //  4. onTaskNotificationCreated     → Firestore trigger on task_notifications/{notifId}
 //     Sends FCM push to the lead when their task is modified.
+//  5. sendDailyTaskReminders        → scheduled 9:00 AM Mon–Fri
+//     Sends countdown reminders to lead + members for pending tasks.
 
-const { setGlobalOptions }    = require("firebase-functions");
-const { onSchedule }          = require("firebase-functions/v2/scheduler");
-const { onDocumentCreated }   = require("firebase-functions/v2/firestore");
-const logger                  = require("firebase-functions/logger");
-const admin                   = require("firebase-admin");
+const { setGlobalOptions } = require("firebase-functions");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const logger = require("firebase-functions/logger");
+const admin = require("firebase-admin");
 
 admin.initializeApp();
-const db        = admin.firestore();
+const db = admin.firestore();
 const messaging = admin.messaging();
 
 setGlobalOptions({ maxInstances: 1 });
@@ -26,8 +28,8 @@ setGlobalOptions({ maxInstances: 1 });
 // ─────────────────────────────────────────────────────────────────────────────
 exports.markAbsentAtCutoff = onSchedule(
   {
-    schedule:     "1 12 * * 1-5",
-    timeZone:     "Asia/Karachi",
+    schedule: "1 12 * * 1-5",
+    timeZone: "Asia/Karachi",
     maxInstances: 1,
   },
   async (_event) => {
@@ -43,8 +45,8 @@ exports.markAbsentAtCutoff = onSchedule(
 // ─────────────────────────────────────────────────────────────────────────────
 exports.markAbsentHalfDay = onSchedule(
   {
-    schedule:     "1 14 * * 1-5",
-    timeZone:     "Asia/Karachi",
+    schedule: "1 14 * * 1-5",
+    timeZone: "Asia/Karachi",
     maxInstances: 1,
   },
   async (_event) => {
@@ -65,10 +67,10 @@ exports.onBarrierCreated = onDocumentCreated(
     logger.info(`[onBarrierCreated] New barrier: ${barrierId}`);
 
     const {
-      employeeName  = "An employee",
-      recipientId   = null,
-      ccIds         = [],
-      description   = "",
+      employeeName = "An employee",
+      recipientId = null,
+      ccIds = [],
+      description = "",
     } = barrier;
 
     if (!recipientId) {
@@ -106,22 +108,22 @@ exports.onBarrierCreated = onDocumentCreated(
           token: recipientToken,
           notification: {
             title: "⚠ Barrier Report",
-            body:  `${employeeName} reported a barrier: ${shortDesc}`,
+            body: `${employeeName} reported a barrier: ${shortDesc}`,
           },
           data: {
-            type:         "barrier_report",
+            type: "barrier_report",
             barrierId,
-            reporterId:   barrier.employeeId   ?? "",
+            reporterId: barrier.employeeId ?? "",
             reporterName: employeeName,
             description,
-            timestamp:    new Date().toISOString(),
+            timestamp: new Date().toISOString(),
           },
           android: {
             priority: "high",
             notification: {
               channelId: "barrier_reports",
-              sound:     "default",
-              priority:  "high",
+              sound: "default",
+              priority: "high",
             },
           },
           apns: {
@@ -129,7 +131,7 @@ exports.onBarrierCreated = onDocumentCreated(
               aps: {
                 alert: {
                   title: "⚠ Barrier Report",
-                  body:  `${employeeName} reported a barrier: ${shortDesc}`,
+                  body: `${employeeName} reported a barrier: ${shortDesc}`,
                 },
                 sound: "default",
               },
@@ -157,17 +159,17 @@ exports.onBarrierCreated = onDocumentCreated(
 
     for (let i = 0; i < ccTokens.length; i++) {
       const token = ccTokens[i];
-      const uid   = ccIds[i];
+      const uid = ccIds[i];
       try {
         const result = await messaging.send({
           token,
           data: {
-            type:         "barrier_report_cc",
+            type: "barrier_report_cc",
             barrierId,
-            reporterId:   barrier.employeeId ?? "",
+            reporterId: barrier.employeeId ?? "",
             reporterName: employeeName,
             description,
-            timestamp:    new Date().toISOString(),
+            timestamp: new Date().toISOString(),
           },
           android: { priority: "high" },
           apns: {
@@ -192,7 +194,7 @@ exports.onBarrierCreated = onDocumentCreated(
 
     await event.data.ref.update({
       notificationsSent: sendResults,
-      notifiedAt:        admin.firestore.FieldValue.serverTimestamp(),
+      notifiedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
     logger.info(
@@ -210,7 +212,7 @@ exports.onBarrierCreated = onDocumentCreated(
 exports.onTaskNotificationCreated = onDocumentCreated(
   "task_notifications/{notifId}",
   async (event) => {
-    const notif   = event.data.data();
+    const notif = event.data.data();
     const notifId = event.params.notifId;
 
     logger.info(`[onTaskNotificationCreated] New task notification: ${notifId}`);
@@ -224,12 +226,12 @@ exports.onTaskNotificationCreated = onDocumentCreated(
     // Find the lead's user doc by emp_id (case-insensitive)
     const usersSnap = await db.collection("users").get();
     let leadToken = null;
-    let leadUid   = null;
+    let leadUid = null;
     for (const doc of usersSnap.docs) {
       const data = doc.data();
       if ((data.emp_id ?? "").toLowerCase() === leadEmpId) {
         leadToken = data.fcmToken ?? null;
-        leadUid   = doc.id;
+        leadUid = doc.id;
         break;
       }
     }
@@ -240,24 +242,24 @@ exports.onTaskNotificationCreated = onDocumentCreated(
     }
 
     const title = notif.title ?? "Task Updated";
-    const body  = notif.body  ?? "One of your tasks was modified.";
+    const body = notif.body ?? "One of your tasks was modified.";
 
     try {
       const result = await messaging.send({
         token: leadToken,
         notification: { title, body },
         data: {
-          type:       "task_modified",
-          taskId:     notif.taskId    ?? "",
+          type: "task_modified",
+          taskId: notif.taskId ?? "",
           modifiedBy: notif.modifiedBy ?? "",
-          timestamp:  new Date().toISOString(),
+          timestamp: new Date().toISOString(),
         },
         android: {
           priority: "high",
           notification: {
             channelId: "task_updates",
-            sound:     "default",
-            priority:  "high",
+            sound: "default",
+            priority: "high",
           },
         },
         apns: {
@@ -282,16 +284,109 @@ exports.onTaskNotificationCreated = onDocumentCreated(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
+// DAILY TASK REMINDERS — 9:00 AM Mon–Fri
+// Sends countdown notifications to lead + members for pending tasks.
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+// 0    9    *    *    1-5
+// │    │    │    │    │
+// │    │    │    │    └── Monday to Friday
+// │    │    │    └────── Every month
+// │    │    └────────── Every day of month
+// │    └────────────── 9 AM
+// └────────────────── Minute 0
+
+// Final Meaning
+
+// 👉 Runs at 9:00 AM, Monday to Friday, every week
+exports.sendDailyTaskReminders = onSchedule(
+  {
+    schedule: "0 9 * * 1-5",
+    timeZone: "Asia/Karachi",
+    maxInstances: 1,
+  },
+  async (_event) => {
+    logger.info("[sendDailyTaskReminders] Starting daily reminder run.");
+
+    const tasksSnap = await db.collection("tasks")
+      .where("status", "==", "pending")
+      .get();
+
+    if (tasksSnap.empty) {
+      logger.info("[sendDailyTaskReminders] No pending tasks found.");
+      return;
+    }
+
+    logger.info(`[sendDailyTaskReminders] Found ${tasksSnap.size} pending task(s).`);
+
+    const now = new Date();
+    let notifCount = 0;
+
+    for (const taskDoc of tasksSnap.docs) {
+      const task = taskDoc.data();
+      const taskId = taskDoc.id;
+      const deadline = task.deadline;
+
+      if (!deadline) continue;
+
+      const deadlineDate = deadline.toDate();
+      const diffMs = deadlineDate.getTime() - now.getTime();
+      const remainingDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+      const title = task.title || "Untitled Task";
+      let reminderText;
+      if (remainingDays > 0) {
+        reminderText = `"${title}" — ${remainingDays} day${remainingDays === 1 ? "" : "s"} remaining`;
+      } else if (remainingDays === 0) {
+        reminderText = `"${title}" is due today!`;
+      } else {
+        reminderText = `"${title}" is overdue by ${-remainingDays} day${remainingDays === -1 ? "" : "s"}`;
+      }
+
+      // Collect all recipient emp_ids: lead + members
+      const recipientEmpIds = new Set();
+
+      const leadId = (task.lead_id || "").trim();
+      if (leadId) recipientEmpIds.add(leadId);
+
+      const members = task.members || {};
+      for (const key of Object.keys(members)) {
+        const m = members[key];
+        if (m && m.emp_id) {
+          recipientEmpIds.add(m.emp_id);
+        }
+      }
+
+      // Create a task_notification doc for each recipient
+      for (const empId of recipientEmpIds) {
+        await db.collection("task_notifications").add({
+          lead_id: empId,
+          taskId: taskId,
+          title: "Task Reminder",
+          body: reminderText,
+          type: "daily_reminder",
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        notifCount++;
+      }
+    }
+
+    logger.info(`[sendDailyTaskReminders] Done. Created ${notifCount} reminder notification(s).`);
+  }
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Core absent logic — called by both scheduled functions
 // ─────────────────────────────────────────────────────────────────────────────
 async function _runMarkAbsent({ skipFirstHalfLeave }) {
 
   let checkInCutoff = 12;
   let halfDayCutoff = 14;
-  let halfDayMark   = 13;
+  let halfDayMark = 13;
   let workStartHour = 9;
-  let workEndHour   = 18;
-  let timezone      = "Asia/Karachi";
+  let workEndHour = 18;
+  let timezone = "Asia/Karachi";
 
   try {
     const settingsSnap = await db
@@ -303,10 +398,10 @@ async function _runMarkAbsent({ skipFirstHalfLeave }) {
       const data = settingsSnap.data();
       if (data.checkInCutoff != null) checkInCutoff = data.checkInCutoff;
       if (data.halfDayCutoff != null) halfDayCutoff = data.halfDayCutoff;
-      if (data.halfDayMark   != null) halfDayMark   = data.halfDayMark;
+      if (data.halfDayMark != null) halfDayMark = data.halfDayMark;
       if (data.workStartHour != null) workStartHour = data.workStartHour;
-      if (data.workEndHour   != null) workEndHour   = data.workEndHour;
-      if (data.timezone      != null) timezone      = data.timezone;
+      if (data.workEndHour != null) workEndHour = data.workEndHour;
+      if (data.timezone != null) timezone = data.timezone;
 
       logger.info(
         `[markAbsent] Settings — start:${workStartHour} cutoff:${checkInCutoff} ` +
@@ -325,18 +420,18 @@ async function _runMarkAbsent({ skipFirstHalfLeave }) {
   // Previously: new Date(dayKey + "T00:00:00") used the server's local timezone
   // (UTC on Cloud Functions), which could be a different date than Pakistan time.
   const todayStr = now.toLocaleDateString("en-CA", { timeZone: timezone }); // "YYYY-MM-DD"
-  const dayKey   = todayStr;
+  const dayKey = todayStr;
 
   // Build midnight in Pakistan time correctly via Intl parts
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: timezone,
-    year:     "numeric",
-    month:    "2-digit",
-    day:      "2-digit",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
   }).formatToParts(now);
-  const pYear  = Number(parts.find(p => p.type === "year").value);
+  const pYear = Number(parts.find(p => p.type === "year").value);
   const pMonth = Number(parts.find(p => p.type === "month").value);
-  const pDay   = Number(parts.find(p => p.type === "day").value);
+  const pDay = Number(parts.find(p => p.type === "day").value);
 
   // Midnight PKT expressed as a UTC Date
   // PKT = UTC+5, so midnight PKT = previous day 19:00 UTC
@@ -363,7 +458,7 @@ async function _runMarkAbsent({ skipFirstHalfLeave }) {
   const usersSnap = await db
     .collection("users")
     .where("isActive", "==", true)
-    .where("role",     "==", "employee")
+    .where("role", "==", "employee")
     .get();
 
   if (usersSnap.empty) {
@@ -376,12 +471,12 @@ async function _runMarkAbsent({ skipFirstHalfLeave }) {
   const month = String(pMonth).padStart(2, "0");
 
   const BATCH_SIZE = 400;
-  let   batch      = db.batch();
-  let   batchCount = 0;
-  let   processed  = 0;
+  let batch = db.batch();
+  let batchCount = 0;
+  let processed = 0;
 
   for (const userDoc of usersSnap.docs) {
-    const userId    = userDoc.id;
+    const userId = userDoc.id;
     const archiveId = `${userId}_${pYear}_${month}`;
 
     // ── FIX 2: Check attendance_live using dayKey string, not Date comparison ──
@@ -425,16 +520,16 @@ async function _runMarkAbsent({ skipFirstHalfLeave }) {
 
     const leaveSnap = await db
       .collection("leaves")
-      .where("userId",    "==", userId)
-      .where("status",    "==", "approved")
+      .where("userId", "==", userId)
+      .where("status", "==", "approved")
       .where("startDate", "<=", admin.firestore.Timestamp.fromDate(todayStart))
-      .where("endDate",   ">=", admin.firestore.Timestamp.fromDate(todayStart))
+      .where("endDate", ">=", admin.firestore.Timestamp.fromDate(todayStart))
       .limit(1)
       .get();
 
-    const leaveDoc       = leaveSnap.empty ? null : leaveSnap.docs[0];
+    const leaveDoc = leaveSnap.empty ? null : leaveSnap.docs[0];
     const leaveRequestId = leaveDoc?.id ?? null;
-    const leaveDuration  = leaveDoc?.data()?.duration ?? null;
+    const leaveDuration = leaveDoc?.data()?.duration ?? null;
 
     let status = null;
 
@@ -494,17 +589,17 @@ async function _runMarkAbsent({ skipFirstHalfLeave }) {
     const archiveRef = db.collection("attendance_archive").doc(archiveId);
     const record = {
       userId,
-      date:              admin.firestore.Timestamp.fromDate(todayStart),
+      date: admin.firestore.Timestamp.fromDate(todayStart),
       status,
       checkInCutoff,
       halfDayCutoff,
       halfDayMark,
       workStartHour,
       workEndHour,
-      breaks:            [],
-      totalWorkSeconds:  0,
+      breaks: [],
+      totalWorkSeconds: 0,
       totalBreakSeconds: 0,
-      ...(leaveDuration  && { leaveType: leaveDuration }),
+      ...(leaveDuration && { leaveType: leaveDuration }),
       ...(leaveRequestId && { leaveRequestId }),
     };
 
@@ -512,9 +607,9 @@ async function _runMarkAbsent({ skipFirstHalfLeave }) {
       archiveRef,
       {
         userId,
-        year:  pYear,
+        year: pYear,
         month: pMonth,
-        days:  { [dayKey]: record },
+        days: { [dayKey]: record },
       },
       { merge: true }
     );
@@ -525,7 +620,7 @@ async function _runMarkAbsent({ skipFirstHalfLeave }) {
     if (batchCount >= BATCH_SIZE) {
       await batch.commit();
       logger.info(`[markAbsent] Batch of ${batchCount} committed.`);
-      batch      = db.batch();
+      batch = db.batch();
       batchCount = 0;
     }
   }
