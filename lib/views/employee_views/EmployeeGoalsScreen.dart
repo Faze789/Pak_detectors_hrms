@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:hrms_app/views/lead_employee_chat_screen.dart';
 import 'package:provider/provider.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/task_viewmodel.dart';
@@ -464,6 +465,57 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                       Icons.category_outlined,
                       (task['taskType'] as String).toUpperCase(),
                     ),
+                    SizedBox(width: 30),
+                    _isLead
+                        ? Row(
+                            children: [
+                              feed_back_button(
+                                TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFF2563EB),
+                                ),
+                                Icons.feedback_outlined,
+                                'Feedback',
+                                () => _showFeedbackMemberPicker(context, task),
+                              ),
+
+                              //  check_status ? status(
+                              //           TextStyle(fontSize: 11, color: Color(0xFF2563EB)),
+                              //           Icons.check_circle_outline,
+                              //           'Approved',
+                              //           () {
+                              //             _approveTask(task);
+                              //             Navigator.pop(context);
+                              //           },
+                              //         )
+                            ],
+                          )
+                        : feed_back_button(
+                            TextStyle(fontSize: 11, color: Color(0xFF2563EB)),
+                            Icons.feedback_outlined,
+                            'Send a query',
+                            () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => LeadEmployeeChatScreen(
+                                    taskId: task['id'] ?? '',
+                                    taskTitle: task['title'] ?? '',
+                                    leadEmpId: task['lead_id'] ?? '',
+                                    leadName: task['leadName'] ?? '',
+                                    employeeEmpId: _empId ?? '',
+                                    employeeName:
+                                        context
+                                            .read<AuthViewModel>()
+                                            .currentUser
+                                            ?.name ??
+                                        '',
+                                    currentUserEmpId: _empId ?? '',
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
                   ],
                 ],
               ),
@@ -471,6 +523,132 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget feed_back_button(
+    TextStyle textStyle,
+    IconData icon,
+    String label,
+    VoidCallback onPressed,
+  ) {
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 12, color: const Color(0xFF2563EB)),
+      label: Text(label, style: textStyle),
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        side: const BorderSide(color: Color(0xFF2563EB)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+      ),
+    );
+  }
+
+  // ─── Feedback Member Picker (Lead picks which member to chat with) ────────
+
+  void _showFeedbackMemberPicker(
+    BuildContext context,
+    Map<String, dynamic> task,
+  ) {
+    final members = task['members'] as Map<String, dynamic>? ?? {};
+    if (members.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No members assigned to this task'),
+          backgroundColor: Color(0xFFEF4444),
+        ),
+      );
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetCtx) {
+        return Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFCBD5E1),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Select Member to Chat',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              const SizedBox(height: 12),
+              ...members.entries.map((entry) {
+                final m = entry.value as Map<String, dynamic>;
+                return ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: const Color(0xFFDBEAFE),
+                    child: Text(
+                      (m['name'] ?? '?')[0].toUpperCase(),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF2563EB),
+                      ),
+                    ),
+                  ),
+                  title: Text(
+                    m['name'] ?? 'Unknown',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1E293B),
+                    ),
+                  ),
+                  subtitle: Text(
+                    m['emp_id'] ?? '',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF94A3B8),
+                    ),
+                  ),
+                  trailing: const Icon(
+                    Icons.chat_outlined,
+                    color: Color(0xFF2563EB),
+                    size: 20,
+                  ),
+                  onTap: () {
+                    Navigator.of(sheetCtx).pop();
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => LeadEmployeeChatScreen(
+                          taskId: task['id'] ?? '',
+                          taskTitle: task['title'] ?? '',
+                          leadEmpId: task['lead_id'] ?? '',
+                          leadName: task['leadName'] ?? '',
+                          employeeEmpId: m['emp_id'] ?? '',
+                          employeeName: m['name'] ?? '',
+                          currentUserEmpId: _empId ?? '',
+                        ),
+                      ),
+                    );
+                  },
+                );
+              }),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -529,6 +707,7 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
     final success = await context.read<TaskViewModel>().editTask(
       taskId: task['id'],
       currentData: task,
+      project_status_from_employeer: 'pending',
       newTitle: task['title'] ?? '',
       newDescription: newDescription ?? task['description'] ?? '',
       newDuration: task['duration'] ?? '',

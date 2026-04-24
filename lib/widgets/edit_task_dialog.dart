@@ -59,6 +59,8 @@ class _EditTaskDialogState extends State<EditTaskDialog> {
     final taskVm = context.read<TaskViewModel>();
     final success = await taskVm.editTask(
       taskId: widget.task['id'],
+      project_status_from_employeer:
+          widget.task['project_status_from_employeer'],
       currentData: widget.task,
       newTitle: _titleCtrl.text.trim(),
       newDescription: _descCtrl.text.trim(),
@@ -107,8 +109,11 @@ class _EditTaskDialogState extends State<EditTaskDialog> {
                   // Header
                   Row(
                     children: [
-                      const Icon(Icons.edit_note_rounded,
-                          color: Color(0xFF2563EB), size: 24),
+                      const Icon(
+                        Icons.edit_note_rounded,
+                        color: Color(0xFF2563EB),
+                        size: 24,
+                      ),
                       const SizedBox(width: 8),
                       const Expanded(
                         child: Text(
@@ -123,7 +128,9 @@ class _EditTaskDialogState extends State<EditTaskDialog> {
                       // Version badge
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFFEFF6FF),
                           borderRadius: BorderRadius.circular(6),
@@ -182,13 +189,15 @@ class _EditTaskDialogState extends State<EditTaskDialog> {
                     initialValue: _status,
                     decoration: _inputDecoration(''),
                     items: _statusOptions
-                        .map((s) => DropdownMenuItem(
-                              value: s,
-                              child: Text(
-                                s[0].toUpperCase() + s.substring(1),
-                                style: const TextStyle(fontSize: 14),
-                              ),
-                            ))
+                        .map(
+                          (s) => DropdownMenuItem(
+                            value: s,
+                            child: Text(
+                              s[0].toUpperCase() + s.substring(1),
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                          ),
+                        )
                         .toList(),
                     onChanged: (v) {
                       if (v != null) setState(() => _status = v);
@@ -209,8 +218,7 @@ class _EditTaskDialogState extends State<EditTaskDialog> {
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
                             ),
-                            side:
-                                const BorderSide(color: Color(0xFFCBD5E1)),
+                            side: const BorderSide(color: Color(0xFFCBD5E1)),
                           ),
                           child: const Text(
                             'Cancel',
@@ -297,7 +305,9 @@ class _EditTaskDialogState extends State<EditTaskDialog> {
 
 /// A bottom sheet that shows all versions of a task (history + current).
 void showTaskHistorySheet(
-    BuildContext context, Map<String, dynamic> currentTask) {
+  BuildContext context,
+  Map<String, dynamic> currentTask,
+) {
   final taskVm = context.read<TaskViewModel>();
   taskVm.loadTaskHistory(currentTask['id']);
 
@@ -373,16 +383,18 @@ void showTaskHistorySheet(
                         ),
                       )
                     else
-                      ...history.reversed.map((h) => _versionCard(
-                            version: h['version'] ?? 0,
-                            title: h['title'] ?? '',
-                            description: h['description'] ?? '',
-                            duration: h['duration'] ?? '',
-                            status: h['status'] ?? '',
-                            isCurrent: false,
-                            modifiedBy: h['savedBy'],
-                            timestamp: h['savedAt'] as Timestamp?,
-                          )),
+                      ...history.reversed.map(
+                        (h) => _versionCard(
+                          version: h['version'] ?? 0,
+                          title: h['title'] ?? '',
+                          description: h['description'] ?? '',
+                          duration: h['duration'] ?? '',
+                          status: h['status'] ?? '',
+                          isCurrent: false,
+                          modifiedBy: h['savedBy'],
+                          timestamp: h['savedAt'] as Timestamp?,
+                        ),
+                      ),
 
                     const SizedBox(height: 16),
                   ],
@@ -493,20 +505,25 @@ Widget _versionCard({
         const SizedBox(height: 6),
         Row(
           children: [
-            const Icon(Icons.schedule_outlined,
-                size: 12, color: Color(0xFF94A3B8)),
+            const Icon(
+              Icons.schedule_outlined,
+              size: 12,
+              color: Color(0xFF94A3B8),
+            ),
             const SizedBox(width: 4),
-            Text(duration,
-                style: const TextStyle(
-                    fontSize: 11, color: Color(0xFF94A3B8))),
+            Text(
+              duration,
+              style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+            ),
             if (modifiedBy != null) ...[
               const Spacer(),
               Text(
                 'by $modifiedBy',
                 style: const TextStyle(
-                    fontSize: 11,
-                    fontStyle: FontStyle.italic,
-                    color: Color(0xFF94A3B8)),
+                  fontSize: 11,
+                  fontStyle: FontStyle.italic,
+                  color: Color(0xFF94A3B8),
+                ),
               ),
             ],
           ],

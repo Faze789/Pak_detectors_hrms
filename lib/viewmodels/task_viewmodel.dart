@@ -11,6 +11,7 @@ class TaskViewModel extends ChangeNotifier {
   List<Map<String, dynamic>> _members = [];
   List<Map<String, dynamic>> _unassignedEmployees = [];
   List<Map<String, dynamic>> _taskHistory = [];
+  String project_status_from_employeer = 'pending';
   bool isLoading = false;
   String? errorMessage;
 
@@ -18,9 +19,12 @@ class TaskViewModel extends ChangeNotifier {
 
   bool get isSubmitting => _submitting;
 
+  List<Map<String, dynamic>> _allUsers = [];
+
   List<Map<String, dynamic>> get tasks => _tasks;
   List<Map<String, dynamic>> get members => _members;
   List<Map<String, dynamic>> get unassignedEmployees => _unassignedEmployees;
+  List<Map<String, dynamic>> get allUsers => _allUsers;
   List<Map<String, dynamic>> get taskHistory => _taskHistory;
 
   /// Load all tasks for a specific lead by emp_id
@@ -105,6 +109,17 @@ class TaskViewModel extends ChangeNotifier {
     }
 
     isLoading = false;
+    notifyListeners();
+  }
+
+  /// Load all users excluding HR (for lead + member selection by HR)
+  Future<void> loadAllNonHRUsers() async {
+    try {
+      _allUsers = await _service.getAllNonHRUsers();
+    } catch (e) {
+      debugPrint('[TaskVM] ERROR loading all users: $e');
+      _allUsers = [];
+    }
     notifyListeners();
   }
 
@@ -197,6 +212,7 @@ class TaskViewModel extends ChangeNotifier {
   Future<bool> editTask({
     required String taskId,
     required Map<String, dynamic> currentData,
+    required String project_status_from_employeer,
     required String newTitle,
     required String newDescription,
     required String newDuration,
@@ -211,6 +227,7 @@ class TaskViewModel extends ChangeNotifier {
       await _service.updateTask(
         taskId: taskId,
         currentData: currentData,
+        project_status_from_employeer: project_status_from_employeer,
         newTitle: newTitle,
         newDescription: newDescription,
         newDuration: newDuration,

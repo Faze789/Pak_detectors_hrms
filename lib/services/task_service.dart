@@ -87,25 +87,27 @@ class TaskService {
   }
 
   /// Fetch tasks where the given emp_id appears in the members map
-  Future<List<Map<String, dynamic>>> getTasksByMemberEmpId(
-      String empId) async {
+  Future<List<Map<String, dynamic>>> getTasksByMemberEmpId(String empId) async {
     final snap = await _tasks.get();
     final lowerEmpId = empId.toLowerCase();
 
-    final docs = snap.docs.where((d) {
-      final data = d.data();
-      final members = data['members'] as Map<String, dynamic>? ?? {};
-      return members.values.any((m) {
-        if (m is Map<String, dynamic>) {
-          return (m['emp_id'] ?? '').toString().toLowerCase() == lowerEmpId;
-        }
-        return false;
-      });
-    }).map((d) {
-      final data = d.data();
-      data['id'] = d.id;
-      return data;
-    }).toList();
+    final docs = snap.docs
+        .where((d) {
+          final data = d.data();
+          final members = data['members'] as Map<String, dynamic>? ?? {};
+          return members.values.any((m) {
+            if (m is Map<String, dynamic>) {
+              return (m['emp_id'] ?? '').toString().toLowerCase() == lowerEmpId;
+            }
+            return false;
+          });
+        })
+        .map((d) {
+          final data = d.data();
+          data['id'] = d.id;
+          return data;
+        })
+        .toList();
 
     docs.sort((a, b) {
       final aTime = a['createdAt'] as Timestamp?;
@@ -206,6 +208,7 @@ class TaskService {
   Future<void> updateTask({
     required String taskId,
     required Map<String, dynamic> currentData,
+    required String project_status_from_employeer,
     required String newTitle,
     required String newDescription,
     required String newDuration,
@@ -246,9 +249,10 @@ class TaskService {
     // Save previous description so both screens can show old vs new
     updateData['previousDescription'] = currentData['description'] ?? '';
 
-    // Save approval timestamp when task is approved
+    // Save approval timestamp and set employee status when task is approved
     if (newStatus == 'approved') {
       updateData['approvedAt'] = FieldValue.serverTimestamp();
+      updateData['project_status_from_employee'] = 'pending';
     }
 
     await taskRef.update(updateData);
@@ -275,6 +279,22 @@ class TaskService {
     required Map<String, dynamic> membersMap,
   }) async {
     await _tasks.doc(taskId).update({'members': membersMap});
+  }
+
+  /// Fetch all users excluding HR (for lead + member selection)
+  Future<List<Map<String, dynamic>>> getAllNonHRUsers() async {
+    final snapshot = await _users.get();
+    return snapshot.docs
+        .where((doc) {
+          final role = (doc.data()['role'] ?? '').toString().toLowerCase();
+          return !role.contains('hr');
+        })
+        .map((doc) {
+          final data = doc.data();
+          data['uid'] = doc.id;
+          return data;
+        })
+        .toList();
   }
 
   /// Fetch employees that have no lead_id (unassigned to any lead)

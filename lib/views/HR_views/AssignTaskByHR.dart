@@ -1,20 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:hrms_app/views/HR_views/CheckAssignedTasks.dart';
 import 'package:hrms_app/views/HR_views/assign_task_to_lead_form.dart';
-import 'package:provider/provider.dart';
-import 'package:hrms_app/viewmodels/employee_viewmodel.dart';
 
 class AssignTaskByHR extends StatelessWidget {
   const AssignTaskByHR({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final allEmployees = context.watch<EmployeeViewModel>().employees;
-
-    final projectLeads = allEmployees
-        .where((emp) => emp.role.toLowerCase() == 'project lead')
-        .toList();
-
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
@@ -40,17 +32,13 @@ class AssignTaskByHR extends StatelessWidget {
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            IconButton(
-              onPressed: () {},
-              icon: const Icon(Icons.hourglass_empty, color: Colors.orange),
-            ),
             const SizedBox(height: 12),
 
-            // ── NEW: Tappable Existing Projects Section ──────────────
+            // ── View Existing Projects ──────────────────────────────
             Material(
               color: Colors.transparent,
               child: InkWell(
@@ -58,7 +46,7 @@ class AssignTaskByHR extends StatelessWidget {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => CheckAssignedTasks(),
+                      builder: (_) => const CheckAssignedTasks(),
                     ),
                   );
                 },
@@ -69,7 +57,7 @@ class AssignTaskByHR extends StatelessWidget {
                     vertical: 14,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEFF6FF), // Light blue background
+                    color: const Color(0xFFEFF6FF),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: const Color(0xFFBFDBFE)),
                   ),
@@ -78,7 +66,7 @@ class AssignTaskByHR extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF2563EB), // Primary blue
+                          color: const Color(0xFF2563EB),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Icon(
@@ -121,139 +109,80 @@ class AssignTaskByHR extends StatelessWidget {
                 ),
               ),
             ),
-
-            // ─────────────────────────────────────────────────────────
-            const SizedBox(height: 24),
-            const Text(
-              'Select a Project Lead',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF1E293B),
-              ),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'Choose a lead to delegate a new project task.',
-              style: TextStyle(fontSize: 14, color: Color(0xFF64748B)),
-            ),
             const SizedBox(height: 20),
-            Expanded(
-              child: projectLeads.isEmpty
-                  ? const Center(child: Text('No project leads available.'))
-                  : GridView.builder(
-                      physics: const BouncingScrollPhysics(),
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            crossAxisSpacing: 14,
-                            mainAxisSpacing: 14,
-                            childAspectRatio: 0.85,
-                          ),
-                      itemCount: projectLeads.length,
-                      itemBuilder: (context, index) {
-                        final lead = projectLeads[index];
-                        return _buildLeadCard(lead, context);
-                      },
+
+            // ── Assign New Task ─────────────────────────────────────
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const AssignTaskToLeadForm(),
                     ),
+                  );
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0FDF4),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFBBF7D0)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF16A34A),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.add_task_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Assign New Task',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF1E293B),
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Select lead & employees, then create a task',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        size: 16,
+                        color: Color(0xFF94A3B8),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLeadCard(dynamic lead, BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F172A).withOpacity(0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: () {
-            debugPrint("Selected: ${lead.name}");
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => AssignTaskToLeadForm(lead: lead),
-              ),
-            );
-          },
-          child: Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Avatar with light blue style
-                Container(
-                  padding: const EdgeInsets.all(3),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: const Color(0xFF93C5FD),
-                      width: 2,
-                    ),
-                  ),
-                  child: CircleAvatar(
-                    radius: 32,
-                    backgroundColor: const Color(0xFFDBEAFE),
-                    child: Text(
-                      lead.name.isNotEmpty ? lead.name[0].toUpperCase() : 'P',
-                      style: const TextStyle(
-                        color: Color(0xFF2563EB),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 22,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                // Name
-                Text(
-                  lead.name,
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF0F172A),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                // Employee ID Badge
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    'ID: ${lead.emp_id}',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF64748B),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );

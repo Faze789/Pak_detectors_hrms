@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:hrms_app/models/employee_model.dart';
 import 'package:hrms_app/viewmodels/task_viewmodel.dart';
 import 'package:hrms_app/views/HR_views/CheckAssignedTasks.dart';
 import 'package:provider/provider.dart';
 
 class AssignTaskToLeadForm extends StatefulWidget {
-  final Employee lead;
-
-  const AssignTaskToLeadForm({super.key, required this.lead});
+  const AssignTaskToLeadForm({super.key});
 
   @override
   State<AssignTaskToLeadForm> createState() => _AssignTaskToLeadFormState();
@@ -20,8 +17,12 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
 
   String? _selectedDuration;
   bool _isPrimary = true;
-  final Set<String> _selectedMemberUids = {};
-  bool _membersInitialized = false;
+
+  // Lead selection — only one lead per task
+  String? _selectedLeadEmpId;
+
+  // Member selection — multiple employees
+  final Set<String> _selectedMemberEmpIds = {};
 
   final Map<String, int> _durations = {
     'Weekly': 7,
@@ -36,9 +37,7 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
     super.initState();
     Future.microtask(() {
       if (!mounted) return;
-      final taskVm = context.read<TaskViewModel>();
-      taskVm.loadMembersByLeadId(widget.lead.emp_id);
-      taskVm.loadUnassignedEmployees();
+      context.read<TaskViewModel>().loadAllNonHRUsers();
     });
   }
 
@@ -51,8 +50,6 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
 
   @override
   Widget build(BuildContext context) {
-    final lead = widget.lead;
-
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
@@ -79,13 +76,7 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
       ),
       body: Consumer<TaskViewModel>(
         builder: (context, taskVm, _) {
-          // Auto-select all members on first load
-          if (!_membersInitialized && taskVm.members.isNotEmpty) {
-            _membersInitialized = true;
-            for (final m in taskVm.members) {
-              _selectedMemberUids.add(m['uid'] ?? m['emp_id'] ?? '');
-            }
-          }
+          final allUsers = taskVm.allUsers;
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(24),
@@ -94,162 +85,49 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── Assigned To Card ─────────────────────────────────
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFDBEAFE)),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF3B82F6).withValues(alpha: 0.04),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(3),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: const Color(0xFF93C5FD),
-                              width: 2,
-                            ),
-                          ),
-                          child: CircleAvatar(
-                            radius: 26,
-                            backgroundColor: const Color(0xFFDBEAFE),
-                            child: Text(
-                              lead.name.isNotEmpty
-                                  ? lead.name[0].toUpperCase()
-                                  : 'P',
-                              style: const TextStyle(
-                                color: Color(0xFF2563EB),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 20,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Assigning to',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF94A3B8),
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                lead.name,
-                                style: const TextStyle(
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF0F172A),
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 3,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFF1F5F9),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      lead.emp_id,
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                        color: Color(0xFF64748B),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 3,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFEFF6FF),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      lead.department,
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                        color: Color(0xFF2563EB),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+                  // ── Select Lead ──────────────────────────────────────
+                  _buildLabel('Select Lead'),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Choose one person to lead this task.',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
                   ),
-                  const SizedBox(height: 28),
-
-                  // ── Current Team Members ──────────────────────────────
-                  _buildLabel('Team Members'),
                   const SizedBox(height: 8),
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                      border: Border.all(
+                        color: _selectedLeadEmpId != null
+                            ? const Color(0xFF2563EB)
+                            : const Color(0xFFE2E8F0),
+                      ),
                     ),
-                    child: taskVm.members.isEmpty
+                    child: allUsers.isEmpty
                         ? const Padding(
                             padding: EdgeInsets.all(16),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.group_outlined,
-                                  size: 20,
+                            child: Center(
+                              child: Text(
+                                'Loading users...',
+                                style: TextStyle(
+                                  fontSize: 14,
                                   color: Color(0xFF94A3B8),
                                 ),
-                                SizedBox(width: 12),
-                                Text(
-                                  'No team members yet',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Color(0xFF94A3B8),
-                                  ),
-                                ),
-                              ],
+                              ),
                             ),
                           )
                         : Column(
-                            children: taskVm.members.map((m) {
-                              final id = m['uid'] ?? m['emp_id'] ?? '';
-                              final isSelected = _selectedMemberUids.contains(
-                                id,
-                              );
-                              return CheckboxListTile(
-                                value: isSelected,
+                            children: allUsers.map((user) {
+                              final empId =
+                                  (user['emp_id'] ?? '').toString();
+                              final isSelected =
+                                  _selectedLeadEmpId == empId;
+                              return RadioListTile<String>(
+                                value: empId,
+                                groupValue: _selectedLeadEmpId,
                                 activeColor: const Color(0xFF2563EB),
                                 title: Text(
-                                  m['name'] ?? 'Unknown',
+                                  user['name'] ?? 'Unknown',
                                   style: const TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
@@ -257,7 +135,83 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                                   ),
                                 ),
                                 subtitle: Text(
-                                  m['emp_id'] ?? '',
+                                  '$empId · ${user['department'] ?? user['role'] ?? ''}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF94A3B8),
+                                  ),
+                                ),
+                                secondary: isSelected
+                                    ? const Icon(
+                                        Icons.star_rounded,
+                                        color: Color(0xFF2563EB),
+                                        size: 20,
+                                      )
+                                    : null,
+                                onChanged: (v) {
+                                  setState(() {
+                                    _selectedLeadEmpId = v;
+                                    // Remove lead from members if selected
+                                    _selectedMemberEmpIds.remove(v);
+                                  });
+                                },
+                              );
+                            }).toList(),
+                          ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // ── Select Employees / Members ──────────────────────
+                  _buildLabel('Select Employees'),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Choose team members for this task.',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: allUsers.isEmpty
+                        ? const Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Center(
+                              child: Text(
+                                'Loading users...',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Color(0xFF94A3B8),
+                                ),
+                              ),
+                            ),
+                          )
+                        : Column(
+                            children: allUsers.where((user) {
+                              // Exclude the selected lead from member list
+                              final empId =
+                                  (user['emp_id'] ?? '').toString();
+                              return empId != _selectedLeadEmpId;
+                            }).map((user) {
+                              final empId =
+                                  (user['emp_id'] ?? '').toString();
+                              final isSelected =
+                                  _selectedMemberEmpIds.contains(empId);
+                              return CheckboxListTile(
+                                value: isSelected,
+                                activeColor: const Color(0xFF16A34A),
+                                title: Text(
+                                  user['name'] ?? 'Unknown',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF1E293B),
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  '$empId · ${user['department'] ?? user['role'] ?? ''}',
                                   style: const TextStyle(
                                     fontSize: 12,
                                     color: Color(0xFF94A3B8),
@@ -266,9 +220,9 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                                 onChanged: (v) {
                                   setState(() {
                                     if (v == true) {
-                                      _selectedMemberUids.add(id);
+                                      _selectedMemberEmpIds.add(empId);
                                     } else {
-                                      _selectedMemberUids.remove(id);
+                                      _selectedMemberEmpIds.remove(empId);
                                     }
                                   });
                                 },
@@ -276,57 +230,9 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                             }).toList(),
                           ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
 
-                  // ── Available (Unassigned) Employees ───────────────────
-                  if (taskVm.unassignedEmployees.isNotEmpty) ...[
-                    _buildLabel('Available Employees (No Lead Assigned)'),
-                    const SizedBox(height: 8),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFD1FAE5)),
-                      ),
-                      child: Column(
-                        children: taskVm.unassignedEmployees.map((m) {
-                          final id = m['uid'] ?? m['emp_id'] ?? '';
-                          final isSelected = _selectedMemberUids.contains(id);
-                          return CheckboxListTile(
-                            value: isSelected,
-                            activeColor: const Color(0xFF16A34A),
-                            title: Text(
-                              m['name'] ?? 'Unknown',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF1E293B),
-                              ),
-                            ),
-                            subtitle: Text(
-                              '${m['emp_id'] ?? ''} · ${m['role'] ?? ''}',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFF94A3B8),
-                              ),
-                            ),
-                            onChanged: (v) {
-                              setState(() {
-                                if (v == true) {
-                                  _selectedMemberUids.add(id);
-                                } else {
-                                  _selectedMemberUids.remove(id);
-                                }
-                              });
-                            },
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                  ],
-
-                  // ── Task Type (Primary / Secondary) ────────────────────
+                  // ── Task Type (Primary / Secondary) ────────────────
                   _buildLabel('Task Type'),
                   const SizedBox(height: 8),
                   Container(
@@ -335,13 +241,12 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: const Color(0xFFE2E8F0)),
                     ),
-                    child: RadioGroup<bool>(
-                      groupValue: _isPrimary,
-                      onChanged: (v) => setState(() => _isPrimary = v!),
-                      child: Column(
-                        children: [
-                          RadioListTile<bool>(
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: RadioListTile<bool>(
                             value: true,
+                            groupValue: _isPrimary,
                             activeColor: const Color(0xFF2563EB),
                             title: const Text(
                               'Primary',
@@ -350,9 +255,14 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
+                            onChanged: (v) =>
+                                setState(() => _isPrimary = v!),
                           ),
-                          RadioListTile<bool>(
+                        ),
+                        Expanded(
+                          child: RadioListTile<bool>(
                             value: false,
+                            groupValue: _isPrimary,
                             activeColor: const Color(0xFF2563EB),
                             title: const Text(
                               'Secondary',
@@ -361,9 +271,11 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
+                            onChanged: (v) =>
+                                setState(() => _isPrimary = v!),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 28),
@@ -383,7 +295,7 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                   ),
                   const SizedBox(height: 20),
 
-                  // ── Duration Dropdown ────────────────────────────────
+                  // ── Duration Dropdown ───────────────────────────────
                   _buildLabel('Duration'),
                   const SizedBox(height: 8),
                   Container(
@@ -393,7 +305,7 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                       border: Border.all(color: const Color(0xFFE2E8F0)),
                     ),
                     child: DropdownButtonFormField<String>(
-                      initialValue: _selectedDuration,
+                      value: _selectedDuration,
                       isExpanded: true,
                       decoration: const InputDecoration(
                         border: InputBorder.none,
@@ -420,16 +332,13 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                         return null;
                       },
                       onChanged: (v) {
-                        setState(() {
-                          _selectedDuration = v;
-                        });
+                        setState(() => _selectedDuration = v);
                       },
                     ),
                   ),
-
                   const SizedBox(height: 20),
 
-                  // ── Task Title ───────────────────────────────────────
+                  // ── Task Title ──────────────────────────────────────
                   _buildLabel('Task Title'),
                   const SizedBox(height: 8),
                   _buildTextField(
@@ -446,7 +355,7 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                   ),
                   const SizedBox(height: 20),
 
-                  // ── Task Description ─────────────────────────────────
+                  // ── Task Description ────────────────────────────────
                   _buildLabel('Task Description'),
                   const SizedBox(height: 8),
                   _buildTextField(
@@ -463,7 +372,7 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                   ),
                   const SizedBox(height: 32),
 
-                  // ── Submit Button ────────────────────────────────────
+                  // ── Submit Button ───────────────────────────────────
                   SizedBox(
                     width: double.infinity,
                     height: 52,
@@ -471,11 +380,25 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                       onPressed: taskVm.isSubmitting
                           ? null
                           : () async {
-                              if (_selectedMemberUids.isEmpty) {
+                              // Validate lead selection
+                              if (_selectedLeadEmpId == null) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content:
+                                        Text('Please select a lead'),
+                                    backgroundColor: Color(0xFFEF4444),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                                return;
+                              }
+
+                              // Validate member selection
+                              if (_selectedMemberEmpIds.isEmpty) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
                                     content: Text(
-                                      'Please select at least one member',
+                                      'Please select at least one employee',
                                     ),
                                     backgroundColor: Color(0xFFEF4444),
                                     behavior: SnackBarBehavior.floating,
@@ -483,46 +406,45 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                                 );
                                 return;
                               }
+
+                              // Validate form fields
                               if (!_formKey.currentState!.validate()) {
                                 return;
                               }
 
-                              // Save lead_id for any selected unassigned employees
-                              for (final emp in taskVm.unassignedEmployees) {
-                                final id = emp['uid'] ?? emp['emp_id'] ?? '';
-                                if (_selectedMemberUids.contains(id) &&
-                                    (emp['uid'] ?? '').isNotEmpty) {
-                                  await taskVm.assignEmployeeToLead(
-                                    emp['uid'],
-                                    widget.lead.emp_id,
-                                  );
-                                }
-                              }
+                              // Find lead info from allUsers
+                              final leadUser = allUsers.firstWhere(
+                                (u) =>
+                                    (u['emp_id'] ?? '') ==
+                                    _selectedLeadEmpId,
+                                orElse: () => <String, dynamic>{},
+                              );
+                              final leadName =
+                                  (leadUser['name'] ?? '').toString();
+                              final leadDept =
+                                  (leadUser['department'] ?? '')
+                                      .toString();
 
-                              // Combine both lists and filter by selection
-                              final allEmployees = [
-                                ...taskVm.members,
-                                ...taskVm.unassignedEmployees,
-                              ];
-                              final selectedMembers = allEmployees
+                              // Build members list from selected emp_ids
+                              final selectedMembers = allUsers
                                   .where(
-                                    (m) => _selectedMemberUids.contains(
-                                      m['uid'] ?? m['emp_id'] ?? '',
-                                    ),
+                                    (u) =>
+                                        _selectedMemberEmpIds.contains(
+                                          (u['emp_id'] ?? '').toString(),
+                                        ),
                                   )
                                   .toList();
 
                               final success = await taskVm.assignTask(
-                                lead_id: widget.lead.emp_id,
-                                leadName: widget.lead.name,
-                                department: widget.lead.department,
+                                lead_id: _selectedLeadEmpId!,
+                                leadName: leadName,
+                                department: leadDept,
                                 title: _titleCtrl.text.trim(),
                                 description: _descCtrl.text.trim(),
                                 duration: _selectedDuration!,
                                 members: selectedMembers,
-                                taskType: _isPrimary
-                                    ? 'primary'
-                                    : 'secondary',
+                                taskType:
+                                    _isPrimary ? 'primary' : 'secondary',
                               );
 
                               if (!context.mounted) return;
@@ -536,11 +458,11 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                                     behavior: SnackBarBehavior.floating,
                                   ),
                                 );
-                                Navigator.push(
+                                Navigator.pushReplacement(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) =>
-                                        CheckAssignedTasks(),
+                                    builder: (_) =>
+                                        const CheckAssignedTasks(),
                                   ),
                                 );
                               }
