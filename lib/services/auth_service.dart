@@ -49,6 +49,7 @@ class AuthService {
     required String email,
     required String password,
     required String role,
+    String department = '',
   }) async {
     try {
       UserCredential cred = await _auth.createUserWithEmailAndPassword(
@@ -58,10 +59,9 @@ class AuthService {
 
       await _firestore.collection('users').doc(cred.user!.uid).set({
         'name': name,
-        'employee_id'
-                'email':
-            email,
+        'email': email,
         'role': role,
+        'department': department,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -70,6 +70,7 @@ class AuthService {
         name: name,
         email: email,
         role: role,
+        department: department,
       );
 
       await _saveToPrefs(_currentUser!);

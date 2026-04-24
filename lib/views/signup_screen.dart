@@ -17,6 +17,18 @@ class _SignupScreenState extends State<SignupScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  String? _selectedDepartment;
+
+  static const List<String> _departments = [
+    'IT',
+    'Marketing',
+    'Finance',
+    'HR',
+    'Sales',
+    'Operations',
+    'Design',
+    'Support',
+  ];
 
   @override
   void initState() {
@@ -51,6 +63,7 @@ class _SignupScreenState extends State<SignupScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text,
         role: role,
+        department: _selectedDepartment ?? '',
       );
 
       if (!mounted) return;
@@ -193,6 +206,36 @@ class _SignupScreenState extends State<SignupScreen> {
                                         return 'Name must be at least 3 characters';
                                       }
                                       return null;
+                                    },
+                                  ),
+                                  const SizedBox(height: 18),
+                                  // Department
+                                  DropdownButtonFormField<String>(
+                                    value: _selectedDepartment,
+                                    decoration: InputDecoration(
+                                      labelText: 'Department',
+                                      hintText: 'Select your department',
+                                      prefixIcon: const Icon(
+                                        Icons.business_outlined,
+                                      ),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    items: _departments.map((dept) {
+                                      return DropdownMenuItem<String>(
+                                        value: dept,
+                                        child: Text(dept),
+                                      );
+                                    }).toList(),
+                                    validator: (value) {
+                                      if (value == null || value.isEmpty) {
+                                        return 'Please select a department';
+                                      }
+                                      return null;
+                                    },
+                                    onChanged: (v) {
+                                      setState(() => _selectedDepartment = v);
                                     },
                                   ),
                                   const SizedBox(height: 18),

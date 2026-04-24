@@ -17,12 +17,24 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
 
   String? _selectedDuration;
   bool _isPrimary = true;
+  String? _selectedDepartment;
 
   // Lead selection — only one lead per task
   String? _selectedLeadEmpId;
 
   // Member selection — multiple employees
   final Set<String> _selectedMemberEmpIds = {};
+
+  static const List<String> _departments = [
+    'IT',
+    'Marketing',
+    'Finance',
+    'HR',
+    'Sales',
+    'Operations',
+    'Design',
+    'Support',
+  ];
 
   final Map<String, int> _durations = {
     'Weekly': 7,
@@ -76,7 +88,14 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
       ),
       body: Consumer<TaskViewModel>(
         builder: (context, taskVm, _) {
-          final allUsers = taskVm.allUsers;
+          // Filter users by selected department
+          final allUsers = _selectedDepartment == null
+              ? taskVm.allUsers
+              : taskVm.allUsers
+                    .where((u) =>
+                        (u['department'] ?? '').toString().toLowerCase() ==
+                        _selectedDepartment!.toLowerCase())
+                    .toList();
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(24),
@@ -85,6 +104,58 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // ── Filter by Department ─────────────────────────────
+                  _buildLabel('Filter by Department'),
+                  const SizedBox(height: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: DropdownButtonFormField<String>(
+                      value: _selectedDepartment,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
+                        hintText: 'All Departments',
+                        hintStyle: TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF94A3B8),
+                        ),
+                        prefixIcon: Icon(
+                          Icons.business_outlined,
+                          color: Color(0xFF94A3B8),
+                        ),
+                      ),
+                      items: [
+                        const DropdownMenuItem<String>(
+                          value: null,
+                          child: Text('All Departments'),
+                        ),
+                        ..._departments.map((dept) {
+                          return DropdownMenuItem<String>(
+                            value: dept,
+                            child: Text(dept),
+                          );
+                        }),
+                      ],
+                      onChanged: (v) {
+                        setState(() {
+                          _selectedDepartment = v;
+                          // Clear selections when department changes
+                          _selectedLeadEmpId = null;
+                          _selectedMemberEmpIds.clear();
+                        });
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
                   // ── Select Lead ──────────────────────────────────────
                   _buildLabel('Select Lead'),
                   const SizedBox(height: 4),

@@ -125,6 +125,7 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
     final status = task['status'] ?? 'pending';
     final isCompleted = status == 'completed';
     final isApproved = status == 'approved';
+    final isSubmitted = status == 'submitted';
     final members = task['members'] as Map<String, dynamic>? ?? {};
     final createdAt = task['createdAt'] as Timestamp?;
     final dateStr = createdAt != null
@@ -170,7 +171,9 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                     decoration: BoxDecoration(
                       color: isCompleted
                           ? const Color(0xFFD1FAE5)
-                          : const Color(0xFFFEF3C7),
+                          : isSubmitted
+                              ? const Color(0xFFEDE9FE)
+                              : const Color(0xFFFEF3C7),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -180,7 +183,9 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                         fontWeight: FontWeight.w700,
                         color: isCompleted
                             ? const Color(0xFF065F46)
-                            : const Color(0xFF92400E),
+                            : isSubmitted
+                                ? const Color(0xFF6D28D9)
+                                : const Color(0xFF92400E),
                       ),
                     ),
                   ),
@@ -517,70 +522,241 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                     }),
                   const SizedBox(height: 20),
 
-                  // Edit & History buttons
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () {
-                            Navigator.of(context).pop(); // close bottom sheet
-                            showDialog(
-                              context: context,
-                              builder: (_) => EditTaskDialog(
-                                task: task,
-                                modifiedBy: 'HR',
-                                modifiedByRole: 'hr',
-                                onSaved: () {
-                                  context.read<TaskViewModel>().loadAllTasks();
-                                },
-                              ),
-                            );
-                          },
-                          icon: const Icon(
-                            Icons.edit_outlined,
-                            size: 16,
-                            color: Colors.white,
-                          ),
-                          label: const Text(
-                            'Edit',
-                            style: TextStyle(color: Colors.white),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF2563EB),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
+                  // Submission details (if submitted or completed)
+                  if (task['projectSummary'] != null &&
+                      task['projectSummary'].toString().isNotEmpty) ...[
+                    const Text(
+                      'Project Summary',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF475569),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF0FDF4),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFBBF7D0)),
+                      ),
+                      child: Text(
+                        task['projectSummary'],
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF166534),
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () {
-                            Navigator.of(context).pop(); // close bottom sheet
-                            showTaskHistorySheet(context, task);
-                          },
-                          icon: const Icon(
-                            Icons.history_rounded,
-                            size: 16,
-                            color: Color(0xFF2563EB),
-                          ),
-                          label: const Text(
-                            'History',
-                            style: TextStyle(color: Color(0xFF2563EB)),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            side: const BorderSide(color: Color(0xFF2563EB)),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+
+                  if (task['submissionText'] != null &&
+                      task['submissionText'].toString().isNotEmpty) ...[
+                    const Text(
+                      'Submission Details',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF475569),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Text(
+                        task['submissionText'],
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF334155),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    if (task['submittedBy'] != null)
+                      Text(
+                        'Submitted by ${task['submittedBy']}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF94A3B8),
+                        ),
+                      ),
+                    if (task['submissionPdfUrl'] != null &&
+                        task['submissionPdfUrl'].toString().isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          const Icon(Icons.picture_as_pdf, size: 16, color: Color(0xFFDC2626)),
+                          const SizedBox(width: 4),
+                          const Text(
+                            'PDF attached',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFFDC2626),
                             ),
                           ),
-                        ),
+                        ],
                       ),
                     ],
-                  ),
+                    const SizedBox(height: 12),
+                  ],
+
+                  // Rejection reason (if task was rejected before)
+                  if (task['rejectionReason'] != null &&
+                      task['rejectionReason'].toString().isNotEmpty) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF2F2),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFFECACA)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Previous Rejection Reason',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF991B1B),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            task['rejectionReason'],
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Color(0xFFDC2626),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+
+                  // Accept/Reject for submitted tasks
+                  if (task['status'] == 'submitted')
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () async {
+                              Navigator.of(context).pop();
+                              final success = await context
+                                  .read<TaskViewModel>()
+                                  .acceptSubmission(task['id']);
+                              if (success) {
+                                context.read<TaskViewModel>().loadAllTasks();
+                              }
+                            },
+                            icon: const Icon(Icons.check_circle, size: 16, color: Colors.white),
+                            label: const Text('Accept', style: TextStyle(color: Colors.white)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF16A34A),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                              _showRejectDialog(context, task);
+                            },
+                            icon: const Icon(Icons.cancel_outlined, size: 16, color: Colors.white),
+                            label: const Text('Reject', style: TextStyle(color: Colors.white)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFDC2626),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    // Edit & History buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                              showDialog(
+                                context: context,
+                                builder: (_) => EditTaskDialog(
+                                  task: task,
+                                  modifiedBy: 'HR',
+                                  modifiedByRole: 'hr',
+                                  onSaved: () {
+                                    context.read<TaskViewModel>().loadAllTasks();
+                                  },
+                                ),
+                              );
+                            },
+                            icon: const Icon(
+                              Icons.edit_outlined,
+                              size: 16,
+                              color: Colors.white,
+                            ),
+                            label: const Text(
+                              'Edit',
+                              style: TextStyle(color: Colors.white),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF2563EB),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                              showTaskHistorySheet(context, task);
+                            },
+                            icon: const Icon(
+                              Icons.history_rounded,
+                              size: 16,
+                              color: Color(0xFF2563EB),
+                            ),
+                            label: const Text(
+                              'History',
+                              style: TextStyle(color: Color(0xFF2563EB)),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              side: const BorderSide(color: Color(0xFF2563EB)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   const SizedBox(height: 12),
                 ],
               ),
@@ -588,6 +764,61 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
           },
         );
       },
+    );
+  }
+
+  void _showRejectDialog(BuildContext context, Map<String, dynamic> task) {
+    final reasonCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Text('Reject Submission'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Provide a reason for rejection:',
+              style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonCtrl,
+              maxLines: 3,
+              decoration: InputDecoration(
+                hintText: 'Reason for rejection...',
+                hintStyle: const TextStyle(fontSize: 13, color: Color(0xFFCBD5E1)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (reasonCtrl.text.trim().isEmpty) return;
+              Navigator.of(ctx).pop();
+              final success = await context
+                  .read<TaskViewModel>()
+                  .rejectSubmission(task['id'], reasonCtrl.text.trim());
+              if (success) {
+                context.read<TaskViewModel>().loadAllTasks();
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Reject', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
     );
   }
 

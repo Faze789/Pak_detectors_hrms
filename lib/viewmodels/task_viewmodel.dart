@@ -304,6 +304,128 @@ class TaskViewModel extends ChangeNotifier {
     }
   }
 
+  /// Submit a task with summary, text and optional PDF
+  Future<bool> submitTask({
+    required String taskId,
+    required String summary,
+    required String submissionText,
+    required String submittedBy,
+    required String submittedByRole,
+    String? pdfUrl,
+  }) async {
+    _submitting = true;
+    notifyListeners();
+
+    try {
+      await _service.submitTask(
+        taskId: taskId,
+        summary: summary,
+        submissionText: submissionText,
+        submittedBy: submittedBy,
+        submittedByRole: submittedByRole,
+        pdfUrl: pdfUrl,
+      );
+
+      // Notify HR about the submission
+      final hrUsers = await FirebaseFirestore.instance
+          .collection('users')
+          .where('role', isEqualTo: 'hr')
+          .get();
+
+      for (final doc in hrUsers.docs) {
+        final hrEmpId = doc.data()['emp_id'] ?? doc.id;
+        await FirebaseFirestore.instance.collection('task_notifications').add({
+          'lead_id': hrEmpId,
+          'title': 'Task Submitted',
+          'body': '"$submittedBy" has submitted a task for review',
+          'taskId': taskId,
+          'createdAt': FieldValue.serverTimestamp(),
+          'read': false,
+        });
+      }
+
+      _submitting = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      errorMessage = 'Failed to submit task: $e';
+      _submitting = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Member submits their work to the lead (per-member, no task status change)
+  Future<bool> submitMemberWork({
+    required String taskId,
+    required String empId,
+    required String memberName,
+    required String submissionText,
+    required String leadEmpId,
+    required String taskTitle,
+    String? pdfUrl,
+  }) async {
+    _submitting = true;
+    notifyListeners();
+
+    try {
+      await _service.submitMemberWork(
+        taskId: taskId,
+        empId: empId,
+        memberName: memberName,
+        submissionText: submissionText,
+        pdfUrl: pdfUrl,
+      );
+
+      // Notify lead about the member submission
+      if (leadEmpId.isNotEmpty) {
+        await FirebaseFirestore.instance.collection('task_notifications').add({
+          'lead_id': leadEmpId,
+          'title': 'Member Submission',
+          'body': '$memberName has submitted work for "$taskTitle"',
+          'taskId': taskId,
+          'createdAt': FieldValue.serverTimestamp(),
+          'read': false,
+        });
+      }
+
+      _submitting = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      errorMessage = 'Failed to submit work: $e';
+      _submitting = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// HR accepts a submitted task
+  Future<bool> acceptSubmission(String taskId) async {
+    try {
+      await _service.acceptSubmission(taskId);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      errorMessage = 'Failed to accept submission: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// HR rejects a submitted task
+  Future<bool> rejectSubmission(String taskId, String reason) async {
+    try {
+      await _service.rejectSubmission(taskId, reason);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      errorMessage = 'Failed to reject submission: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
   /// Update the members map on a task (for lead add/remove members)
   Future<bool> updateTaskMembers({
     required String taskId,

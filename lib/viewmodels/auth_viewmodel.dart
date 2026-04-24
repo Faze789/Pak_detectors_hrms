@@ -42,12 +42,13 @@ class AuthViewModel extends ChangeNotifier {
     required String email,
     required String password,
     required String role,
+    String department = '',
   }) async {
     _setLoading(true);
     _clearError();
     try {
       final result = await authService.signup(
-          name: name, email: email, password: password, role: role);
+          name: name, email: email, password: password, role: role, department: department);
       if (result['success'] as bool) {
         _currentUser = result['user'] as UserModel;
         _isLoggedIn  = true;

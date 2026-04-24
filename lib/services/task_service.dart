@@ -146,10 +146,15 @@ class TaskService {
         return false;
       });
 
-      if ((isLead || isMember) && !seenIds.contains(docId)) {
-        seenIds.add(docId);
-        data['id'] = docId;
-        docs.add(data);
+      // Lead sees all their tasks (pending + approved)
+      // Members only see approved tasks
+      final status = (data['status'] ?? '').toString();
+      if (isLead || (isMember && status != 'pending')) {
+        if (!seenIds.contains(docId)) {
+          seenIds.add(docId);
+          data['id'] = docId;
+          docs.add(data);
+        }
       }
     }
 
@@ -226,6 +231,61 @@ class TaskService {
       'createdAt': FieldValue.serverTimestamp(),
       'deadline': Timestamp.fromDate(deadline),
       'version': 1,
+    });
+  }
+
+  /// Submit a task — saves summary, submission text, optional PDF URL
+  Future<void> submitTask({
+    required String taskId,
+    required String summary,
+    required String submissionText,
+    required String submittedBy,
+    required String submittedByRole,
+    String? pdfUrl,
+  }) async {
+    await _tasks.doc(taskId).update({
+      'status': 'submitted',
+      'projectSummary': summary,
+      'submissionText': submissionText,
+      'submissionPdfUrl': pdfUrl ?? '',
+      'submittedBy': submittedBy,
+      'submittedByRole': submittedByRole,
+      'submittedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Member submits their individual work — stored per-member, does NOT change task status
+  Future<void> submitMemberWork({
+    required String taskId,
+    required String empId,
+    required String memberName,
+    required String submissionText,
+    String? pdfUrl,
+  }) async {
+    await _tasks.doc(taskId).update({
+      'member_submissions.$empId': {
+        'memberName': memberName,
+        'submissionText': submissionText,
+        'pdfUrl': pdfUrl ?? '',
+        'submittedAt': FieldValue.serverTimestamp(),
+      },
+    });
+  }
+
+  /// HR accepts a submitted task
+  Future<void> acceptSubmission(String taskId) async {
+    await _tasks.doc(taskId).update({
+      'status': 'completed',
+      'completedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// HR rejects a submitted task — sends back to approved
+  Future<void> rejectSubmission(String taskId, String reason) async {
+    await _tasks.doc(taskId).update({
+      'status': 'approved',
+      'rejectionReason': reason,
+      'rejectedAt': FieldValue.serverTimestamp(),
     });
   }
 
