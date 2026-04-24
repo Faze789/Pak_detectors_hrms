@@ -112,6 +112,23 @@ class TaskViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Load tasks where the user is either the lead OR a member
+  Future<void> loadTasksForUser(String empId) async {
+    isLoading = true;
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      _tasks = await _service.getTasksForUser(empId);
+    } catch (e) {
+      errorMessage = 'Failed to load tasks: $e';
+      _tasks = [];
+    }
+
+    isLoading = false;
+    notifyListeners();
+  }
+
   /// Load all users excluding HR (for lead + member selection by HR)
   Future<void> loadAllNonHRUsers() async {
     try {

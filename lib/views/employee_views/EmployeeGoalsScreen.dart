@@ -16,7 +16,6 @@ class EmployeeGoalsScreen extends StatefulWidget {
 class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
   String? _empId;
   bool _fetchingEmpId = true;
-  bool _isLead = false;
 
   @override
   void initState() {
@@ -35,37 +34,36 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
           .doc(user.uid)
           .get();
       final empId = doc.data()?['emp_id'] ?? '';
-      final isLead = user.role.toLowerCase().contains('lead');
 
       if (!mounted) return;
       setState(() {
         _empId = empId;
-        _isLead = isLead;
         _fetchingEmpId = false;
       });
 
       if (empId.isNotEmpty) {
         final taskVm = context.read<TaskViewModel>();
-        if (isLead) {
-          taskVm.loadTasksByLeadId(empId);
-          taskVm.loadMembersByLeadId(empId);
-          taskVm.loadUnassignedEmployees();
-        } else {
-          // Regular employee — load tasks where they are a member
-          taskVm.loadTasksForEmployee(empId);
-        }
+        // Load all tasks where user is lead OR member
+        taskVm.loadTasksForUser(empId);
+        taskVm.loadMembersByLeadId(empId);
+        taskVm.loadUnassignedEmployees();
       }
     });
+  }
+
+  /// Check if current user is the lead for a specific task
+  bool _isLeadForTask(Map<String, dynamic> task) {
+    final taskLeadId = (task['lead_id'] ?? '').toString().toLowerCase();
+    final currentEmpId = (_empId ?? '').toLowerCase();
+    return taskLeadId.isNotEmpty &&
+        currentEmpId.isNotEmpty &&
+        taskLeadId == currentEmpId;
   }
 
   void _refreshTasks() {
     if (_empId == null) return;
     final taskVm = context.read<TaskViewModel>();
-    if (_isLead) {
-      taskVm.loadTasksByLeadId(_empId!);
-    } else {
-      taskVm.loadTasksForEmployee(_empId!);
-    }
+    taskVm.loadTasksForUser(_empId!);
   }
 
   @override
@@ -190,9 +188,7 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                 child: RefreshIndicator(
                   onRefresh: () {
                     if (_empId == null) return Future.value();
-                    return _isLead
-                        ? taskVm.loadTasksByLeadId(_empId!)
-                        : taskVm.loadTasksForEmployee(_empId!);
+                    return taskVm.loadTasksForUser(_empId!);
                   },
                   child: ListView.builder(
                     padding: const EdgeInsets.all(16),
@@ -217,6 +213,7 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
     final status = (task['status'] ?? 'pending').toString();
     final isApproved = status == 'approved';
     final members = task['members'] as Map<String, dynamic>? ?? {};
+    final isLead = _isLeadForTask(task);
 
     // Build the status label
     String statusLabel;
@@ -346,9 +343,46 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                     ),
                   ),
                   const Spacer(),
+                  // Role badge — LEAD or MEMBER
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isLead
+                          ? const Color(0xFFFEF3C7)
+                          : const Color(0xFFEDE9FE),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          isLead ? Icons.star_rounded : Icons.person_outline,
+                          size: 12,
+                          color: isLead
+                              ? const Color(0xFF92400E)
+                              : const Color(0xFF6D28D9),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          isLead ? 'LEAD' : 'MEMBER',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: isLead
+                                ? const Color(0xFF92400E)
+                                : const Color(0xFF6D28D9),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   // Options menu (only if not yet approved)
-                  if (_isLead && !isApproved) _buildOptionsMenu(task),
-                  if (!_isLead || isApproved)
+                  if (isLead && !isApproved) _buildOptionsMenu(task),
+                  if (!isLead || isApproved)
                     Text(
                       dateStr,
                       style: const TextStyle(
@@ -420,7 +454,7 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
               const SizedBox(height: 12),
 
               // Lead info (for employees)
-              if (!_isLead && task['leadName'] != null) ...[
+              if (!isLead && task['leadName'] != null) ...[
                 Row(
                   children: [
                     CircleAvatar(
@@ -466,7 +500,7 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                       (task['taskType'] as String).toUpperCase(),
                     ),
                     SizedBox(width: 30),
-                    _isLead
+                    isLead
                         ? Row(
                             children: [
                               feed_back_button(
@@ -954,7 +988,9 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                             ),
                           ),
                           const Spacer(),
-                          if (_isLead && !isAlreadyApproved && !isEditing)
+                          if (_isLeadForTask(task) &&
+                              !isAlreadyApproved &&
+                              !isEditing)
                             GestureDetector(
                               onTap: () =>
                                   setSheetState(() => isEditing = true),
@@ -1131,7 +1167,7 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                           );
                         }),
                       // Manage Members button (lead only, not approved)
-                      if (_isLead && !isAlreadyApproved) ...[
+                      if (_isLeadForTask(task) && !isAlreadyApproved) ...[
                         const SizedBox(height: 8),
                         SizedBox(
                           width: double.infinity,
@@ -1162,7 +1198,7 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                       const SizedBox(height: 20),
 
                       // Action buttons (lead: approve+history, employee: history only)
-                      if (_isLead && !isAlreadyApproved)
+                      if (_isLeadForTask(task) && !isAlreadyApproved)
                         Row(
                           children: [
                             // Approve button
