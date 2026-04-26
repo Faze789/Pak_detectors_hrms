@@ -211,7 +211,7 @@ class _SignupScreenState extends State<SignupScreen> {
                                   const SizedBox(height: 18),
                                   // Department
                                   DropdownButtonFormField<String>(
-                                    value: _selectedDepartment,
+                                    initialValue: _selectedDepartment,
                                     decoration: InputDecoration(
                                       labelText: 'Department',
                                       hintText: 'Select your department',

@@ -1,3 +1,7 @@
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:hrms_app/viewmodels/task_viewmodel.dart';
 import 'package:hrms_app/views/HR_views/CheckAssignedTasks.dart';
@@ -24,6 +28,10 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
 
   // Member selection — multiple employees
   final Set<String> _selectedMemberEmpIds = {};
+
+  // Attachments — picked files ready to upload
+  final List<PlatformFile> _pickedFiles = [];
+  bool _uploading = false;
 
   static const List<String> _departments = [
     'IT',
@@ -60,6 +68,45 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
     super.dispose();
   }
 
+  Future<void> _pickFiles() async {
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: true,
+      type: kIsWeb ? FileType.custom : FileType.any,
+      allowedExtensions: kIsWeb ? ['pdf', 'doc', 'docx', 'png', 'jpg'] : null,
+      withData: true,
+    );
+    if (result == null) return;
+    setState(() => _pickedFiles.addAll(result.files));
+  }
+
+  /// Upload all picked files to Firebase Storage, returns list of attachment maps
+  Future<List<Map<String, dynamic>>> _uploadAttachments() async {
+    final attachments = <Map<String, dynamic>>[];
+    for (final file in _pickedFiles) {
+      final fileName =
+          '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
+      final ref =
+          FirebaseStorage.instance.ref('task_attachments/$fileName');
+
+      if (file.bytes != null) {
+        await ref.putData(file.bytes!);
+      } else if (file.path != null) {
+        await ref.putFile(File(file.path!));
+      } else {
+        continue;
+      }
+
+      final url = await ref.getDownloadURL();
+      final ext = file.extension?.toLowerCase() ?? '';
+      attachments.add({
+        'name': file.name,
+        'url': url,
+        'type': ext,
+      });
+    }
+    return attachments;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -92,9 +139,11 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
           final allUsers = _selectedDepartment == null
               ? taskVm.allUsers
               : taskVm.allUsers
-                    .where((u) =>
-                        (u['department'] ?? '').toString().toLowerCase() ==
-                        _selectedDepartment!.toLowerCase())
+                    .where(
+                      (u) =>
+                          (u['department'] ?? '').toString().toLowerCase() ==
+                          _selectedDepartment!.toLowerCase(),
+                    )
                     .toList();
 
           return SingleChildScrollView(
@@ -114,7 +163,7 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                       border: Border.all(color: const Color(0xFFE2E8F0)),
                     ),
                     child: DropdownButtonFormField<String>(
-                      value: _selectedDepartment,
+                      initialValue: _selectedDepartment,
                       isExpanded: true,
                       decoration: const InputDecoration(
                         border: InputBorder.none,
@@ -189,10 +238,8 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                           )
                         : Column(
                             children: allUsers.map((user) {
-                              final empId =
-                                  (user['emp_id'] ?? '').toString();
-                              final isSelected =
-                                  _selectedLeadEmpId == empId;
+                              final empId = (user['emp_id'] ?? '').toString();
+                              final isSelected = _selectedLeadEmpId == empId;
                               return RadioListTile<String>(
                                 value: empId,
                                 groupValue: _selectedLeadEmpId,
@@ -260,45 +307,48 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                             ),
                           )
                         : Column(
-                            children: allUsers.where((user) {
-                              // Exclude the selected lead from member list
-                              final empId =
-                                  (user['emp_id'] ?? '').toString();
-                              return empId != _selectedLeadEmpId;
-                            }).map((user) {
-                              final empId =
-                                  (user['emp_id'] ?? '').toString();
-                              final isSelected =
-                                  _selectedMemberEmpIds.contains(empId);
-                              return CheckboxListTile(
-                                value: isSelected,
-                                activeColor: const Color(0xFF16A34A),
-                                title: Text(
-                                  user['name'] ?? 'Unknown',
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF1E293B),
-                                  ),
-                                ),
-                                subtitle: Text(
-                                  '$empId · ${user['department'] ?? user['role'] ?? ''}',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: Color(0xFF94A3B8),
-                                  ),
-                                ),
-                                onChanged: (v) {
-                                  setState(() {
-                                    if (v == true) {
-                                      _selectedMemberEmpIds.add(empId);
-                                    } else {
-                                      _selectedMemberEmpIds.remove(empId);
-                                    }
-                                  });
-                                },
-                              );
-                            }).toList(),
+                            children: allUsers
+                                .where((user) {
+                                  // Exclude the selected lead from member list
+                                  final empId = (user['emp_id'] ?? '')
+                                      .toString();
+                                  return empId != _selectedLeadEmpId;
+                                })
+                                .map((user) {
+                                  final empId = (user['emp_id'] ?? '')
+                                      .toString();
+                                  final isSelected = _selectedMemberEmpIds
+                                      .contains(empId);
+                                  return CheckboxListTile(
+                                    value: isSelected,
+                                    activeColor: const Color(0xFF16A34A),
+                                    title: Text(
+                                      user['name'] ?? 'Unknown',
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF1E293B),
+                                      ),
+                                    ),
+                                    subtitle: Text(
+                                      '$empId · ${user['department'] ?? user['role'] ?? ''}',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Color(0xFF94A3B8),
+                                      ),
+                                    ),
+                                    onChanged: (v) {
+                                      setState(() {
+                                        if (v == true) {
+                                          _selectedMemberEmpIds.add(empId);
+                                        } else {
+                                          _selectedMemberEmpIds.remove(empId);
+                                        }
+                                      });
+                                    },
+                                  );
+                                })
+                                .toList(),
                           ),
                   ),
                   const SizedBox(height: 24),
@@ -326,8 +376,7 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
-                            onChanged: (v) =>
-                                setState(() => _isPrimary = v!),
+                            onChanged: (v) => setState(() => _isPrimary = v!),
                           ),
                         ),
                         Expanded(
@@ -342,8 +391,7 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
-                            onChanged: (v) =>
-                                setState(() => _isPrimary = v!),
+                            onChanged: (v) => setState(() => _isPrimary = v!),
                           ),
                         ),
                       ],
@@ -376,7 +424,7 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                       border: Border.all(color: const Color(0xFFE2E8F0)),
                     ),
                     child: DropdownButtonFormField<String>(
-                      value: _selectedDuration,
+                      initialValue: _selectedDuration,
                       isExpanded: true,
                       decoration: const InputDecoration(
                         border: InputBorder.none,
@@ -441,6 +489,80 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                       return null;
                     },
                   ),
+                  const SizedBox(height: 20),
+
+                  // ── Attachments ────────────────────────────────────
+                  _buildLabel('Attachments (optional)'),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Attach PDF, DOC, or image files for this task.',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (_pickedFiles.isNotEmpty) ...[
+                          ..._pickedFiles.asMap().entries.map((entry) {
+                            final i = entry.key;
+                            final f = entry.value;
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.attach_file,
+                                      size: 16, color: Color(0xFF2563EB)),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      f.name,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        color: Color(0xFF1E293B),
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  GestureDetector(
+                                    onTap: () =>
+                                        setState(() => _pickedFiles.removeAt(i)),
+                                    child: const Icon(Icons.close,
+                                        size: 16, color: Color(0xFFEF4444)),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                          const SizedBox(height: 6),
+                        ],
+                        OutlinedButton.icon(
+                          onPressed: _pickFiles,
+                          icon: const Icon(Icons.upload_file_rounded, size: 18),
+                          label: Text(
+                            _pickedFiles.isEmpty
+                                ? 'Choose Files'
+                                : 'Add More Files',
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF2563EB),
+                            side: const BorderSide(color: Color(0xFFCBD5E1)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 32),
 
                   // ── Submit Button ───────────────────────────────────
@@ -448,15 +570,14 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                     width: double.infinity,
                     height: 52,
                     child: ElevatedButton(
-                      onPressed: taskVm.isSubmitting
+                      onPressed: (taskVm.isSubmitting || _uploading)
                           ? null
                           : () async {
                               // Validate lead selection
                               if (_selectedLeadEmpId == null) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content:
-                                        Text('Please select a lead'),
+                                    content: Text('Please select a lead'),
                                     backgroundColor: Color(0xFFEF4444),
                                     behavior: SnackBarBehavior.floating,
                                   ),
@@ -486,25 +607,42 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                               // Find lead info from allUsers
                               final leadUser = allUsers.firstWhere(
                                 (u) =>
-                                    (u['emp_id'] ?? '') ==
-                                    _selectedLeadEmpId,
+                                    (u['emp_id'] ?? '') == _selectedLeadEmpId,
                                 orElse: () => <String, dynamic>{},
                               );
-                              final leadName =
-                                  (leadUser['name'] ?? '').toString();
-                              final leadDept =
-                                  (leadUser['department'] ?? '')
-                                      .toString();
+                              final leadName = (leadUser['name'] ?? '')
+                                  .toString();
+                              final leadDept = (leadUser['department'] ?? '')
+                                  .toString();
 
                               // Build members list from selected emp_ids
                               final selectedMembers = allUsers
                                   .where(
-                                    (u) =>
-                                        _selectedMemberEmpIds.contains(
-                                          (u['emp_id'] ?? '').toString(),
-                                        ),
+                                    (u) => _selectedMemberEmpIds.contains(
+                                      (u['emp_id'] ?? '').toString(),
+                                    ),
                                   )
                                   .toList();
+
+                              // Upload attachments if any
+                              List<Map<String, dynamic>>? attachments;
+                              if (_pickedFiles.isNotEmpty) {
+                                setState(() => _uploading = true);
+                                try {
+                                  attachments = await _uploadAttachments();
+                                } catch (e) {
+                                  if (!context.mounted) return;
+                                  setState(() => _uploading = false);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('File upload failed: $e'),
+                                      backgroundColor: const Color(0xFFEF4444),
+                                    ),
+                                  );
+                                  return;
+                                }
+                                setState(() => _uploading = false);
+                              }
 
                               final success = await taskVm.assignTask(
                                 lead_id: _selectedLeadEmpId!,
@@ -514,17 +652,15 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                                 description: _descCtrl.text.trim(),
                                 duration: _selectedDuration!,
                                 members: selectedMembers,
-                                taskType:
-                                    _isPrimary ? 'primary' : 'secondary',
+                                taskType: _isPrimary ? 'primary' : 'secondary',
+                                attachments: attachments,
                               );
 
                               if (!context.mounted) return;
                               if (success) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text(
-                                      'Task assigned successfully',
-                                    ),
+                                    content: Text('Task assigned successfully'),
                                     backgroundColor: Color(0xFF10B981),
                                     behavior: SnackBarBehavior.floating,
                                   ),
@@ -532,8 +668,7 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                                 Navigator.pushReplacement(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) =>
-                                        const CheckAssignedTasks(),
+                                    builder: (_) => const CheckAssignedTasks(),
                                   ),
                                 );
                               }
@@ -547,7 +682,7 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
-                      child: taskVm.isSubmitting
+                      child: (taskVm.isSubmitting || _uploading)
                           ? const SizedBox(
                               width: 22,
                               height: 22,

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:hrms_app/viewmodels/task_viewmodel.dart';
 import 'package:hrms_app/widgets/edit_task_dialog.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class CheckAssignedTasks extends StatefulWidget {
   const CheckAssignedTasks({super.key});
@@ -326,19 +327,20 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
   void _showTaskDetails(BuildContext context, Map<String, dynamic> task) {
     final members = task['members'] as Map<String, dynamic>? ?? {};
 
+    final parentContext = context;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) {
+      builder: (_) {
         return DraggableScrollableSheet(
           initialChildSize: 0.6,
           minChildSize: 0.3,
           maxChildSize: 0.85,
           expand: false,
-          builder: (context, scrollController) {
+          builder: (_, scrollController) {
             return SingleChildScrollView(
               controller: scrollController,
               padding: const EdgeInsets.all(24),
@@ -591,20 +593,48 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                       ),
                     if (task['submissionPdfUrl'] != null &&
                         task['submissionPdfUrl'].toString().isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          const Icon(Icons.picture_as_pdf, size: 16, color: Color(0xFFDC2626)),
-                          const SizedBox(width: 4),
-                          const Text(
-                            'PDF attached',
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () async {
+                            final url = task['submissionPdfUrl'].toString();
+                            try {
+                              await launchUrl(
+                                Uri.parse(url),
+                                mode: LaunchMode.externalApplication,
+                              );
+                            } catch (e) {
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Could not open PDF: $e'),
+                                  backgroundColor: const Color(0xFFEF4444),
+                                ),
+                              );
+                            }
+                          },
+                          icon: const Icon(
+                            Icons.picture_as_pdf,
+                            size: 18,
+                            color: Colors.white,
+                          ),
+                          label: const Text(
+                            'View Submitted PDF',
                             style: TextStyle(
-                              fontSize: 12,
+                              color: Colors.white,
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFFDC2626),
+                              fontSize: 13,
                             ),
                           ),
-                        ],
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFDC2626),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                     const SizedBox(height: 12),
@@ -653,12 +683,13 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                         Expanded(
                           child: ElevatedButton.icon(
                             onPressed: () async {
-                              Navigator.of(context).pop();
-                              final success = await context
-                                  .read<TaskViewModel>()
+                              final taskVm =
+                                  parentContext.read<TaskViewModel>();
+                              Navigator.of(parentContext).pop();
+                              final success = await taskVm
                                   .acceptSubmission(task['id']);
                               if (success) {
-                                context.read<TaskViewModel>().loadAllTasks();
+                                taskVm.loadAllTasks();
                               }
                             },
                             icon: const Icon(Icons.check_circle, size: 16, color: Colors.white),
@@ -676,8 +707,8 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                         Expanded(
                           child: ElevatedButton.icon(
                             onPressed: () {
-                              Navigator.of(context).pop();
-                              _showRejectDialog(context, task);
+                              Navigator.of(parentContext).pop();
+                              _showRejectDialog(parentContext, task);
                             },
                             icon: const Icon(Icons.cancel_outlined, size: 16, color: Colors.white),
                             label: const Text('Reject', style: TextStyle(color: Colors.white)),
@@ -692,6 +723,29 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                         ),
                       ],
                     )
+                  else if (task['status'] == 'completed')
+                    // Comparison view button for completed tasks
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.of(parentContext).pop();
+                          _showComparisonView(parentContext, task);
+                        },
+                        icon: const Icon(Icons.compare_arrows, size: 18, color: Colors.white),
+                        label: const Text(
+                          'View Comparison: Requirements vs Delivery',
+                          style: TextStyle(color: Colors.white, fontSize: 13),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF7C3AED),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                    )
                   else
                     // Edit & History buttons
                     Row(
@@ -699,15 +753,17 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                         Expanded(
                           child: ElevatedButton.icon(
                             onPressed: () {
-                              Navigator.of(context).pop();
+                              Navigator.of(parentContext).pop();
                               showDialog(
-                                context: context,
+                                context: parentContext,
                                 builder: (_) => EditTaskDialog(
                                   task: task,
                                   modifiedBy: 'HR',
                                   modifiedByRole: 'hr',
                                   onSaved: () {
-                                    context.read<TaskViewModel>().loadAllTasks();
+                                    parentContext
+                                        .read<TaskViewModel>()
+                                        .loadAllTasks();
                                   },
                                 ),
                               );
@@ -734,8 +790,8 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                         Expanded(
                           child: OutlinedButton.icon(
                             onPressed: () {
-                              Navigator.of(context).pop();
-                              showTaskHistorySheet(context, task);
+                              Navigator.of(parentContext).pop();
+                              showTaskHistorySheet(parentContext, task);
                             },
                             icon: const Icon(
                               Icons.history_rounded,
@@ -758,6 +814,467 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                       ],
                     ),
                   const SizedBox(height: 12),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// Comparison view: original requirements vs final delivery
+  void _showComparisonView(BuildContext context, Map<String, dynamic> task) {
+    final members = task['members'] as Map<String, dynamic>? ?? {};
+    final memberSubs =
+        task['member_submissions'] as Map<String, dynamic>? ?? {};
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.75,
+          minChildSize: 0.4,
+          maxChildSize: 0.92,
+          expand: false,
+          builder: (context, scrollController) {
+            return SingleChildScrollView(
+              controller: scrollController,
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Handle bar
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFCBD5E1),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Title
+                  Row(
+                    children: [
+                      const Icon(Icons.compare_arrows,
+                          color: Color(0xFF7C3AED)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          task['title'] ?? 'Untitled',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // ── ORIGINAL REQUIREMENTS ──
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFBFDBFE)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.assignment_outlined,
+                                size: 18, color: Color(0xFF2563EB)),
+                            SizedBox(width: 6),
+                            Text(
+                              'Original Requirements (HR)',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF1E40AF),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          task['previousDescription'] != null &&
+                                  task['previousDescription']
+                                      .toString()
+                                      .isNotEmpty
+                              ? task['previousDescription'].toString()
+                              : task['description'] ?? 'No description',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFF334155),
+                            height: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          children: [
+                            _infoChip(Icons.schedule_outlined,
+                                task['duration'] ?? ''),
+                            _infoChip(Icons.business_outlined,
+                                task['department'] ?? ''),
+                            if (task['taskType'] != null)
+                              _infoChip(Icons.category_outlined,
+                                  (task['taskType'] as String).toUpperCase()),
+                          ],
+                        ),
+                        // HR attachments
+                        if ((task['attachments'] as List?)?.isNotEmpty ??
+                            false) ...[
+                          const SizedBox(height: 10),
+                          const Text(
+                            'Attached Files',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF475569),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          ...(task['attachments'] as List).map((att) {
+                            final a = att as Map<String, dynamic>;
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: InkWell(
+                                onTap: () async {
+                                  try {
+                                    await launchUrl(Uri.parse(a['url']),
+                                        mode: LaunchMode.externalApplication);
+                                  } catch (_) {}
+                                },
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      (a['type'] ?? '') == 'pdf'
+                                          ? Icons.picture_as_pdf
+                                          : Icons.attach_file,
+                                      size: 14,
+                                      color: (a['type'] ?? '') == 'pdf'
+                                          ? const Color(0xFFDC2626)
+                                          : const Color(0xFF2563EB),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        a['name'] ?? 'File',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: Color(0xFF2563EB),
+                                          fontWeight: FontWeight.w500,
+                                          decoration:
+                                              TextDecoration.underline,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const Icon(Icons.open_in_new,
+                                        size: 12, color: Color(0xFF94A3B8)),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Divider with arrow
+                  const Center(
+                    child: Column(
+                      children: [
+                        Icon(Icons.arrow_downward,
+                            color: Color(0xFF94A3B8), size: 24),
+                        Text(
+                          'DELIVERED',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF94A3B8),
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // ── FINAL DELIVERY ──
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0FDF4),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFBBF7D0)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.check_circle_outline,
+                                size: 18, color: Color(0xFF16A34A)),
+                            SizedBox(width: 6),
+                            Text(
+                              'Final Delivery (Lead)',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF166534),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        if (task['projectSummary'] != null &&
+                            task['projectSummary'].toString().isNotEmpty) ...[
+                          const Text(
+                            'Project Summary',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF475569),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            task['projectSummary'].toString(),
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Color(0xFF166534),
+                              height: 1.5,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        if (task['submissionText'] != null &&
+                            task['submissionText'].toString().isNotEmpty) ...[
+                          const Text(
+                            'Submission Details',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF475569),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            task['submissionText'].toString(),
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Color(0xFF334155),
+                              height: 1.5,
+                            ),
+                          ),
+                        ],
+                        if (task['submittedBy'] != null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Submitted by ${task['submittedBy']}',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF94A3B8),
+                            ),
+                          ),
+                        ],
+                        if (task['submissionPdfUrl'] != null &&
+                            task['submissionPdfUrl']
+                                .toString()
+                                .isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          InkWell(
+                            onTap: () async {
+                              try {
+                                await launchUrl(
+                                  Uri.parse(task['submissionPdfUrl'].toString()),
+                                  mode: LaunchMode.externalApplication,
+                                );
+                              } catch (_) {}
+                            },
+                            child: Row(
+                              children: const [
+                                Icon(Icons.picture_as_pdf,
+                                    size: 16, color: Color(0xFFDC2626)),
+                                SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    'View Submitted PDF',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFFDC2626),
+                                      decoration: TextDecoration.underline,
+                                    ),
+                                  ),
+                                ),
+                                Icon(Icons.open_in_new,
+                                    size: 12, color: Color(0xFF94A3B8)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // ── MEMBER CONTRIBUTIONS ──
+                  if (memberSubs.isNotEmpty) ...[
+                    Text(
+                      'Member Contributions (${memberSubs.length}/${members.length})',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF475569),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    ...members.entries.map((entry) {
+                      final m = entry.value as Map<String, dynamic>;
+                      final empId = (m['emp_id'] ?? '').toString();
+                      Map<String, dynamic>? sub;
+                      for (final key in memberSubs.keys) {
+                        if (key.toLowerCase() == empId.toLowerCase()) {
+                          sub = memberSubs[key] as Map<String, dynamic>?;
+                          break;
+                        }
+                      }
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: sub != null
+                              ? const Color(0xFFF0FDF4)
+                              : const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: sub != null
+                                ? const Color(0xFFBBF7D0)
+                                : const Color(0xFFE2E8F0),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 12,
+                                  backgroundColor: const Color(0xFFDBEAFE),
+                                  child: Text(
+                                    (m['name'] ?? '?')[0].toUpperCase(),
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF2563EB),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    '${m['name'] ?? 'Unknown'} ($empId)',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF1E293B),
+                                    ),
+                                  ),
+                                ),
+                                if (sub != null)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFD1FAE5),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      (sub['status'] ?? 'submitted')
+                                          .toString()
+                                          .toUpperCase(),
+                                      style: const TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF065F46),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            if (sub != null &&
+                                (sub['submissionText'] ?? '')
+                                    .toString()
+                                    .isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                sub['submissionText'].toString(),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF64748B),
+                                ),
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                            // Member's PDF
+                            if (sub != null &&
+                                (sub['pdfUrl'] ?? '')
+                                    .toString()
+                                    .isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              InkWell(
+                                onTap: () async {
+                                  try {
+                                    await launchUrl(
+                                      Uri.parse(sub!['pdfUrl'].toString()),
+                                      mode: LaunchMode.externalApplication,
+                                    );
+                                  } catch (_) {}
+                                },
+                                child: Row(
+                                  children: const [
+                                    Icon(Icons.picture_as_pdf,
+                                        size: 14, color: Color(0xFFDC2626)),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'View PDF',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFFDC2626),
+                                        decoration: TextDecoration.underline,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                  const SizedBox(height: 16),
                 ],
               ),
             );
@@ -803,12 +1320,15 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
           ElevatedButton(
             onPressed: () async {
               if (reasonCtrl.text.trim().isEmpty) return;
+              final taskVm = context.read<TaskViewModel>();
               Navigator.of(ctx).pop();
-              final success = await context
-                  .read<TaskViewModel>()
-                  .rejectSubmission(task['id'], reasonCtrl.text.trim());
+              final success = await taskVm.rejectSubmission(
+                task['id'],
+                reasonCtrl.text.trim(),
+                leadEmpId: (task['lead_id'] ?? '').toString(),
+              );
               if (success) {
-                context.read<TaskViewModel>().loadAllTasks();
+                taskVm.loadAllTasks();
               }
             },
             style: ElevatedButton.styleFrom(

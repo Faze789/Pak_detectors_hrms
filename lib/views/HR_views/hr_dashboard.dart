@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -5,9 +6,12 @@ import 'dart:math' as math;
 
 import '../../models/attendance_model.dart';
 import '../../models/employee_model.dart';
+import '../../services/task_service.dart';
 import '../../viewmodels/attendance_viewmodel.dart';
+import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/dashboard_viewmodel.dart';
 import '../../viewmodels/employee_viewmodel.dart';
+import 'task_notifications_screen.dart';
 
 abstract class _Breakpoints {
   static const double mobile = 768;
@@ -42,6 +46,9 @@ class _HRDashboardScreenState extends State<HRDashboardScreen> {
 
   bool _archiveLoading = false;
 
+  String? _hrEmpId;
+  final TaskService _taskService = TaskService();
+
   @override
   void initState() {
     super.initState();
@@ -54,6 +61,18 @@ class _HRDashboardScreenState extends State<HRDashboardScreen> {
       if (!mounted) return;
       _dashVM.startListening();
       await _loadTodayArchive();
+
+      // Fetch HR user's emp_id for notifications
+      final user = context.read<AuthViewModel>().currentUser;
+      if (user != null) {
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+        if (mounted) {
+          setState(() => _hrEmpId = doc.data()?['emp_id'] ?? user.uid);
+        }
+      }
     });
   }
 
@@ -286,37 +305,61 @@ class _HRDashboardScreenState extends State<HRDashboardScreen> {
               tooltip: 'Refresh attendance',
             ),
             const SizedBox(width: 8),
-            Stack(
-              children: [
-                IconButton(
-                  onPressed: () {},
-                  icon: const Icon(
-                    Icons.notifications_outlined,
-                    size: 24,
-                    color: Color(0xFF475569),
-                  ),
-                  style: IconButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.all(12),
-                  ),
-                ),
-                Positioned(
-                  top: 12,
-                  right: 12,
-                  child: Container(
-                    width: 8,
-                    height: 8,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFEF4444),
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            if (_hrEmpId != null)
+              StreamBuilder<int>(
+                stream: _taskService.streamUnreadTaskNotificationCount(_hrEmpId!),
+                builder: (context, snap) {
+                  final count = snap.data ?? 0;
+                  return Stack(
+                    children: [
+                      IconButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => TaskNotificationsScreen(
+                                recipientId: _hrEmpId!,
+                              ),
+                            ),
+                          );
+                        },
+                        icon: const Icon(
+                          Icons.notifications_outlined,
+                          size: 24,
+                          color: Color(0xFF475569),
+                        ),
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.all(12),
+                        ),
+                      ),
+                      if (count > 0)
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFEF4444),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Text(
+                              count > 9 ? '9+' : '$count',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
           ],
         ),
       ],

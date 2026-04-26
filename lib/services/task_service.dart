@@ -193,6 +193,7 @@ class TaskService {
 
   /// Save a new task to Firestore
   /// Members are saved as: {1: {name: "...", emp_id: "..."}, 2: {...}}
+  /// Attachments are saved as: [{type: "pdf"/"doc", url: "...", name: "..."}, ...]
   Future<void> createTask({
     List<Map<String, dynamic>>? members,
     required String lead_id,
@@ -202,6 +203,7 @@ class TaskService {
     required String description,
     required String duration,
     required String taskType,
+    List<Map<String, dynamic>>? attachments,
   }) async {
     // Format members as numbered map: {1: {name, emp_id}, 2: {name, emp_id}}
     final Map<String, dynamic> membersMap = {};
@@ -218,7 +220,7 @@ class TaskService {
     final durationDays = _durationToDays(duration);
     final deadline = DateTime.now().add(Duration(days: durationDays));
 
-    await _tasks.add({
+    final taskData = <String, dynamic>{
       'members': membersMap,
       'lead_id': lead_id,
       'leadName': leadName,
@@ -231,7 +233,13 @@ class TaskService {
       'createdAt': FieldValue.serverTimestamp(),
       'deadline': Timestamp.fromDate(deadline),
       'version': 1,
-    });
+    };
+
+    if (attachments != null && attachments.isNotEmpty) {
+      taskData['attachments'] = attachments;
+    }
+
+    await _tasks.add(taskData);
   }
 
   /// Submit a task — saves summary, submission text, optional PDF URL
@@ -268,8 +276,60 @@ class TaskService {
         'submissionText': submissionText,
         'pdfUrl': pdfUrl ?? '',
         'submittedAt': FieldValue.serverTimestamp(),
+        'status': 'submitted',
       },
     });
+  }
+
+  /// Lead accepts a member's submitted work
+  Future<void> acceptMemberWork({
+    required String taskId,
+    required String empId,
+  }) async {
+    await _tasks.doc(taskId).update({
+      'member_submissions.$empId.status': 'accepted',
+      'member_submissions.$empId.reviewedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Lead rejects a member's submitted work with a reason
+  Future<void> rejectMemberWork({
+    required String taskId,
+    required String empId,
+    required String reason,
+  }) async {
+    await _tasks.doc(taskId).update({
+      'member_submissions.$empId.status': 'rejected',
+      'member_submissions.$empId.rejectionReason': reason,
+      'member_submissions.$empId.reviewedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Lead pushes back all member submissions for corrections
+  Future<void> pushBackToMembers(String taskId) async {
+    final doc = await _tasks.doc(taskId).get();
+    final data = doc.data();
+    if (data == null) return;
+
+    final submissions =
+        data['member_submissions'] as Map<String, dynamic>? ?? {};
+    final updates = <String, dynamic>{};
+    for (final empId in submissions.keys) {
+      updates['member_submissions.$empId.status'] = 'rejected';
+      updates['member_submissions.$empId.rejectionReason'] =
+          'Lead requested corrections after HR review';
+      updates['member_submissions.$empId.reviewedAt'] =
+          FieldValue.serverTimestamp();
+    }
+
+    if (updates.isNotEmpty) {
+      await _tasks.doc(taskId).update(updates);
+    }
+  }
+
+  /// Update an employee's department
+  Future<void> updateEmployeeDepartment(String uid, String department) async {
+    await _users.doc(uid).update({'department': department});
   }
 
   /// HR accepts a submitted task
@@ -425,17 +485,154 @@ class TaskService {
         .toList();
   }
 
-  /// Assign a lead_id to an employee's user document
+  /// Assign a lead_id to an employee — requires lead approval
   Future<void> assignLeadToEmployee(
     String employeeUid,
     String leadEmpId,
   ) async {
-    await _users.doc(employeeUid).update({'lead_id': leadEmpId});
+    await _users.doc(employeeUid).update({
+      'lead_id': leadEmpId,
+      'team_status': 'pending_lead_approval',
+    });
   }
 
   /// Remove lead_id from an employee's user document
   Future<void> removeLeadFromEmployee(String employeeUid) async {
-    await _users.doc(employeeUid).update({'lead_id': ''});
+    await _users.doc(employeeUid).update({
+      'lead_id': '',
+      'team_status': FieldValue.delete(),
+    });
+  }
+
+  /// Lead accepts a pending team member
+  Future<void> acceptTeamMember(String employeeUid) async {
+    await _users.doc(employeeUid).update({'team_status': 'active_team_member'});
+  }
+
+  /// Lead rejects a pending team member
+  Future<void> rejectTeamMember(String employeeUid) async {
+    await _users.doc(employeeUid).update({
+      'lead_id': '',
+      'team_status': FieldValue.delete(),
+    });
+  }
+
+  /// Fetch pending team members for a lead (awaiting approval)
+  Future<List<Map<String, dynamic>>> getPendingTeamMembers(
+    String leadEmpId,
+  ) async {
+    final snapshot = await _users.get();
+    final lower = leadEmpId.toLowerCase();
+    return snapshot.docs
+        .where((doc) {
+          final data = doc.data();
+          final docLeadId = (data['lead_id'] ?? '').toString().toLowerCase();
+          final status = (data['team_status'] ?? '').toString();
+          return docLeadId == lower && status == 'pending_lead_approval';
+        })
+        .map((doc) {
+          final data = doc.data();
+          data['uid'] = doc.id;
+          return data;
+        })
+        .toList();
+  }
+
+  /// Lead forwards a task to a specific member with additional instructions + attachments
+  /// Stored in task document as member_tasks.$empId
+  Future<void> forwardTaskToMember({
+    required String taskId,
+    required String empId,
+    required String memberName,
+    required String instructions,
+    List<Map<String, dynamic>>? attachments,
+  }) async {
+    final data = <String, dynamic>{
+      'memberName': memberName,
+      'instructions': instructions,
+      'forwardedAt': FieldValue.serverTimestamp(),
+      'status': 'assigned',
+    };
+    if (attachments != null && attachments.isNotEmpty) {
+      data['attachments'] = attachments;
+    }
+    await _tasks.doc(taskId).update({'member_tasks.$empId': data});
+  }
+
+  /// Fetch active team members for a lead (accepted members only)
+  Future<List<Map<String, dynamic>>> getActiveTeamMembers(
+    String leadEmpId,
+  ) async {
+    final snapshot = await _users.get();
+    final lower = leadEmpId.toLowerCase();
+    return snapshot.docs
+        .where((doc) {
+          final data = doc.data();
+          final docLeadId = (data['lead_id'] ?? '').toString().toLowerCase();
+          final status = (data['team_status'] ?? '').toString();
+          return docLeadId == lower && status == 'active_team_member';
+        })
+        .map((doc) {
+          final data = doc.data();
+          data['uid'] = doc.id;
+          return data;
+        })
+        .toList();
+  }
+
+  // ── Task Notifications ─────────────────────────────────────────
+
+  CollectionReference<Map<String, dynamic>> get _notifications =>
+      _db.collection('task_notifications');
+
+  /// Stream unread task notification count for a specific user (by emp_id or uid)
+  Stream<int> streamUnreadTaskNotificationCount(String recipientId) {
+    final lower = recipientId.toLowerCase();
+    return _notifications
+        .where('read', isEqualTo: false)
+        .snapshots()
+        .map((snap) => snap.docs.where((d) {
+              final leadId = (d.data()['lead_id'] ?? '').toString().toLowerCase();
+              return leadId == lower;
+            }).length);
+  }
+
+  /// Stream all task notifications for a specific user
+  Stream<List<Map<String, dynamic>>> streamTaskNotifications(String recipientId) {
+    final lower = recipientId.toLowerCase();
+    return _notifications
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs
+            .where((d) {
+              final leadId = (d.data()['lead_id'] ?? '').toString().toLowerCase();
+              return leadId == lower;
+            })
+            .map((d) {
+              final data = d.data();
+              data['id'] = d.id;
+              return data;
+            })
+            .toList());
+  }
+
+  /// Mark a single task notification as read
+  Future<void> markTaskNotificationRead(String notifId) async {
+    await _notifications.doc(notifId).update({'read': true});
+  }
+
+  /// Clear (delete) all task notifications for a user
+  Future<void> clearAllTaskNotifications(String recipientId) async {
+    final lower = recipientId.toLowerCase();
+    final snap = await _notifications.get();
+    final batch = _db.batch();
+    for (final doc in snap.docs) {
+      final leadId = (doc.data()['lead_id'] ?? '').toString().toLowerCase();
+      if (leadId == lower) {
+        batch.delete(doc.reference);
+      }
+    }
+    await batch.commit();
   }
 
   /// Fetch the FCM token for a user by their emp_id (case-insensitive)

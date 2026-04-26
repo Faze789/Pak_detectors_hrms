@@ -5,7 +5,9 @@ import '../../models/employee_model.dart';
 import '../../viewmodels/attendance_viewmodel.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/document_viewmodel.dart';
+import '../../viewmodels/employee_viewmodel.dart';
 import '../../viewmodels/leave_viewmodel.dart';
+import '../../viewmodels/task_viewmodel.dart';
 import '../../widgets/avatar_widget.dart';
 import '../../widgets/status_badge.dart';
 import '../employee_tabs/attendance_tab.dart';
@@ -51,6 +53,77 @@ class _EmployeeProfileViewState extends State<EmployeeProfileView>
         ); // streams only this employee's leaves
       }
     });
+  }
+
+  static const List<String> _departments = [
+    'IT', 'Marketing', 'Finance', 'HR',
+    'Sales', 'Operations', 'Design', 'Support',
+  ];
+
+  void _showEditDepartmentDialog() {
+    String? selected = widget.employee.department;
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14)),
+          title: const Text('Change Department'),
+          content: DropdownButtonFormField<String>(
+            value: _departments.contains(selected) ? selected : null,
+            decoration: InputDecoration(
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10)),
+              contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 12),
+            ),
+            items: _departments
+                .map((d) => DropdownMenuItem(value: d, child: Text(d)))
+                .toList(),
+            onChanged: (v) => setDialogState(() => selected = v),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel',
+                  style: TextStyle(color: Color(0xFF64748B))),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (selected == null || selected == widget.employee.department) {
+                  Navigator.of(ctx).pop();
+                  return;
+                }
+                Navigator.of(ctx).pop();
+                final ok = await context
+                    .read<TaskViewModel>()
+                    .updateEmployeeDepartment(
+                        widget.employee.uid, selected!);
+                if (ok && mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                          'Department changed to $selected'),
+                      backgroundColor: const Color(0xFF16A34A),
+                    ),
+                  );
+                  // Refresh employee list
+                  context.read<EmployeeViewModel>().loadEmployees('');
+                  Navigator.of(context).pop(); // Go back to list
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2563EB),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('Save',
+                  style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -115,12 +188,28 @@ class _EmployeeProfileViewState extends State<EmployeeProfileView>
                   ),
                 ),
                 const SizedBox(height: 6),
-                Text(
-                  widget.employee.department,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Color(0xFF94A3B8),
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      widget.employee.department,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF94A3B8),
+                      ),
+                    ),
+                    if (_isHR) ...[
+                      const SizedBox(width: 6),
+                      GestureDetector(
+                        onTap: () => _showEditDepartmentDialog(),
+                        child: const Icon(
+                          Icons.edit,
+                          size: 14,
+                          color: Color(0xFF94A3B8),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 10),
                 Text(

@@ -186,6 +186,7 @@ class TaskViewModel extends ChangeNotifier {
     required String description,
     required String duration,
     String taskType = 'primary',
+    List<Map<String, dynamic>>? attachments,
   }) async {
     _submitting = true;
     notifyListeners();
@@ -200,6 +201,7 @@ class TaskViewModel extends ChangeNotifier {
         description: description,
         duration: duration,
         taskType: taskType,
+        attachments: attachments,
       );
 
       // Notify the lead about the new task assignment
@@ -413,14 +415,137 @@ class TaskViewModel extends ChangeNotifier {
     }
   }
 
-  /// HR rejects a submitted task
-  Future<bool> rejectSubmission(String taskId, String reason) async {
+  /// HR rejects a submitted task — notifies the lead
+  Future<bool> rejectSubmission(
+    String taskId,
+    String reason, {
+    String? leadEmpId,
+  }) async {
     try {
       await _service.rejectSubmission(taskId, reason);
+
+      // Notify lead about rejection
+      if (leadEmpId != null && leadEmpId.isNotEmpty) {
+        await FirebaseFirestore.instance.collection('task_notifications').add({
+          'lead_id': leadEmpId,
+          'title': 'Task Rejected by HR',
+          'body': 'Your submission was rejected. Reason: $reason',
+          'taskId': taskId,
+          'createdAt': FieldValue.serverTimestamp(),
+          'read': false,
+        });
+      }
+
       notifyListeners();
       return true;
     } catch (e) {
       errorMessage = 'Failed to reject submission: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Lead accepts a member's submitted work
+  Future<bool> acceptMemberWork({
+    required String taskId,
+    required String empId,
+    required String memberName,
+  }) async {
+    try {
+      await _service.acceptMemberWork(taskId: taskId, empId: empId);
+
+      await FirebaseFirestore.instance.collection('task_notifications').add({
+        'lead_id': empId,
+        'title': 'Work Accepted',
+        'body': 'Your submission has been accepted by the lead',
+        'taskId': taskId,
+        'createdAt': FieldValue.serverTimestamp(),
+        'read': false,
+      });
+
+      notifyListeners();
+      return true;
+    } catch (e) {
+      errorMessage = 'Failed to accept member work: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Lead rejects a member's submitted work
+  Future<bool> rejectMemberWork({
+    required String taskId,
+    required String empId,
+    required String memberName,
+    required String reason,
+  }) async {
+    try {
+      await _service.rejectMemberWork(
+        taskId: taskId,
+        empId: empId,
+        reason: reason,
+      );
+
+      await FirebaseFirestore.instance.collection('task_notifications').add({
+        'lead_id': empId,
+        'title': 'Work Rejected',
+        'body': 'Your submission was rejected. Reason: $reason',
+        'taskId': taskId,
+        'createdAt': FieldValue.serverTimestamp(),
+        'read': false,
+      });
+
+      notifyListeners();
+      return true;
+    } catch (e) {
+      errorMessage = 'Failed to reject member work: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Lead pushes back all member submissions for corrections
+  Future<bool> pushBackToMembers({
+    required String taskId,
+    required Map<String, dynamic> members,
+  }) async {
+    try {
+      await _service.pushBackToMembers(taskId);
+
+      for (final entry in members.values) {
+        if (entry is Map<String, dynamic>) {
+          final memberEmpId = entry['emp_id'] ?? '';
+          if (memberEmpId.isNotEmpty) {
+            await FirebaseFirestore.instance.collection('task_notifications').add({
+              'lead_id': memberEmpId,
+              'title': 'Task Pushed Back',
+              'body':
+                  'The lead has requested corrections. Please resubmit your work.',
+              'taskId': taskId,
+              'createdAt': FieldValue.serverTimestamp(),
+              'read': false,
+            });
+          }
+        }
+      }
+
+      notifyListeners();
+      return true;
+    } catch (e) {
+      errorMessage = 'Failed to push back to members: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// HR updates an employee's department
+  Future<bool> updateEmployeeDepartment(String uid, String department) async {
+    try {
+      await _service.updateEmployeeDepartment(uid, department);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      errorMessage = 'Failed to update department: $e';
       notifyListeners();
       return false;
     }
@@ -437,6 +562,120 @@ class TaskViewModel extends ChangeNotifier {
       return true;
     } catch (e) {
       errorMessage = 'Failed to update members: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // ── Team member management ───────────────────────────────────────
+
+  List<Map<String, dynamic>> _pendingMembers = [];
+  List<Map<String, dynamic>> get pendingMembers => _pendingMembers;
+
+  /// Load pending team members awaiting lead approval
+  Future<void> loadPendingMembers(String leadEmpId) async {
+    try {
+      _pendingMembers = await _service.getPendingTeamMembers(leadEmpId);
+    } catch (e) {
+      debugPrint('[TaskVM] ERROR loading pending members: $e');
+      _pendingMembers = [];
+    }
+    notifyListeners();
+  }
+
+  /// Lead accepts a pending team member
+  Future<bool> acceptTeamMember({
+    required String employeeUid,
+    required String employeeName,
+    required String leadEmpId,
+  }) async {
+    try {
+      await _service.acceptTeamMember(employeeUid);
+
+      await FirebaseFirestore.instance.collection('task_notifications').add({
+        'lead_id': employeeUid,
+        'title': 'Team Request Accepted',
+        'body': 'You have been accepted into the team',
+        'createdAt': FieldValue.serverTimestamp(),
+        'read': false,
+      });
+
+      await loadPendingMembers(leadEmpId);
+      await loadMembersByLeadId(leadEmpId);
+      return true;
+    } catch (e) {
+      errorMessage = 'Failed to accept team member: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Lead rejects a pending team member
+  Future<bool> rejectTeamMember({
+    required String employeeUid,
+    required String employeeName,
+    required String leadEmpId,
+  }) async {
+    try {
+      await _service.rejectTeamMember(employeeUid);
+
+      await FirebaseFirestore.instance.collection('task_notifications').add({
+        'lead_id': employeeUid,
+        'title': 'Team Request Declined',
+        'body': 'Your team assignment was declined by the lead',
+        'createdAt': FieldValue.serverTimestamp(),
+        'read': false,
+      });
+
+      await loadPendingMembers(leadEmpId);
+      return true;
+    } catch (e) {
+      errorMessage = 'Failed to reject team member: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // ── Task forwarding (Lead → Member) ────────────────────────────
+
+  /// Lead forwards a task to a specific member with instructions + optional attachments
+  Future<bool> forwardTaskToMember({
+    required String taskId,
+    required String empId,
+    required String memberName,
+    required String instructions,
+    required String leadEmpId,
+    required String taskTitle,
+    List<Map<String, dynamic>>? attachments,
+  }) async {
+    _submitting = true;
+    notifyListeners();
+
+    try {
+      await _service.forwardTaskToMember(
+        taskId: taskId,
+        empId: empId,
+        memberName: memberName,
+        instructions: instructions,
+        attachments: attachments,
+      );
+
+      // Notify the member
+      await FirebaseFirestore.instance.collection('task_notifications').add({
+        'lead_id': empId,
+        'title': 'Task Forwarded to You',
+        'body': 'Lead has assigned you work on "$taskTitle"',
+        'taskId': taskId,
+        'createdAt': FieldValue.serverTimestamp(),
+        'read': false,
+      });
+
+      _submitting = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      errorMessage = 'Failed to forward task: $e';
+      _submitting = false;
       notifyListeners();
       return false;
     }

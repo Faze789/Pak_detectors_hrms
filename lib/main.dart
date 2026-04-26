@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -42,6 +43,14 @@ const AndroidNotificationChannel _barrierChannel = AndroidNotificationChannel(
   playSound: true,
 );
 
+const AndroidNotificationChannel _taskChannel = AndroidNotificationChannel(
+  'task_notifications',
+  'Task Notifications',
+  description: 'Notifications for task updates and requests',
+  importance: Importance.high,
+  playSound: true,
+);
+
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
@@ -53,6 +62,24 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
           '${data['reporterName'] ?? 'A colleague'} sent a barrier report — you are CC\'d.',
     );
   }
+}
+
+void _showTaskNotification({required String title, required String body}) {
+  _localNotifications.show(
+    id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    title: title,
+    body: body,
+    notificationDetails: NotificationDetails(
+      android: AndroidNotificationDetails(
+        _taskChannel.id,
+        _taskChannel.name,
+        channelDescription: _taskChannel.description,
+        importance: Importance.high,
+        priority: Priority.high,
+        icon: '@mipmap/ic_launcher',
+      ),
+    ),
+  );
 }
 
 void _showLocalNotification({required String title, required String body}) {
@@ -89,6 +116,11 @@ void main() async {
         AndroidFlutterLocalNotificationsPlugin
       >()
       ?.createNotificationChannel(_barrierChannel);
+  await _localNotifications
+      .resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin
+      >()
+      ?.createNotificationChannel(_taskChannel);
 
   await _localNotifications.initialize(
     settings: const InitializationSettings(
@@ -405,11 +437,20 @@ class _AppInit extends StatefulWidget {
 }
 
 class _AppInitState extends State<_AppInit> {
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _notifSub;
+  bool _isFirstNotifSnapshot = true;
+
   @override
   void initState() {
     super.initState();
     _boot();
     _listenForegroundMessages();
+  }
+
+  @override
+  void dispose() {
+    _notifSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _boot() async {
@@ -424,6 +465,9 @@ class _AppInitState extends State<_AppInit> {
 
     final authViewModel = context.read<AuthViewModel>();
     if (authViewModel.isLoggedIn && authViewModel.currentUser != null) {
+      // Start listening for task notifications for this user
+      _startTaskNotificationListener(authViewModel.currentUser!.uid);
+
       final role = authViewModel.currentUser!.role;
       if (role == 'hr') {
         Navigator.of(context).pushReplacementNamed('/hr_dashboard');
@@ -433,6 +477,46 @@ class _AppInitState extends State<_AppInit> {
     } else {
       Navigator.of(context).pushReplacementNamed('/login');
     }
+  }
+
+  /// Listens to Firestore for new task_notifications targeting this user
+  /// and shows a local pop-up notification in real time.
+  void _startTaskNotificationListener(String uid) async {
+    // Get the user's emp_id
+    final userDoc =
+        await FirebaseFirestore.instance.collection('users').doc(uid).get();
+    final empId = (userDoc.data()?['emp_id'] ?? '').toString().toLowerCase();
+    if (empId.isEmpty) return;
+
+    _notifSub = FirebaseFirestore.instance
+        .collection('task_notifications')
+        .orderBy('createdAt', descending: true)
+        .limit(20)
+        .snapshots()
+        .listen((snapshot) {
+      // Skip the first snapshot (existing data)
+      if (_isFirstNotifSnapshot) {
+        _isFirstNotifSnapshot = false;
+        return;
+      }
+
+      for (final change in snapshot.docChanges) {
+        if (change.type == DocumentChangeType.added) {
+          final data = change.doc.data();
+          if (data == null) continue;
+
+          final leadId = (data['lead_id'] ?? '').toString().toLowerCase();
+          final isRead = data['read'] == true;
+
+          // Only show for this user + unread
+          if (leadId == empId && !isRead) {
+            final title = data['title'] ?? 'Task Notification';
+            final body = data['body'] ?? '';
+            _showTaskNotification(title: title, body: body);
+          }
+        }
+      }
+    });
   }
 
   Future<void> _saveFcmToken() async {

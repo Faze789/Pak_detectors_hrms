@@ -44,6 +44,20 @@ class AuthService {
     }
   }
 
+  /// Generate the next auto-increment employee ID (EMP_001, EMP_002, ...)
+  Future<String> _generateEmpId() async {
+    final snapshot = await _firestore.collection('users').get();
+    int maxNum = 0;
+    for (final doc in snapshot.docs) {
+      final empId = (doc.data()['emp_id'] ?? '').toString();
+      if (empId.startsWith('EMP_')) {
+        final num = int.tryParse(empId.substring(4)) ?? 0;
+        if (num > maxNum) maxNum = num;
+      }
+    }
+    return 'EMP_${(maxNum + 1).toString().padLeft(3, '0')}';
+  }
+
   Future<Map<String, dynamic>> signup({
     required String name,
     required String email,
@@ -57,11 +71,14 @@ class AuthService {
         password: password,
       );
 
+      final empId = await _generateEmpId();
+
       await _firestore.collection('users').doc(cred.user!.uid).set({
         'name': name,
         'email': email,
         'role': role,
         'department': department,
+        'emp_id': empId,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
