@@ -10,6 +10,7 @@ import 'package:hrms_app/views/HR_views/hr_leave_screen.dart';
 import 'package:hrms_app/views/HR_views/hr_report_screen.dart';
 import 'package:hrms_app/views/HR_views/payroll_screen.dart';
 import 'package:hrms_app/views/HR_views/recruitment_screen.dart';
+import 'package:hrms_app/views/HR_views/hr_monthly_goals_screen.dart';
 import 'package:hrms_app/views/HR_views/task_notifications_screen.dart';
 import 'package:hrms_app/views/meetings_screens/hr_meeting_screen.dart';
 import 'package:hrms_app/views/performance_screens/hr_performance_screen.dart';
@@ -172,6 +173,8 @@ class _HRDashboardWithSidebarState extends State<HRDashboardWithSidebar> {
         return const RecruitmentScreen();
       case 'payroll':
         return const HRPayrollScreen();
+      case 'monthly-goals':
+        return const HRMonthlyGoalsScreen();
       case 'reports':
         return HRReportScreen();
       case 'meetings':

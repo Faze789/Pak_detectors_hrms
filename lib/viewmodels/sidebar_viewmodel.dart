@@ -59,6 +59,11 @@ class SidebarProvider {
           icon: Icons.assignment_outlined,
         ),
         SidebarItem(
+          id: 'monthly-goals',
+          label: 'Monthly Goals',
+          icon: Icons.track_changes_outlined,
+        ),
+        SidebarItem(
           id: 'recruitment',
           label: 'Recruitment',
           icon: Icons.work_outline,
@@ -137,6 +142,11 @@ class SidebarProvider {
           id: 'employee-goals',
           label: 'My Goals',
           icon: Icons.flag_outlined,
+        ),
+        const SidebarItem(
+          id: 'monthly-report',
+          label: 'Monthly Report',
+          icon: Icons.track_changes_outlined,
         ),
         const SidebarItem(
           id: 'my-profile',

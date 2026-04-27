@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hrms_app/views/employee_views/attendance_screen.dart';
 import 'package:hrms_app/views/employee_views/employee_payroll_screen.dart';
 import 'package:hrms_app/views/employee_views/EmployeeGoalsScreen.dart';
+import 'package:hrms_app/views/employee_views/leader_monthly_report_screen.dart';
 import 'package:hrms_app/views/employee_views/my_profile_screen.dart';
 import 'package:hrms_app/views/meetings_screens/employee_meetings_screen.dart';
 import 'package:hrms_app/views/performance_screens/employee_performance_screen.dart';
@@ -47,6 +48,8 @@ class _EmployeeDashboardWithSidebarState
         return const EmployeeDashboardScreen();
       case 'employee-goals':
         return EmployeeGoalsScreen();
+      case 'monthly-report':
+        return const LeaderMonthlyReportScreen();
       case 'attendance-clock':
         return const AttendanceScreen();
       case 'my-profile':

@@ -591,29 +591,37 @@ class TaskService {
     return _notifications
         .where('read', isEqualTo: false)
         .snapshots()
-        .map((snap) => snap.docs.where((d) {
-              final leadId = (d.data()['lead_id'] ?? '').toString().toLowerCase();
-              return leadId == lower;
-            }).length);
+        .map(
+          (snap) => snap.docs.where((d) {
+            final leadId = (d.data()['lead_id'] ?? '').toString().toLowerCase();
+            return leadId == lower;
+          }).length,
+        );
   }
 
   /// Stream all task notifications for a specific user
-  Stream<List<Map<String, dynamic>>> streamTaskNotifications(String recipientId) {
+  Stream<List<Map<String, dynamic>>> streamTaskNotifications(
+    String recipientId,
+  ) {
     final lower = recipientId.toLowerCase();
     return _notifications
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snap) => snap.docs
-            .where((d) {
-              final leadId = (d.data()['lead_id'] ?? '').toString().toLowerCase();
-              return leadId == lower;
-            })
-            .map((d) {
-              final data = d.data();
-              data['id'] = d.id;
-              return data;
-            })
-            .toList());
+        .map(
+          (snap) => snap.docs
+              .where((d) {
+                final leadId = (d.data()['lead_id'] ?? '')
+                    .toString()
+                    .toLowerCase();
+                return leadId == lower;
+              })
+              .map((d) {
+                final data = d.data();
+                data['id'] = d.id;
+                return data;
+              })
+              .toList(),
+        );
   }
 
   /// Mark a single task notification as read
