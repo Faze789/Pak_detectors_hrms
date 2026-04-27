@@ -31,7 +31,10 @@ class AssignTaskByHR extends StatelessWidget {
         ),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: Padding(
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -183,6 +186,8 @@ class AssignTaskByHR extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
         ),
       ),
     );

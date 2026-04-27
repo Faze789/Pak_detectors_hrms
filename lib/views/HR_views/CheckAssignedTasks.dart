@@ -100,22 +100,34 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
             );
           }
 
-          return Padding(
-            padding: const EdgeInsets.all(16),
-            child: GridView.builder(
-              physics: const BouncingScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 0.72,
-              ),
-              itemCount: taskVm.tasks.length,
-              itemBuilder: (context, index) {
-                final task = taskVm.tasks[index];
-                return _buildTaskCard(context, task);
-              },
-            ),
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final width = constraints.maxWidth;
+              final crossAxisCount = width >= 1200
+                  ? 4
+                  : width >= 768
+                      ? 3
+                      : 2;
+              final aspectRatio = width >= 768 ? 0.78 : 0.72;
+
+              return Padding(
+                padding: EdgeInsets.all(width >= 768 ? 24 : 16),
+                child: GridView.builder(
+                  physics: const BouncingScrollPhysics(),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: aspectRatio,
+                  ),
+                  itemCount: taskVm.tasks.length,
+                  itemBuilder: (context, index) {
+                    final task = taskVm.tasks[index];
+                    return _buildTaskCard(context, task);
+                  },
+                ),
+              );
+            },
           );
         },
       ),
@@ -328,9 +340,13 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
     final members = task['members'] as Map<String, dynamic>? ?? {};
 
     final parentContext = context;
+    final sheetWidth = MediaQuery.of(context).size.width;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      constraints: sheetWidth >= 768
+          ? BoxConstraints(maxWidth: 640, minWidth: 400)
+          : null,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -829,9 +845,13 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
     final memberSubs =
         task['member_submissions'] as Map<String, dynamic>? ?? {};
 
+    final compWidth = MediaQuery.of(context).size.width;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      constraints: compWidth >= 768
+          ? BoxConstraints(maxWidth: 700, minWidth: 400)
+          : null,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),

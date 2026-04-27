@@ -146,9 +146,18 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                     )
                     .toList();
 
+          final screenWidth = MediaQuery.of(context).size.width;
+          final isDesktop = screenWidth >= 768;
+
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Form(
+            padding: EdgeInsets.symmetric(
+              horizontal: isDesktop ? 48 : 24,
+              vertical: 24,
+            ),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 720),
+                child: Form(
               key: _formKey,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -214,6 +223,9 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                   ),
                   const SizedBox(height: 8),
                   Container(
+                    constraints: BoxConstraints(
+                      maxHeight: isDesktop ? 280 : 220,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
@@ -236,45 +248,49 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                               ),
                             ),
                           )
-                        : Column(
-                            children: allUsers.map((user) {
-                              final empId = (user['emp_id'] ?? '').toString();
-                              final isSelected = _selectedLeadEmpId == empId;
-                              return RadioListTile<String>(
-                                value: empId,
-                                groupValue: _selectedLeadEmpId,
-                                activeColor: const Color(0xFF2563EB),
-                                title: Text(
-                                  user['name'] ?? 'Unknown',
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF1E293B),
+                        : Scrollbar(
+                            thumbVisibility: true,
+                            child: ListView(
+                              shrinkWrap: true,
+                              children: allUsers.map((user) {
+                                final empId = (user['emp_id'] ?? '').toString();
+                                final isSelected = _selectedLeadEmpId == empId;
+                                return RadioListTile<String>(
+                                  value: empId,
+                                  groupValue: _selectedLeadEmpId,
+                                  activeColor: const Color(0xFF2563EB),
+                                  title: Text(
+                                    user['name'] ?? 'Unknown',
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF1E293B),
+                                    ),
                                   ),
-                                ),
-                                subtitle: Text(
-                                  '$empId · ${user['department'] ?? user['role'] ?? ''}',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: Color(0xFF94A3B8),
+                                  subtitle: Text(
+                                    '$empId · ${user['department'] ?? user['role'] ?? ''}',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Color(0xFF94A3B8),
+                                    ),
                                   ),
-                                ),
-                                secondary: isSelected
-                                    ? const Icon(
-                                        Icons.star_rounded,
-                                        color: Color(0xFF2563EB),
-                                        size: 20,
-                                      )
-                                    : null,
-                                onChanged: (v) {
-                                  setState(() {
-                                    _selectedLeadEmpId = v;
-                                    // Remove lead from members if selected
-                                    _selectedMemberEmpIds.remove(v);
-                                  });
-                                },
-                              );
-                            }).toList(),
+                                  secondary: isSelected
+                                      ? const Icon(
+                                          Icons.star_rounded,
+                                          color: Color(0xFF2563EB),
+                                          size: 20,
+                                        )
+                                      : null,
+                                  onChanged: (v) {
+                                    setState(() {
+                                      _selectedLeadEmpId = v;
+                                      // Remove lead from members if selected
+                                      _selectedMemberEmpIds.remove(v);
+                                    });
+                                  },
+                                );
+                              }).toList(),
+                            ),
                           ),
                   ),
                   const SizedBox(height: 24),
@@ -288,6 +304,9 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                   ),
                   const SizedBox(height: 8),
                   Container(
+                    constraints: BoxConstraints(
+                      maxHeight: isDesktop ? 280 : 220,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
@@ -306,49 +325,53 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                               ),
                             ),
                           )
-                        : Column(
-                            children: allUsers
-                                .where((user) {
-                                  // Exclude the selected lead from member list
-                                  final empId = (user['emp_id'] ?? '')
-                                      .toString();
-                                  return empId != _selectedLeadEmpId;
-                                })
-                                .map((user) {
-                                  final empId = (user['emp_id'] ?? '')
-                                      .toString();
-                                  final isSelected = _selectedMemberEmpIds
-                                      .contains(empId);
-                                  return CheckboxListTile(
-                                    value: isSelected,
-                                    activeColor: const Color(0xFF16A34A),
-                                    title: Text(
-                                      user['name'] ?? 'Unknown',
-                                      style: const TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                        color: Color(0xFF1E293B),
+                        : Scrollbar(
+                            thumbVisibility: true,
+                            child: ListView(
+                              shrinkWrap: true,
+                              children: allUsers
+                                  .where((user) {
+                                    // Exclude the selected lead from member list
+                                    final empId = (user['emp_id'] ?? '')
+                                        .toString();
+                                    return empId != _selectedLeadEmpId;
+                                  })
+                                  .map((user) {
+                                    final empId = (user['emp_id'] ?? '')
+                                        .toString();
+                                    final isSelected = _selectedMemberEmpIds
+                                        .contains(empId);
+                                    return CheckboxListTile(
+                                      value: isSelected,
+                                      activeColor: const Color(0xFF16A34A),
+                                      title: Text(
+                                        user['name'] ?? 'Unknown',
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF1E293B),
+                                        ),
                                       ),
-                                    ),
-                                    subtitle: Text(
-                                      '$empId · ${user['department'] ?? user['role'] ?? ''}',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        color: Color(0xFF94A3B8),
+                                      subtitle: Text(
+                                        '$empId · ${user['department'] ?? user['role'] ?? ''}',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: Color(0xFF94A3B8),
+                                        ),
                                       ),
-                                    ),
-                                    onChanged: (v) {
-                                      setState(() {
-                                        if (v == true) {
-                                          _selectedMemberEmpIds.add(empId);
-                                        } else {
-                                          _selectedMemberEmpIds.remove(empId);
-                                        }
-                                      });
-                                    },
-                                  );
-                                })
-                                .toList(),
+                                      onChanged: (v) {
+                                        setState(() {
+                                          if (v == true) {
+                                            _selectedMemberEmpIds.add(empId);
+                                          } else {
+                                            _selectedMemberEmpIds.remove(empId);
+                                          }
+                                        });
+                                      },
+                                    );
+                                  })
+                                  .toList(),
+                            ),
                           ),
                   ),
                   const SizedBox(height: 24),
@@ -710,6 +733,8 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                   ),
                   const SizedBox(height: 24),
                 ],
+              ),
+            ),
               ),
             ),
           );

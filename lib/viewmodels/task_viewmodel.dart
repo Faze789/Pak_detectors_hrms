@@ -371,6 +371,7 @@ class TaskViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
+      debugPrint('[submitMemberWork] empId=$empId, pdfUrl=${pdfUrl != null ? "present (${pdfUrl.length} chars)" : "null"}');
       await _service.submitMemberWork(
         taskId: taskId,
         empId: empId,

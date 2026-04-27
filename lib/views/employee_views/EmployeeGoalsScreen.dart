@@ -354,18 +354,23 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
 
               // Task list
               Expanded(
-                child: RefreshIndicator(
-                  onRefresh: () {
-                    if (_empId == null) return Future.value();
-                    return taskVm.loadTasksForUser(_empId!);
-                  },
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    itemCount: taskVm.tasks.length,
-                    itemBuilder: (context, index) {
-                      return _buildTaskCard(context, taskVm.tasks[index]);
-                    },
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 800),
+                    child: RefreshIndicator(
+                      onRefresh: () {
+                        if (_empId == null) return Future.value();
+                        return taskVm.loadTasksForUser(_empId!);
+                      },
+                      child: ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        itemCount: taskVm.tasks.length,
+                        itemBuilder: (context, index) {
+                          return _buildTaskCard(context, taskVm.tasks[index]);
+                        },
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -413,9 +418,13 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
 
   void _showPendingMembersSheet(TaskViewModel taskVm) {
     final parentContext = context;
+    final sw = MediaQuery.of(context).size.width;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      constraints: sw >= 768
+          ? const BoxConstraints(maxWidth: 640, minWidth: 400)
+          : null,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -1370,8 +1379,12 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
       return;
     }
 
+    final mw = MediaQuery.of(context).size.width;
     showModalBottomSheet(
       context: context,
+      constraints: mw >= 768
+          ? const BoxConstraints(maxWidth: 640, minWidth: 400)
+          : null,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -1464,9 +1477,13 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
   // ─── Member Submissions View (Lead only) ────────────────────────────────────
 
   void _showMemberSubmissions(BuildContext context, String taskId) {
+    final msw = MediaQuery.of(context).size.width;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      constraints: msw >= 768
+          ? const BoxConstraints(maxWidth: 640, minWidth: 400)
+          : null,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -2104,9 +2121,13 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
     Uint8List? pickedFileBytes;
     bool uploading = false;
 
+    final sdw = MediaQuery.of(context).size.width;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      constraints: sdw >= 768
+          ? const BoxConstraints(maxWidth: 640, minWidth: 400)
+          : null,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -2394,27 +2415,38 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
 
                                 setSheetState(() => uploading = true);
 
+                                // Capture closure variables into locals
+                                // to avoid any Dart closure capture issues
+                                final localFileName = pickedFileName;
+                                final localFileBytes = pickedFileBytes;
+                                final localFilePath = pickedFilePath;
+
                                 // Upload PDF if selected
                                 String? pdfUrl;
-                                if (pickedFileName != null &&
-                                    (pickedFileBytes != null ||
-                                        pickedFilePath != null)) {
+                                if (localFileName != null &&
+                                    (localFileBytes != null ||
+                                        localFilePath != null)) {
                                   try {
                                     final ref = FirebaseStorage.instance.ref(
-                                      'task_submissions/${task['id']}/$pickedFileName',
+                                      'task_submissions/${task['id']}/$localFileName',
                                     );
                                     final meta = SettableMetadata(
                                       contentType: 'application/pdf',
                                     );
-                                    if (pickedFileBytes != null) {
+                                    if (localFileBytes != null &&
+                                        localFileBytes.isNotEmpty) {
                                       await ref.putData(
-                                          pickedFileBytes!, meta);
-                                    } else {
+                                          localFileBytes, meta);
+                                    } else if (localFilePath != null &&
+                                        localFilePath.isNotEmpty) {
                                       await ref.putFile(
-                                          File(pickedFilePath!), meta);
+                                          File(localFilePath), meta);
                                     }
                                     pdfUrl = await ref.getDownloadURL();
+                                    debugPrint(
+                                        '[PDF Upload] Success — URL: $pdfUrl');
                                   } catch (e) {
+                                    debugPrint('[PDF Upload] Failed: $e');
                                     if (!mounted) return;
                                     setSheetState(() => uploading = false);
                                     ScaffoldMessenger.of(context).showSnackBar(
@@ -2530,9 +2562,13 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
       text: task['description'] ?? '',
     );
 
+    final tdw = MediaQuery.of(context).size.width;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      constraints: tdw >= 768
+          ? const BoxConstraints(maxWidth: 700, minWidth: 400)
+          : null,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -3507,6 +3543,7 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
               ),
               content: SizedBox(
                 width: double.maxFinite,
+                height: MediaQuery.of(context).size.height * 0.5,
                 child: Consumer<TaskViewModel>(
                   builder: (ctx, vm, _) {
                     // All non-HR users, excluding the lead themselves
@@ -3523,8 +3560,9 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                       );
                     }
 
-                    return ListView(
-                      shrinkWrap: true,
+                    return Scrollbar(
+                      thumbVisibility: true,
+                      child: ListView(
                       children: allUsers.map((m) {
                         final empId = (m['emp_id'] ?? '').toString();
                         final dept = (m['department'] ?? '').toString();
@@ -3557,6 +3595,7 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                           },
                         );
                       }).toList(),
+                    ),
                     );
                   },
                 ),
@@ -3651,9 +3690,13 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
     bool forwarding = false;
     final parentContext = context;
 
+    final fww = MediaQuery.of(context).size.width;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      constraints: fww >= 768
+          ? const BoxConstraints(maxWidth: 640, minWidth: 400)
+          : null,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
