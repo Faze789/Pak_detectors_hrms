@@ -45,5 +45,26 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+
+	<!-- Location (geolocator) -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>This app needs access to your location for attendance tracking.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>This app needs access to your location for attendance tracking.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>This app needs access to your location for attendance tracking.</string>
+
+	<!-- Push Notifications (firebase_messaging) -->
+	<key>FirebaseAppDelegateProxyEnabled</key>
+	<false/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>remote-notification</string>
+	</array>
+
+	<!-- Photo Library (file_picker may need this) -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>This app needs access to your photo library to upload files.</string>
 </dict>
 </plist>

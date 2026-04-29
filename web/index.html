@@ -32,6 +32,11 @@
   <title>hrms_app</title>
   <link rel="manifest" href="manifest.json">
 
+  <!-- Polyfill: Firebase JS SDK 12.12.0 references Node.js "global" which doesn't exist in browsers -->
+  <script>
+    if (typeof global === 'undefined') { window.global = window; }
+  </script>
+
   <!-- Register Firebase Messaging service worker for web push notifications -->
   <script>
     if ('serviceWorker' in navigator) {

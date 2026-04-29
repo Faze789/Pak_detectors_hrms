@@ -12,13 +12,23 @@ class MeetingService {
 
   // ─── Meetings ───────────────────────────────────────────────
 
+  /// Safely parse a single doc, returning null on failure
+  MeetingModel? _safeParse(DocumentSnapshot doc) {
+    try {
+      return MeetingModel.fromFirestore(doc);
+    } catch (e) {
+      print('[MeetingService] Failed to parse meeting ${doc.id}: $e');
+      return null;
+    }
+  }
+
   /// Stream of all meetings (for HR)
   Stream<List<MeetingModel>> streamAllMeetings() {
-    return _firestore
-        .collection('meetings')
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snap) => snap.docs.map((d) => MeetingModel.fromFirestore(d)).toList());
+    return _firestore.collection('meetings').snapshots().map((snap) {
+      final list = snap.docs.map(_safeParse).whereType<MeetingModel>().toList();
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    });
   }
 
   /// Stream of pending meetings (for HR approval tab)
@@ -28,10 +38,13 @@ class MeetingService {
         .where('status', isEqualTo: 'pending')
         .snapshots()
         .map((snap) {
-      final list = snap.docs.map((d) => MeetingModel.fromFirestore(d)).toList();
-      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      return list;
-    });
+          final list = snap.docs
+              .map(_safeParse)
+              .whereType<MeetingModel>()
+              .toList();
+          list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return list;
+        });
   }
 
   /// Stream of meetings for a specific employee —
@@ -66,20 +79,24 @@ class MeetingService {
             .where('attendeeIds', arrayContains: userId)
             .snapshots()
             .listen((snap) {
-          attendeeList =
-              snap.docs.map((d) => MeetingModel.fromFirestore(d)).toList();
-          emit();
-        });
+              attendeeList = snap.docs
+                  .map(_safeParse)
+                  .whereType<MeetingModel>()
+                  .toList();
+              emit();
+            });
 
         subOrganizer = _firestore
             .collection('meetings')
             .where('organizerId', isEqualTo: userId)
             .snapshots()
             .listen((snap) {
-          organizerList =
-              snap.docs.map((d) => MeetingModel.fromFirestore(d)).toList();
-          emit();
-        });
+              organizerList = snap.docs
+                  .map(_safeParse)
+                  .whereType<MeetingModel>()
+                  .toList();
+              emit();
+            });
       },
       onCancel: () {
         subAttendee?.cancel();
@@ -97,10 +114,13 @@ class MeetingService {
         .where('organizerId', isEqualTo: userId)
         .snapshots()
         .map((snap) {
-      final list = snap.docs.map((d) => MeetingModel.fromFirestore(d)).toList();
-      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      return list;
-    });
+          final list = snap.docs
+              .map(_safeParse)
+              .whereType<MeetingModel>()
+              .toList();
+          list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return list;
+        });
   }
 
   /// HR arranges a meeting (auto-approved, send notifications to attendees)
@@ -136,7 +156,8 @@ class MeetingService {
       batch.set(notifRef, {
         'userId': meeting.attendeeIds[i],
         'title': '📅 New Meeting Scheduled',
-        'body': 'HR has scheduled "${meeting.title}" on ${_formatDate(meeting.dateTime)}',
+        'body':
+            'HR has scheduled "${meeting.title}" on ${_formatDate(meeting.dateTime)}',
         'meetingId': docRef.id,
         'isRead': false,
         'createdAt': Timestamp.now(),
@@ -151,7 +172,8 @@ class MeetingService {
       userIds: meeting.attendeeIds,
       employees: employees,
       title: '📅 New Meeting Scheduled',
-      body: 'HR has scheduled "${meeting.title}" on ${_formatDate(meeting.dateTime)}',
+      body:
+          'HR has scheduled "${meeting.title}" on ${_formatDate(meeting.dateTime)}',
       data: {'meetingId': docRef.id, 'type': 'new_meeting'},
     );
   }
@@ -165,8 +187,12 @@ class MeetingService {
 
     // Make sure the organizer is also in attendeeIds so the meeting
     // appears in their own stream once approved
-    final allAttendeeIds = {meeting.organizerId, ...meeting.attendeeIds}.toList();
-    final allAttendeeNames = meeting.attendeeNames.contains(meeting.organizerName)
+    final allAttendeeIds = {
+      meeting.organizerId,
+      ...meeting.attendeeIds,
+    }.toList();
+    final allAttendeeNames =
+        meeting.attendeeNames.contains(meeting.organizerName)
         ? meeting.attendeeNames
         : [meeting.organizerName, ...meeting.attendeeNames];
 
@@ -197,7 +223,8 @@ class MeetingService {
       batch.set(notifRef, {
         'userId': hr.id,
         'title': '🔔 New Meeting Request',
-        'body': '${meeting.organizerName} has requested a meeting: "${meeting.title}"',
+        'body':
+            '${meeting.organizerName} has requested a meeting: "${meeting.title}"',
         'meetingId': docRef.id,
         'isRead': false,
         'createdAt': Timestamp.now(),
@@ -212,7 +239,8 @@ class MeetingService {
       userIds: hrUsers.map((u) => u.id).toList(),
       employees: hrUsers,
       title: '🔔 New Meeting Request',
-      body: '${meetingWithOrganizer.organizerName} requested "${meetingWithOrganizer.title}"',
+      body:
+          '${meetingWithOrganizer.organizerName} requested "${meetingWithOrganizer.title}"',
       data: {'meetingId': docRef.id, 'type': 'meeting_request'},
     );
   }
@@ -236,7 +264,8 @@ class MeetingService {
       batch.set(notifRef, {
         'userId': uid,
         'title': '✅ Meeting Approved',
-        'body': '"${meeting.title}" has been approved for ${_formatDate(meeting.dateTime)}',
+        'body':
+            '"${meeting.title}" has been approved for ${_formatDate(meeting.dateTime)}',
         'meetingId': meeting.id,
         'isRead': false,
         'createdAt': Timestamp.now(),
@@ -246,12 +275,15 @@ class MeetingService {
 
     await batch.commit();
 
-    final notifyUsers = allUsers.where((u) => notifyIds.contains(u.id)).toList();
+    final notifyUsers = allUsers
+        .where((u) => notifyIds.contains(u.id))
+        .toList();
     await _sendPushToUsers(
       userIds: notifyIds,
       employees: notifyUsers,
       title: '✅ Meeting Approved',
-      body: '"${meeting.title}" on ${_formatDate(meeting.dateTime)} is confirmed!',
+      body:
+          '"${meeting.title}" on ${_formatDate(meeting.dateTime)} is confirmed!',
       data: {'meetingId': meeting.id, 'type': 'meeting_approved'},
     );
   }
@@ -283,7 +315,9 @@ class MeetingService {
 
     await batch.commit();
 
-    final organizer = allUsers.where((u) => u.id == meeting.organizerId).toList();
+    final organizer = allUsers
+        .where((u) => u.id == meeting.organizerId)
+        .toList();
     await _sendPushToUsers(
       userIds: [meeting.organizerId],
       employees: organizer,
@@ -324,11 +358,20 @@ class MeetingService {
         .where('userId', isEqualTo: userId)
         .snapshots()
         .map((snap) {
-      final list = snap.docs.map((d) => NotificationModel.fromFirestore(d)).toList();
-      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      if (list.length > 50) return list.sublist(0, 50);
-      return list;
-    });
+          final list = <NotificationModel>[];
+          for (final d in snap.docs) {
+            try {
+              list.add(NotificationModel.fromFirestore(d));
+            } catch (e) {
+              print(
+                '[MeetingService] Failed to parse notification ${d.id}: $e',
+              );
+            }
+          }
+          list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          if (list.length > 50) return list.sublist(0, 50);
+          return list;
+        });
   }
 
   Stream<int> streamUnreadCount(String userId) {
@@ -341,7 +384,9 @@ class MeetingService {
   }
 
   Future<void> markNotificationRead(String notifId) async {
-    await _firestore.collection('notifications').doc(notifId).update({'isRead': true});
+    await _firestore.collection('notifications').doc(notifId).update({
+      'isRead': true,
+    });
   }
 
   Future<void> markAllNotificationsRead(String userId) async {
@@ -362,7 +407,9 @@ class MeetingService {
   Future<void> saveUserFCMToken(String userId) async {
     final token = await _messaging.getToken();
     if (token != null) {
-      await _firestore.collection('users').doc(userId).update({'fcmToken': token});
+      await _firestore.collection('users').doc(userId).update({
+        'fcmToken': token,
+      });
     }
   }
 
@@ -387,7 +434,9 @@ class MeetingService {
 
       // Replace with your Cloud Function URL
       await http.post(
-        Uri.parse('https://YOUR_REGION-YOUR_PROJECT.cloudfunctions.net/sendNotification'),
+        Uri.parse(
+          'https://YOUR_REGION-YOUR_PROJECT.cloudfunctions.net/sendNotification',
+        ),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'tokens': tokens,
@@ -402,7 +451,20 @@ class MeetingService {
   }
 
   String _formatDate(DateTime dt) {
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    return '${months[dt.month - 1]} ${dt.day}, ${dt.year} at ${dt.hour.toString().padLeft(2,'0')}:${dt.minute.toString().padLeft(2,'0')}';
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${months[dt.month - 1]} ${dt.day}, ${dt.year} at ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
   }
 }

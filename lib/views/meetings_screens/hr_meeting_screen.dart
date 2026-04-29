@@ -486,12 +486,14 @@ class _HRMeetingsScreenState extends State<HRMeetingsScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 DateBox(
                   dateTime: meeting.dateTime,
                   color: const Color(0xFF3B82F6),
                 ),
                 const SizedBox(width: 14),
+
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -534,6 +536,43 @@ class _HRMeetingsScreenState extends State<HRMeetingsScreen>
                       ),
                     ],
                   ),
+                ),
+
+                // ✅ FORCE VISIBLE DELETE BUTTON
+                Column(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      onPressed: () async {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Delete Meeting'),
+                            content: const Text(
+                              'Are you sure you want to delete this meeting?',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, false),
+                                child: const Text('Cancel'),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, true),
+                                child: const Text(
+                                  'Delete',
+                                  style: TextStyle(color: Colors.red),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+
+                        if (confirm == true) {
+                          // await _service.deleteMeeting(meeting.id);
+                        }
+                      },
+                    ),
+                  ],
                 ),
               ],
             ),

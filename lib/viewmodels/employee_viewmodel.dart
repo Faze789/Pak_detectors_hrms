@@ -36,9 +36,12 @@ class EmployeeViewModel extends ChangeNotifier {
 
     try {
       final currentUser = authViewModel.currentUser;
+
       if (currentUser == null) {
-        debugPrint("❌ EmployeeViewModel: Current user is null");
-        throw Exception("Current user is null");
+        debugPrint("⏳ User not ready yet, skipping loadEmployees()");
+        isLoading = false;
+        notifyListeners();
+        return;
       }
 
       debugPrint(
