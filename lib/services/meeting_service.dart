@@ -26,9 +26,12 @@ class MeetingService {
     return _firestore
         .collection('meetings')
         .where('status', isEqualTo: 'pending')
-        .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snap) => snap.docs.map((d) => MeetingModel.fromFirestore(d)).toList());
+        .map((snap) {
+      final list = snap.docs.map((d) => MeetingModel.fromFirestore(d)).toList();
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    });
   }
 
   /// Stream of meetings for a specific employee —
@@ -92,9 +95,12 @@ class MeetingService {
     return _firestore
         .collection('meetings')
         .where('organizerId', isEqualTo: userId)
-        .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snap) => snap.docs.map((d) => MeetingModel.fromFirestore(d)).toList());
+        .map((snap) {
+      final list = snap.docs.map((d) => MeetingModel.fromFirestore(d)).toList();
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    });
   }
 
   /// HR arranges a meeting (auto-approved, send notifications to attendees)
@@ -316,10 +322,13 @@ class MeetingService {
     return _firestore
         .collection('notifications')
         .where('userId', isEqualTo: userId)
-        .orderBy('createdAt', descending: true)
-        .limit(50)
         .snapshots()
-        .map((snap) => snap.docs.map((d) => NotificationModel.fromFirestore(d)).toList());
+        .map((snap) {
+      final list = snap.docs.map((d) => NotificationModel.fromFirestore(d)).toList();
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      if (list.length > 50) return list.sublist(0, 50);
+      return list;
+    });
   }
 
   Stream<int> streamUnreadCount(String userId) {

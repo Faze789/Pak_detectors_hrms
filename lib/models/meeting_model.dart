@@ -48,7 +48,9 @@ class MeetingModel {
     return MeetingModel(
       id: doc.id,
       title: data['title'] ?? '',
-      dateTime: (data['dateTime'] as Timestamp).toDate(),
+      dateTime: data['dateTime'] is Timestamp
+          ? (data['dateTime'] as Timestamp).toDate()
+          : DateTime.now(),
       duration: data['duration'] ?? '30m',
       type: MeetingType.values.firstWhere(
             (e) => e.name == data['type'],
@@ -69,7 +71,9 @@ class MeetingModel {
       attendeeIds: List<String>.from(data['attendeeIds'] ?? []),
       attendeeNames: List<String>.from(data['attendeeNames'] ?? []),
       isAllEmployees: data['isAllEmployees'] ?? false,
-      createdAt: (data['createdAt'] as Timestamp).toDate(),
+      createdAt: data['createdAt'] is Timestamp
+          ? (data['createdAt'] as Timestamp).toDate()
+          : DateTime.now(),
       rejectionReason: data['rejectionReason'],
     );
   }
@@ -186,7 +190,9 @@ class NotificationModel {
       body: data['body'] ?? '',
       meetingId: data['meetingId'] ?? '',
       isRead: data['isRead'] ?? false,
-      createdAt: (data['createdAt'] as Timestamp).toDate(),
+      createdAt: data['createdAt'] is Timestamp
+          ? (data['createdAt'] as Timestamp).toDate()
+          : DateTime.now(),
       type: data['type'] ?? '',
     );
   }
