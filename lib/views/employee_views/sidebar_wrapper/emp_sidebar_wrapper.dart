@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:hrms_app/views/employee_views/attendance_screen.dart';
 import 'package:hrms_app/views/employee_views/employee_payroll_screen.dart';
 import 'package:hrms_app/views/employee_views/EmployeeGoalsScreen.dart';
-import 'package:hrms_app/views/employee_views/leader_monthly_report_screen.dart';
+import 'package:hrms_app/views/employee_views/submit_report_screen.dart';
+import 'package:hrms_app/views/employee_views/team_reports_screen.dart';
 import 'package:hrms_app/views/employee_views/my_profile_screen.dart';
 import 'package:hrms_app/views/meetings_screens/employee_meetings_screen.dart';
 import 'package:hrms_app/views/performance_screens/employee_performance_screen.dart';
@@ -39,6 +40,11 @@ class _EmployeeDashboardWithSidebarState
     }
   }
 
+  String get _userRole {
+    final user = context.read<AuthViewModel>().currentUser;
+    return user?.role ?? 'employee';
+  }
+
   Widget _buildContent() {
     // Resolve uid once — safe because user is always logged in at this point
     final user = context.read<AuthViewModel>().currentUser;
@@ -48,8 +54,10 @@ class _EmployeeDashboardWithSidebarState
         return const EmployeeDashboardScreen();
       case 'employee-goals':
         return EmployeeGoalsScreen();
-      case 'monthly-report':
-        return const LeaderMonthlyReportScreen();
+      case 'submit-report':
+        return const SubmitReportScreen();
+      case 'team-reports':
+        return const TeamReportsScreen();
       case 'attendance-clock':
         return const AttendanceScreen();
       case 'my-profile':
@@ -90,7 +98,7 @@ class _EmployeeDashboardWithSidebarState
           : Sidebar.buildDrawer(
               activeTab: activeTab,
               onTabChange: _handleTabChange,
-              userRole: 'employee',
+              userRole: _userRole,
             ),
       appBar: isDesktop
           ? null
@@ -120,7 +128,7 @@ class _EmployeeDashboardWithSidebarState
           Sidebar(
             activeTab: activeTab,
             onTabChange: _handleTabChange,
-            userRole: 'employee',
+            userRole: _userRole,
           ),
           Expanded(child: _buildContent()),
         ],

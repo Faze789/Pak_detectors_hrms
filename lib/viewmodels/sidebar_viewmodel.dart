@@ -59,9 +59,9 @@ class SidebarProvider {
           icon: Icons.assignment_outlined,
         ),
         SidebarItem(
-          id: 'monthly-goals',
-          label: 'Monthly Goals',
-          icon: Icons.track_changes_outlined,
+          id: 'employee-reports',
+          label: 'Employee Reports',
+          icon: Icons.assessment_outlined,
         ),
         SidebarItem(
           id: 'recruitment',
@@ -127,74 +127,81 @@ class SidebarProvider {
     ),
   ];
 
-  // Employee Navigation Items
-  static final List<NavigationElement> employeeNavigation = [
-    // Employee Self-Service
-    SidebarSection(
-      title: 'Employee Self-Service',
-      items: [
-        const SidebarItem(
-          id: 'employee-dashboard',
-          label: 'My Dashboard',
-          icon: Icons.home_outlined,
-        ),
-        const SidebarItem(
-          id: 'employee-goals',
-          label: 'My Goals',
-          icon: Icons.flag_outlined,
-        ),
-        const SidebarItem(
-          id: 'monthly-report',
-          label: 'Monthly Report',
-          icon: Icons.track_changes_outlined,
-        ),
-        const SidebarItem(
-          id: 'my-profile',
-          label: 'My Profile',
-          icon: Icons.person_outline,
-        ),
-        const SidebarItem(
-          id: 'my-meetings',
-          label: 'My Meetings',
-          icon: Icons.event_outlined,
-        ),
-        SidebarItem(
-          id: 'my-performance',
-          label: 'My Performance',
-          icon: Icons.bar_chart,
-        ),
-        const SidebarItem(
-          id: 'attendance-clock',
-          label: 'My Attendance',
-          icon: Icons.schedule_outlined,
-        ),
-        const SidebarItem(
-          id: 'my-payslips',
-          label: 'My Payslips',
-          icon: Icons.credit_card_outlined,
-        ),
-      ],
-    ),
-    // System
-    const SidebarSection(
-      title: 'System',
-      items: [
-        SidebarItem(
-          id: 'settings',
-          label: 'Settings',
-          icon: Icons.settings_outlined,
-        ),
-        SidebarItem(id: 'help', label: 'Help Center', icon: Icons.help_outline),
-      ],
-    ),
-  ];
+  // Employee Navigation Items (dynamically includes Team Reports for leads)
+  static List<NavigationElement> getEmployeeNavigation({bool isLead = false}) {
+    return [
+      SidebarSection(
+        title: 'Employee Self-Service',
+        items: [
+          const SidebarItem(
+            id: 'employee-dashboard',
+            label: 'My Dashboard',
+            icon: Icons.home_outlined,
+          ),
+          const SidebarItem(
+            id: 'employee-goals',
+            label: 'My Goals',
+            icon: Icons.flag_outlined,
+          ),
+          const SidebarItem(
+            id: 'submit-report',
+            label: 'Submit Report',
+            icon: Icons.assignment_outlined,
+          ),
+          if (isLead)
+            const SidebarItem(
+              id: 'team-reports',
+              label: 'Team Reports',
+              icon: Icons.group_outlined,
+            ),
+          const SidebarItem(
+            id: 'my-profile',
+            label: 'My Profile',
+            icon: Icons.person_outline,
+          ),
+          const SidebarItem(
+            id: 'my-meetings',
+            label: 'My Meetings',
+            icon: Icons.event_outlined,
+          ),
+          const SidebarItem(
+            id: 'my-performance',
+            label: 'My Performance',
+            icon: Icons.bar_chart,
+          ),
+          const SidebarItem(
+            id: 'attendance-clock',
+            label: 'My Attendance',
+            icon: Icons.schedule_outlined,
+          ),
+          const SidebarItem(
+            id: 'my-payslips',
+            label: 'My Payslips',
+            icon: Icons.credit_card_outlined,
+          ),
+        ],
+      ),
+      const SidebarSection(
+        title: 'System',
+        items: [
+          SidebarItem(
+            id: 'settings',
+            label: 'Settings',
+            icon: Icons.settings_outlined,
+          ),
+          SidebarItem(id: 'help', label: 'Help Center', icon: Icons.help_outline),
+        ],
+      ),
+    ];
+  }
 
   // Get navigation based on role
   static List<NavigationElement> getNavigationForRole(String role) {
     if (role == 'hr' || role == 'admin') {
       return hrNavigation;
     } else {
-      return employeeNavigation;
+      final isLead = role.toLowerCase().contains('project lead');
+      return getEmployeeNavigation(isLead: isLead);
     }
   }
 }

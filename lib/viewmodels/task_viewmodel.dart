@@ -270,7 +270,7 @@ class TaskViewModel extends ChangeNotifier {
         });
       }
 
-      // If approved, notify all task members
+      // If approved, notify all task members + HR
       if (newStatus == 'approved') {
         final members = currentData['members'] as Map<String, dynamic>? ?? {};
         for (final entry in members.values) {
@@ -292,6 +292,46 @@ class TaskViewModel extends ChangeNotifier {
                   });
             }
           }
+        }
+
+        // Auto-forward Week 1 to all members
+        final totalWeeks = (currentData['totalWeeks'] ?? 0) as int;
+        if (members.isNotEmpty && totalWeeks > 0) {
+          await _service.forwardTaskToAllMembers(
+            taskId: taskId,
+            members: members,
+            instructions: newDescription,
+            weekNumber: 1,
+          );
+        }
+
+        // Notify HR about the approval
+        final oldDescription = (currentData['description'] ?? '').toString();
+        final wasModified = newDescription != oldDescription;
+
+        final hrUsers = await FirebaseFirestore.instance
+            .collection('users')
+            .where('role', isEqualTo: 'hr')
+            .get();
+
+        for (final hrDoc in hrUsers.docs) {
+          final hrEmpId = hrDoc.data()['emp_id'] ?? hrDoc.id;
+          await FirebaseFirestore.instance
+              .collection('task_notifications')
+              .add({
+                'lead_id': hrEmpId,
+                'taskId': taskId,
+                'title': wasModified
+                    ? 'Task Edited & Approved'
+                    : 'Task Approved by Lead',
+                'body': wasModified
+                    ? '"$newTitle" was edited and approved by $modifiedBy. Description was modified.'
+                    : '"$newTitle" has been approved by $modifiedBy without changes.',
+                'modifiedBy': modifiedBy,
+                'modifiedByRole': modifiedByRole,
+                'createdAt': FieldValue.serverTimestamp(),
+                'read': false,
+              });
         }
       }
 
@@ -446,7 +486,8 @@ class TaskViewModel extends ChangeNotifier {
     }
   }
 
-  /// Lead accepts a member's submitted work
+  /// Lead accepts a member's submitted work.
+  /// If all members are now accepted, auto-assigns the next week.
   Future<bool> acceptMemberWork({
     required String taskId,
     required String empId,
@@ -464,12 +505,85 @@ class TaskViewModel extends ChangeNotifier {
         'read': false,
       });
 
+      // Check if ALL members are now accepted → auto-assign next week
+      await _autoAssignNextWeekIfAllAccepted(taskId);
+
       notifyListeners();
       return true;
     } catch (e) {
       errorMessage = 'Failed to accept member work: $e';
       notifyListeners();
       return false;
+    }
+  }
+
+  /// Checks if all members have accepted submissions for the current week.
+  /// If yes, auto-forwards the next week to all members.
+  Future<void> _autoAssignNextWeekIfAllAccepted(String taskId) async {
+    final taskDoc = await FirebaseFirestore.instance
+        .collection('tasks')
+        .doc(taskId)
+        .get();
+    final taskData = taskDoc.data();
+    if (taskData == null) return;
+
+    final members = taskData['members'] as Map<String, dynamic>? ?? {};
+    final submissions = taskData['member_submissions'] as Map<String, dynamic>? ?? {};
+    final totalWeeks = (taskData['totalWeeks'] ?? 0) as int;
+    if (members.isEmpty || totalWeeks <= 1) return;
+
+    // Check if every member's submission is 'accepted'
+    for (final memberEntry in members.values) {
+      if (memberEntry is Map<String, dynamic>) {
+        final memberEmpId = (memberEntry['emp_id'] ?? '').toString();
+        if (memberEmpId.isEmpty) continue;
+        final sub = submissions[memberEmpId];
+        if (sub is! Map<String, dynamic> || sub['status'] != 'accepted') {
+          return; // Not all accepted yet
+        }
+      }
+    }
+
+    // All accepted — find next unassigned week
+    final deadlines = taskData['weeklyDeadlines'] as List? ?? [];
+    int nextWeek = 0;
+    for (final d in deadlines) {
+      final w = Map<String, dynamic>.from(d as Map);
+      if (w['assigned'] != true) {
+        nextWeek = (w['week'] as int?) ?? 0;
+        break;
+      }
+    }
+
+    if (nextWeek == 0 || nextWeek > totalWeeks) return; // All weeks done
+
+    // Auto-forward next week
+    await _service.forwardTaskToAllMembers(
+      taskId: taskId,
+      members: members,
+      instructions: taskData['description'] ?? '',
+      weekNumber: nextWeek,
+    );
+
+    // Notify all members about next week
+    final taskTitle = taskData['title'] ?? '';
+    for (final entry in members.values) {
+      if (entry is Map<String, dynamic>) {
+        final memberEmpId = (entry['emp_id'] ?? '').toString();
+        if (memberEmpId.isNotEmpty) {
+          await FirebaseFirestore.instance
+              .collection('task_notifications')
+              .add({
+            'lead_id': memberEmpId,
+            'title': 'Week $nextWeek Assigned',
+            'body':
+                'All submissions accepted! Week $nextWeek of "$taskTitle" is now assigned.',
+            'taskId': taskId,
+            'createdAt': FieldValue.serverTimestamp(),
+            'read': false,
+          });
+        }
+      }
     }
   }
 
@@ -639,6 +753,59 @@ class TaskViewModel extends ChangeNotifier {
 
   // ── Task forwarding (Lead → Member) ────────────────────────────
 
+  /// Forward a task to ALL members for a specific week
+  Future<bool> forwardTaskToAllMembers({
+    required String taskId,
+    required Map<String, dynamic> members,
+    required String instructions,
+    required int weekNumber,
+    required String leadEmpId,
+    required String taskTitle,
+    List<Map<String, dynamic>>? attachments,
+  }) async {
+    _submitting = true;
+    notifyListeners();
+
+    try {
+      await _service.forwardTaskToAllMembers(
+        taskId: taskId,
+        members: members,
+        instructions: instructions,
+        weekNumber: weekNumber,
+        attachments: attachments,
+      );
+
+      // Notify each member
+      for (final entry in members.values) {
+        if (entry is Map<String, dynamic>) {
+          final memberEmpId = (entry['emp_id'] ?? '').toString();
+          if (memberEmpId.isNotEmpty) {
+            await FirebaseFirestore.instance
+                .collection('task_notifications')
+                .add({
+              'lead_id': memberEmpId,
+              'title': 'Week $weekNumber Assigned',
+              'body':
+                  'You have been assigned Week $weekNumber of "$taskTitle"',
+              'taskId': taskId,
+              'createdAt': FieldValue.serverTimestamp(),
+              'read': false,
+            });
+          }
+        }
+      }
+
+      _submitting = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      errorMessage = 'Failed to forward task: $e';
+      _submitting = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
   /// Lead forwards a task to a specific member with instructions + optional attachments
   Future<bool> forwardTaskToMember({
     required String taskId,
@@ -647,6 +814,7 @@ class TaskViewModel extends ChangeNotifier {
     required String instructions,
     required String leadEmpId,
     required String taskTitle,
+    int? weekNumber,
     List<Map<String, dynamic>>? attachments,
   }) async {
     _submitting = true;
@@ -658,6 +826,7 @@ class TaskViewModel extends ChangeNotifier {
         empId: empId,
         memberName: memberName,
         instructions: instructions,
+        weekNumber: weekNumber,
         attachments: attachments,
       );
 
@@ -691,5 +860,92 @@ class TaskViewModel extends ChangeNotifier {
       _taskHistory = [];
     }
     notifyListeners();
+  }
+
+  /// Check all approved multi-week tasks for this lead.
+  /// If the current week's deadline has passed and the next week
+  /// hasn't been assigned yet, auto-assign it and notify members.
+  Future<void> checkWeeklyReminders(String leadEmpId) async {
+    try {
+      final now = DateTime.now();
+
+      for (final task in _tasks) {
+        final taskLeadId = (task['lead_id'] ?? '').toString().toLowerCase();
+        if (taskLeadId != leadEmpId.toLowerCase()) continue;
+
+        final status = (task['status'] ?? '').toString();
+        if (status != 'approved') continue;
+
+        final totalWeeks = (task['totalWeeks'] ?? 0) as int;
+        if (totalWeeks <= 1) continue;
+
+        final deadlines = task['weeklyDeadlines'] as List? ?? [];
+        if (deadlines.isEmpty) continue;
+
+        final members = task['members'] as Map<String, dynamic>? ?? {};
+        if (members.isEmpty) continue;
+
+        for (int i = 0; i < deadlines.length; i++) {
+          final week = Map<String, dynamic>.from(deadlines[i] as Map);
+          final weekNum = week['week'] as int? ?? 0;
+          final assigned = week['assigned'] as bool? ?? false;
+          final deadlineTs = week['deadline'] as Timestamp?;
+
+          if (assigned || deadlineTs == null) continue;
+
+          final deadlineDate = deadlineTs.toDate();
+
+          // If this week's deadline has passed and it's not assigned yet,
+          // auto-assign it to all members
+          if (now.isAfter(deadlineDate)) {
+            await _service.forwardTaskToAllMembers(
+              taskId: task['id'],
+              members: members,
+              instructions: task['description'] ?? '',
+              weekNumber: weekNum,
+            );
+
+            // Notify lead
+            await FirebaseFirestore.instance
+                .collection('task_notifications')
+                .add({
+              'lead_id': leadEmpId,
+              'taskId': task['id'],
+              'title': 'Week $weekNum Auto-Assigned',
+              'body':
+                  'Week $weekNum of "${task['title']}" has been auto-assigned '
+                  'to all members (deadline passed).',
+              'weekNumber': weekNum,
+              'createdAt': FieldValue.serverTimestamp(),
+              'read': false,
+            });
+
+            // Notify all members
+            for (final entry in members.values) {
+              if (entry is Map<String, dynamic>) {
+                final memberEmpId = (entry['emp_id'] ?? '').toString();
+                if (memberEmpId.isNotEmpty) {
+                  await FirebaseFirestore.instance
+                      .collection('task_notifications')
+                      .add({
+                    'lead_id': memberEmpId,
+                    'title': 'Week $weekNum Assigned',
+                    'body':
+                        'Week $weekNum of "${task['title']}" has been assigned to you.',
+                    'taskId': task['id'],
+                    'createdAt': FieldValue.serverTimestamp(),
+                    'read': false,
+                  });
+                }
+              }
+            }
+          }
+          // Only handle the first unassigned week
+          break;
+        }
+      }
+    } catch (e) {
+      debugPrint('[TaskVM] Error checking weekly reminders: $e');
+    }
   }
 }

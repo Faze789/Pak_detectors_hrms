@@ -90,7 +90,7 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
 
       if (file.bytes != null) {
         await ref.putData(file.bytes!);
-      } else if (file.path != null) {
+      } else if (!kIsWeb && file.path != null) {
         await ref.putFile(File(file.path!));
       } else {
         continue;
@@ -249,7 +249,7 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                             ),
                           )
                         : Scrollbar(
-                            thumbVisibility: true,
+                            thumbVisibility: false,
                             child: ListView(
                               shrinkWrap: true,
                               children: allUsers.map((user) {
@@ -326,7 +326,7 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                             ),
                           )
                         : Scrollbar(
-                            thumbVisibility: true,
+                            thumbVisibility: false,
                             child: ListView(
                               shrinkWrap: true,
                               children: allUsers

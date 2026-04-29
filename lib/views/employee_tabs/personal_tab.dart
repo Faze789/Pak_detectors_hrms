@@ -39,6 +39,9 @@ class PersonalTab extends StatelessWidget {
               _buildInfoRow('Role', employee.role),
               _buildInfoRow('Email', employee.email ?? 'N/A'),
               _buildInfoRow('Phone', employee.phone ?? 'N/A'),
+              if (employee.emergencyPhone != null &&
+                  employee.emergencyPhone!.isNotEmpty)
+                _buildInfoRow('Emergency Phone', employee.emergencyPhone!),
               _buildInfoRow('Location', employee.location),
               _buildInfoRow('Department', employee.department ?? 'N/A'),
               const SizedBox(height: 12),

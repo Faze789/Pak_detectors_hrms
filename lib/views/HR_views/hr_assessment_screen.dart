@@ -48,8 +48,7 @@ class _HRAssessmentScreenState extends State<HRAssessmentScreen> {
     });
 
     // Initialize feedback controllers for each goal
-    final entries =
-        (widget.report['goalEntries'] as List<dynamic>?) ?? [];
+    final entries = (widget.report['goalEntries'] as List<dynamic>?) ?? [];
     for (final entry in entries) {
       if (entry is Map<String, dynamic>) {
         final goalId = (entry['goalId'] ?? '').toString();
@@ -58,20 +57,17 @@ class _HRAssessmentScreenState extends State<HRAssessmentScreen> {
     }
 
     // Pre-fill if already assessed
-    final assessment =
-        widget.report['assessment'] as Map<String, dynamic>?;
+    final assessment = widget.report['assessment'] as Map<String, dynamic>?;
     if (assessment != null) {
       _overallRating = assessment['overallRating'] as String?;
       _remarksCtrl.text = (assessment['remarks'] ?? '').toString();
 
-      final goalRatings =
-          (assessment['goalRatings'] as List<dynamic>?) ?? [];
+      final goalRatings = (assessment['goalRatings'] as List<dynamic>?) ?? [];
       for (final gr in goalRatings) {
         if (gr is Map<String, dynamic>) {
           final goalId = (gr['goalId'] ?? '').toString();
           _goalRatings[goalId] = gr['rating'] as String?;
-          _goalFeedbackCtrls[goalId]?.text =
-              (gr['feedback'] ?? '').toString();
+          _goalFeedbackCtrls[goalId]?.text = (gr['feedback'] ?? '').toString();
         }
       }
     }
@@ -86,13 +82,11 @@ class _HRAssessmentScreenState extends State<HRAssessmentScreen> {
     super.dispose();
   }
 
-  bool get _isAlreadyAssessed =>
-      (widget.report['status'] ?? '') == 'assessed';
+  bool get _isAlreadyAssessed => (widget.report['status'] ?? '') == 'assessed';
 
   @override
   Widget build(BuildContext context) {
-    final entries =
-        (widget.report['goalEntries'] as List<dynamic>?) ?? [];
+    final entries = (widget.report['goalEntries'] as List<dynamic>?) ?? [];
     final leaderName = widget.report['leaderName'] ?? 'Unknown';
     final assignedMonth = widget.report['assignedMonth'] ?? '';
     final submittedAt = widget.report['submittedAt'] as Timestamp?;
@@ -145,8 +139,7 @@ class _HRAssessmentScreenState extends State<HRAssessmentScreen> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
-                    border:
-                        Border.all(color: const Color(0xFFE2E8F0)),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
                   ),
                   child: Row(
                     children: [
@@ -165,8 +158,7 @@ class _HRAssessmentScreenState extends State<HRAssessmentScreen> {
                       const SizedBox(width: 16),
                       Expanded(
                         child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               leaderName,
@@ -199,9 +191,7 @@ class _HRAssessmentScreenState extends State<HRAssessmentScreen> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          _isAlreadyAssessed
-                              ? 'Assessed'
-                              : 'Pending Review',
+                          _isAlreadyAssessed ? 'Assessed' : 'Pending Review',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
@@ -239,8 +229,7 @@ class _HRAssessmentScreenState extends State<HRAssessmentScreen> {
                 ...entries.asMap().entries.map((e) {
                   final idx = e.key;
                   final entry = e.value as Map<String, dynamic>;
-                  final goalId =
-                      (entry['goalId'] ?? '').toString();
+                  final goalId = (entry['goalId'] ?? '').toString();
 
                   return Container(
                     width: double.infinity,
@@ -249,23 +238,18 @@ class _HRAssessmentScreenState extends State<HRAssessmentScreen> {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: const Color(0xFFE2E8F0),
-                      ),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
                     ),
                     child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // Goal title
                         Row(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             CircleAvatar(
                               radius: 14,
-                              backgroundColor:
-                                  const Color(0xFFDBEAFE),
+                              backgroundColor: const Color(0xFFDBEAFE),
                               child: Text(
                                 '${idx + 1}',
                                 style: const TextStyle(
@@ -296,12 +280,10 @@ class _HRAssessmentScreenState extends State<HRAssessmentScreen> {
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             color: const Color(0xFFF8FAFC),
-                            borderRadius:
-                                BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(8),
                           ),
                           child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text(
                                 'Assigned Goal:',
@@ -313,8 +295,7 @@ class _HRAssessmentScreenState extends State<HRAssessmentScreen> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                entry['goalDescription'] ??
-                                    '',
+                                entry['goalDescription'] ?? '',
                                 style: const TextStyle(
                                   fontSize: 13,
                                   color: Color(0xFF64748B),
@@ -332,12 +313,10 @@ class _HRAssessmentScreenState extends State<HRAssessmentScreen> {
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             color: const Color(0xFFEFF6FF),
-                            borderRadius:
-                                BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(8),
                           ),
                           child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text(
                                 'Leader\'s Progress Update:',
@@ -376,22 +355,15 @@ class _HRAssessmentScreenState extends State<HRAssessmentScreen> {
                         Container(
                           decoration: BoxDecoration(
                             color: const Color(0xFFF8FAFC),
-                            borderRadius:
-                                BorderRadius.circular(10),
-                            border: Border.all(
-                              color:
-                                  const Color(0xFFE2E8F0),
-                            ),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
                           ),
-                          child:
-                              DropdownButtonFormField<String>(
-                            value: _goalRatings[goalId],
+                          child: DropdownButtonFormField<String>(
+                            initialValue: _goalRatings[goalId],
                             isExpanded: true,
-                            decoration:
-                                const InputDecoration(
+                            decoration: const InputDecoration(
                               border: InputBorder.none,
-                              contentPadding:
-                                  EdgeInsets.symmetric(
+                              contentPadding: EdgeInsets.symmetric(
                                 horizontal: 14,
                                 vertical: 10,
                               ),
@@ -407,10 +379,7 @@ class _HRAssessmentScreenState extends State<HRAssessmentScreen> {
                                     value: r,
                                     child: Text(
                                       r,
-                                      style:
-                                          const TextStyle(
-                                        fontSize: 13,
-                                      ),
+                                      style: const TextStyle(fontSize: 13),
                                     ),
                                   ),
                                 )
@@ -418,34 +387,27 @@ class _HRAssessmentScreenState extends State<HRAssessmentScreen> {
                             onChanged: _isAlreadyAssessed
                                 ? null
                                 : (v) {
-                                    setState(() =>
-                                        _goalRatings[
-                                            goalId] = v);
+                                    setState(() => _goalRatings[goalId] = v);
                                   },
                           ),
                         ),
                         const SizedBox(height: 8),
                         TextField(
-                          controller:
-                              _goalFeedbackCtrls[goalId],
+                          controller: _goalFeedbackCtrls[goalId],
                           maxLines: 2,
                           readOnly: _isAlreadyAssessed,
                           decoration: InputDecoration(
-                            hintText:
-                                'Feedback for this goal (optional)',
+                            hintText: 'Feedback for this goal (optional)',
                             hintStyle: const TextStyle(
                               fontSize: 13,
                               color: Color(0xFFCBD5E1),
                             ),
                             filled: true,
-                            fillColor:
-                                const Color(0xFFF8FAFC),
+                            fillColor: const Color(0xFFF8FAFC),
                             border: OutlineInputBorder(
-                              borderRadius:
-                                  BorderRadius.circular(10),
+                              borderRadius: BorderRadius.circular(10),
                               borderSide: const BorderSide(
-                                color:
-                                    Color(0xFFE2E8F0),
+                                color: Color(0xFFE2E8F0),
                               ),
                             ),
                           ),
@@ -470,8 +432,7 @@ class _HRAssessmentScreenState extends State<HRAssessmentScreen> {
                     ),
                   ),
                   child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Row(
                         children: [
@@ -506,25 +467,19 @@ class _HRAssessmentScreenState extends State<HRAssessmentScreen> {
                       Container(
                         decoration: BoxDecoration(
                           color: const Color(0xFFF8FAFC),
-                          borderRadius:
-                              BorderRadius.circular(12),
-                          border: Border.all(
-                            color: const Color(0xFFE2E8F0),
-                          ),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
-                        child:
-                            DropdownButtonFormField<String>(
-                          value: _overallRating,
+                        child: DropdownButtonFormField<String>(
+                          initialValue: _overallRating,
                           isExpanded: true,
                           decoration: const InputDecoration(
                             border: InputBorder.none,
-                            contentPadding:
-                                EdgeInsets.symmetric(
+                            contentPadding: EdgeInsets.symmetric(
                               horizontal: 16,
                               vertical: 14,
                             ),
-                            hintText:
-                                'Select overall performance rating',
+                            hintText: 'Select overall performance rating',
                             hintStyle: TextStyle(
                               fontSize: 14,
                               color: Color(0xFF94A3B8),
@@ -536,19 +491,14 @@ class _HRAssessmentScreenState extends State<HRAssessmentScreen> {
                           ),
                           items: _ratingOptions
                               .map(
-                                (r) => DropdownMenuItem(
-                                  value: r,
-                                  child: Text(r),
-                                ),
+                                (r) =>
+                                    DropdownMenuItem(value: r, child: Text(r)),
                               )
                               .toList(),
                           onChanged: _isAlreadyAssessed
                               ? null
                               : (v) {
-                                  setState(
-                                    () =>
-                                        _overallRating = v,
-                                  );
+                                  setState(() => _overallRating = v);
                                 },
                         ),
                       ),
@@ -569,18 +519,15 @@ class _HRAssessmentScreenState extends State<HRAssessmentScreen> {
                         maxLines: 4,
                         readOnly: _isAlreadyAssessed,
                         decoration: InputDecoration(
-                          hintText:
-                              'Write your assessment remarks...',
+                          hintText: 'Write your assessment remarks...',
                           hintStyle: const TextStyle(
                             fontSize: 14,
                             color: Color(0xFFCBD5E1),
                           ),
                           filled: true,
-                          fillColor:
-                              const Color(0xFFF8FAFC),
+                          fillColor: const Color(0xFFF8FAFC),
                           border: OutlineInputBorder(
-                            borderRadius:
-                                BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(12),
                             borderSide: const BorderSide(
                               color: Color(0xFFE2E8F0),
                             ),
@@ -598,41 +545,30 @@ class _HRAssessmentScreenState extends State<HRAssessmentScreen> {
                     width: double.infinity,
                     height: 52,
                     child: ElevatedButton.icon(
-                      onPressed: _submitting
-                          ? null
-                          : () => _submitAssessment(),
+                      onPressed: _submitting ? null : () => _submitAssessment(),
                       icon: _submitting
                           ? const SizedBox(
                               width: 18,
                               height: 18,
-                              child:
-                                  CircularProgressIndicator(
+                              child: CircularProgressIndicator(
                                 strokeWidth: 2,
                                 color: Colors.white,
                               ),
                             )
-                          : const Icon(
-                              Icons.check_circle_outline,
-                              size: 20,
-                            ),
+                          : const Icon(Icons.check_circle_outline, size: 20),
                       label: Text(
-                        _submitting
-                            ? 'Submitting...'
-                            : 'Submit Assessment',
+                        _submitting ? 'Submitting...' : 'Submit Assessment',
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            const Color(0xFF16A34A),
+                        backgroundColor: const Color(0xFF16A34A),
                         foregroundColor: Colors.white,
-                        disabledBackgroundColor:
-                            const Color(0xFF86EFAC),
+                        disabledBackgroundColor: const Color(0xFF86EFAC),
                         shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(14),
                         ),
                       ),
                     ),
@@ -644,15 +580,11 @@ class _HRAssessmentScreenState extends State<HRAssessmentScreen> {
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: const Color(0xFFD1FAE5),
-                      borderRadius:
-                          BorderRadius.circular(12),
-                      border: Border.all(
-                        color: const Color(0xFFA7F3D0),
-                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFA7F3D0)),
                     ),
                     child: const Row(
-                      mainAxisAlignment:
-                          MainAxisAlignment.center,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
                           Icons.check_circle,
@@ -705,16 +637,14 @@ class _HRAssessmentScreenState extends State<HRAssessmentScreen> {
     setState(() => _submitting = true);
 
     // Build per-goal ratings
-    final entries =
-        (widget.report['goalEntries'] as List<dynamic>?) ?? [];
+    final entries = (widget.report['goalEntries'] as List<dynamic>?) ?? [];
     final goalRatingsList = entries.map((entry) {
       if (entry is Map<String, dynamic>) {
         final goalId = (entry['goalId'] ?? '').toString();
         return {
           'goalId': goalId,
           'rating': _goalRatings[goalId] ?? 'Not Rated',
-          'feedback':
-              _goalFeedbackCtrls[goalId]?.text.trim() ?? '',
+          'feedback': _goalFeedbackCtrls[goalId]?.text.trim() ?? '',
         };
       }
       return <String, dynamic>{};
@@ -743,8 +673,7 @@ class _HRAssessmentScreenState extends State<HRAssessmentScreen> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-              Text(vm.errorMessage ?? 'Failed to submit assessment'),
+          content: Text(vm.errorMessage ?? 'Failed to submit assessment'),
           backgroundColor: const Color(0xFFEF4444),
         ),
       );

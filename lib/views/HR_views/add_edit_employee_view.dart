@@ -38,8 +38,10 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
   late TextEditingController casualLeaveCtrl;
   late TextEditingController unpaidLeaveCtrl;
   late TextEditingController jobDescriptionCtrl;
+  late TextEditingController emergencyPhoneCtrl;
 
   EmployeeStatus status = EmployeeStatus.active;
+  String _selectedRole = 'employee';
 
   bool get isEdit => widget.mode == EmployeeFormMode.edit;
 
@@ -51,6 +53,10 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
       text: widget.employee?.emp_id ?? '',
     );
     roleController = TextEditingController(text: widget.employee?.role ?? '');
+    final existingRole = (widget.employee?.role ?? '').toLowerCase();
+    _selectedRole = existingRole.contains('project lead')
+        ? 'project lead'
+        : 'employee';
     departmentController = TextEditingController(
       text: widget.employee?.department ?? '',
     );
@@ -79,6 +85,9 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
     jobDescriptionCtrl = TextEditingController(
       text: widget.employee?.jobDescription ?? '',
     );
+    emergencyPhoneCtrl = TextEditingController(
+      text: widget.employee?.emergencyPhone ?? '',
+    );
     status = widget.employee?.status ?? EmployeeStatus.active;
   }
 
@@ -97,6 +106,7 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
     casualLeaveCtrl.dispose();
     unpaidLeaveCtrl.dispose();
     jobDescriptionCtrl.dispose();
+    emergencyPhoneCtrl.dispose();
     super.dispose();
   }
 
@@ -109,7 +119,7 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
       final updatedEmployee = widget.employee!.copyWith(
         emp_id: emp_id_controller.text.trim(),
         name: nameController.text.trim(),
-        role: roleController.text.trim(),
+        role: _selectedRole,
         department: departmentController.text.trim(),
         location: locationController.text.trim(),
         email: emailController.text.trim(),
@@ -121,6 +131,7 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
         casualLeaveQuota: int.tryParse(casualLeaveCtrl.text.trim()) ?? 6,
         unpaidLeaveQuota: int.tryParse(unpaidLeaveCtrl.text.trim()) ?? 0,
         jobDescription: jobDescriptionCtrl.text.trim(),
+        emergencyPhone: emergencyPhoneCtrl.text.trim(),
       );
       vm.updateEmployee(updatedEmployee);
     } else {
@@ -128,7 +139,7 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
         uid: '',
         emp_id: emp_id_controller.text.trim(),
         name: nameController.text.trim(),
-        role: roleController.text.trim(),
+        role: _selectedRole,
         department: departmentController.text.trim(),
         location: locationController.text.trim(),
         email: emailController.text.trim(),
@@ -141,6 +152,7 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
         casualLeaveQuota: 6,
         unpaidLeaveQuota: 0,
         jobDescription: jobDescriptionCtrl.text.trim(),
+        emergencyPhone: emergencyPhoneCtrl.text.trim(),
       );
       vm.addEmployee(newEmployee);
     }
@@ -197,13 +209,62 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
                     validator: (v) => v!.isEmpty ? 'Required' : null,
                   ),
                   const SizedBox(height: 16),
-                  TextFormField(
-                    controller: roleController,
+                  // Role selection
+                  InputDecorator(
                     decoration: const InputDecoration(
                       labelText: 'Role',
                       border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                     ),
-                    validator: (v) => v!.isEmpty ? 'Required' : null,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: RadioListTile<String>(
+                            value: 'employee',
+                            groupValue: _selectedRole,
+                            title: const Text(
+                              'Team Member',
+                              style: TextStyle(fontSize: 14),
+                            ),
+                            activeColor: const Color(0xFF2563EB),
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                            onChanged: (v) {
+                              if (v != null) {
+                                setState(() {
+                                  _selectedRole = v;
+                                  roleController.text = v;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                        Expanded(
+                          child: RadioListTile<String>(
+                            value: 'project lead',
+                            groupValue: _selectedRole,
+                            title: const Text(
+                              'Project Lead',
+                              style: TextStyle(fontSize: 14),
+                            ),
+                            activeColor: const Color(0xFF2563EB),
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                            onChanged: (v) {
+                              if (v != null) {
+                                setState(() {
+                                  _selectedRole = v;
+                                  roleController.text = v;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
@@ -243,6 +304,16 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
                     decoration: const InputDecoration(
                       labelText: 'Phone',
                       border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.phone,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: emergencyPhoneCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Emergency Phone Number',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.emergency_outlined),
                     ),
                     keyboardType: TextInputType.phone,
                   ),

@@ -132,10 +132,7 @@ class _HRMonthlyGoalsScreenState extends State<HRMonthlyGoalsScreen>
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [
-          _buildAssignGoalsTab(),
-          _buildReviewReportsTab(),
-        ],
+        children: [_buildAssignGoalsTab(), _buildReviewReportsTab()],
       ),
     );
   }
@@ -169,7 +166,7 @@ class _HRMonthlyGoalsScreenState extends State<HRMonthlyGoalsScreen>
                       border: Border.all(color: const Color(0xFFE2E8F0)),
                     ),
                     child: DropdownButtonFormField<String>(
-                      value: _selectedMonth,
+                      initialValue: _selectedMonth,
                       isExpanded: true,
                       decoration: const InputDecoration(
                         border: InputBorder.none,
@@ -184,8 +181,7 @@ class _HRMonthlyGoalsScreenState extends State<HRMonthlyGoalsScreen>
                       ),
                       items: _getMonthOptions()
                           .map(
-                            (m) =>
-                                DropdownMenuItem(value: m, child: Text(m)),
+                            (m) => DropdownMenuItem(value: m, child: Text(m)),
                           )
                           .toList(),
                       onChanged: (v) {
@@ -211,8 +207,7 @@ class _HRMonthlyGoalsScreenState extends State<HRMonthlyGoalsScreen>
                         ),
                       ),
                       ElevatedButton.icon(
-                        onPressed: () =>
-                            _showAddGoalDialog(context, vm),
+                        onPressed: () => _showAddGoalDialog(context, vm),
                         icon: const Icon(Icons.add, size: 18),
                         label: const Text('Add Goal'),
                         style: ElevatedButton.styleFrom(
@@ -247,8 +242,7 @@ class _HRMonthlyGoalsScreenState extends State<HRMonthlyGoalsScreen>
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(12),
-                        border:
-                            Border.all(color: const Color(0xFFE2E8F0)),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
                       ),
                       child: Column(
                         children: [
@@ -267,15 +261,12 @@ class _HRMonthlyGoalsScreenState extends State<HRMonthlyGoalsScreen>
                           ),
                           const SizedBox(height: 16),
                           OutlinedButton.icon(
-                            onPressed: () =>
-                                _showAddGoalDialog(context, vm),
+                            onPressed: () => _showAddGoalDialog(context, vm),
                             icon: const Icon(Icons.add, size: 18),
                             label: const Text('Assign First Goal'),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: const Color(0xFF2563EB),
-                              side: const BorderSide(
-                                color: Color(0xFF2563EB),
-                              ),
+                              side: const BorderSide(color: Color(0xFF2563EB)),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(10),
                               ),
@@ -285,9 +276,7 @@ class _HRMonthlyGoalsScreenState extends State<HRMonthlyGoalsScreen>
                       ),
                     )
                   else
-                    ...vm.goals.map(
-                      (goal) => _buildGoalCard(goal, vm),
-                    ),
+                    ...vm.goals.map((goal) => _buildGoalCard(goal, vm)),
                 ],
               ),
             ),
@@ -297,10 +286,7 @@ class _HRMonthlyGoalsScreenState extends State<HRMonthlyGoalsScreen>
     );
   }
 
-  Widget _buildGoalCard(
-    Map<String, dynamic> goal,
-    MonthlyGoalViewModel vm,
-  ) {
+  Widget _buildGoalCard(Map<String, dynamic> goal, MonthlyGoalViewModel vm) {
     final status = (goal['status'] ?? 'active').toString();
     final isActive = status == 'active';
     final assignedByName = (goal['assignedByName'] ?? '').toString();
@@ -497,9 +483,7 @@ class _HRMonthlyGoalsScreenState extends State<HRMonthlyGoalsScreen>
                       decoration: BoxDecoration(
                         color: const Color(0xFFFEF2F2),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: const Color(0xFFFECACA),
-                        ),
+                        border: Border.all(color: const Color(0xFFFECACA)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -540,12 +524,7 @@ class _HRMonthlyGoalsScreenState extends State<HRMonthlyGoalsScreen>
     );
   }
 
-  Widget _buildInfoChip(
-    IconData icon,
-    String text,
-    Color fg,
-    Color bg,
-  ) {
+  Widget _buildInfoChip(IconData icon, String text, Color fg, Color bg) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
@@ -575,10 +554,7 @@ class _HRMonthlyGoalsScreenState extends State<HRMonthlyGoalsScreen>
 
   // ─── Add Goal Dialog ──────────────────────────────────────────────────────
 
-  void _showAddGoalDialog(
-    BuildContext context,
-    MonthlyGoalViewModel vm,
-  ) {
+  void _showAddGoalDialog(BuildContext context, MonthlyGoalViewModel vm) {
     final titleCtrl = TextEditingController();
     final descCtrl = TextEditingController();
     String? selectedLeaderId;
@@ -608,8 +584,9 @@ class _HRMonthlyGoalsScreenState extends State<HRMonthlyGoalsScreen>
               if (pickedPdf == null) return null;
               final fileName =
                   '${DateTime.now().millisecondsSinceEpoch}_${pickedPdf!.name}';
-              final ref = FirebaseStorage.instance
-                  .ref('monthly_goal_pdfs/$fileName');
+              final ref = FirebaseStorage.instance.ref(
+                'monthly_goal_pdfs/$fileName',
+              );
 
               if (pickedPdf!.bytes != null) {
                 await ref.putData(pickedPdf!.bytes!);
@@ -673,41 +650,32 @@ class _HRMonthlyGoalsScreenState extends State<HRMonthlyGoalsScreen>
                       _buildLabel('Select Project Lead'),
                       const SizedBox(height: 8),
                       Container(
-                        constraints:
-                            const BoxConstraints(maxHeight: 180),
+                        constraints: const BoxConstraints(maxHeight: 180),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: const Color(0xFFE2E8F0),
-                          ),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
                         child: vm.leaders.isEmpty
                             ? const Padding(
                                 padding: EdgeInsets.all(16),
                                 child: Text(
                                   'No project leads found',
-                                  style: TextStyle(
-                                    color: Color(0xFF94A3B8),
-                                  ),
+                                  style: TextStyle(color: Color(0xFF94A3B8)),
                                 ),
                               )
                             : Scrollbar(
-                                thumbVisibility: true,
                                 child: ListView(
                                   shrinkWrap: true,
                                   children: vm.leaders.map((leader) {
-                                    final empId =
-                                        (leader['emp_id'] ?? '')
-                                            .toString();
-                                    final name =
-                                        (leader['name'] ?? 'Unknown')
-                                            .toString();
+                                    final empId = (leader['emp_id'] ?? '')
+                                        .toString();
+                                    final name = (leader['name'] ?? 'Unknown')
+                                        .toString();
                                     return RadioListTile<String>(
                                       value: empId,
                                       groupValue: selectedLeaderId,
-                                      activeColor:
-                                          const Color(0xFF2563EB),
+                                      activeColor: const Color(0xFF2563EB),
                                       title: Text(
                                         name,
                                         style: const TextStyle(
@@ -792,9 +760,7 @@ class _HRMonthlyGoalsScreenState extends State<HRMonthlyGoalsScreen>
                           decoration: BoxDecoration(
                             color: const Color(0xFFFEF2F2),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: const Color(0xFFFECACA),
-                            ),
+                            border: Border.all(color: const Color(0xFFFECACA)),
                           ),
                           child: Row(
                             children: [
@@ -835,9 +801,7 @@ class _HRMonthlyGoalsScreenState extends State<HRMonthlyGoalsScreen>
                           label: const Text('Choose PDF'),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: const Color(0xFF64748B),
-                            side: const BorderSide(
-                              color: Color(0xFFCBD5E1),
-                            ),
+                            side: const BorderSide(color: Color(0xFFCBD5E1)),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8),
                             ),
@@ -862,8 +826,7 @@ class _HRMonthlyGoalsScreenState extends State<HRMonthlyGoalsScreen>
                           if (selectedLeaderId == null) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content:
-                                    Text('Please select a project lead'),
+                                content: Text('Please select a project lead'),
                                 backgroundColor: Color(0xFFEF4444),
                               ),
                             );
@@ -873,9 +836,7 @@ class _HRMonthlyGoalsScreenState extends State<HRMonthlyGoalsScreen>
                               descCtrl.text.trim().isEmpty) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text(
-                                  'Please fill in all fields',
-                                ),
+                                content: Text('Please fill in all fields'),
                                 backgroundColor: Color(0xFFEF4444),
                               ),
                             );
@@ -910,8 +871,7 @@ class _HRMonthlyGoalsScreenState extends State<HRMonthlyGoalsScreen>
                             vm.loadGoalsForMonth(_selectedMonth);
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content:
-                                    Text('Goal assigned successfully'),
+                                content: Text('Goal assigned successfully'),
                                 backgroundColor: Color(0xFF16A34A),
                               ),
                             );
@@ -1016,9 +976,7 @@ class _HRMonthlyGoalsScreenState extends State<HRMonthlyGoalsScreen>
                         label: const Text('Refresh'),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: const Color(0xFF2563EB),
-                          side: const BorderSide(
-                            color: Color(0xFFCBD5E1),
-                          ),
+                          side: const BorderSide(color: Color(0xFFCBD5E1)),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
@@ -1039,10 +997,7 @@ class _HRMonthlyGoalsScreenState extends State<HRMonthlyGoalsScreen>
     );
   }
 
-  Widget _buildReportCard(
-    BuildContext context,
-    Map<String, dynamic> report,
-  ) {
+  Widget _buildReportCard(BuildContext context, Map<String, dynamic> report) {
     final status = (report['status'] ?? 'submitted').toString();
     final isAssessed = status == 'assessed';
     final submittedAt = report['submittedAt'] as Timestamp?;
@@ -1057,9 +1012,7 @@ class _HRMonthlyGoalsScreenState extends State<HRMonthlyGoalsScreen>
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isAssessed
-              ? const Color(0xFFA7F3D0)
-              : const Color(0xFFE2E8F0),
+          color: isAssessed ? const Color(0xFFA7F3D0) : const Color(0xFFE2E8F0),
         ),
       ),
       child: InkWell(

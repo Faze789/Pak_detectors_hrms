@@ -16,6 +16,7 @@ import 'package:hrms_app/viewmodels/leave_viewmodel.dart';
 import 'package:hrms_app/viewmodels/performance_viewmodel.dart';
 import 'package:hrms_app/viewmodels/recruitment_viewmodel.dart';
 import 'package:hrms_app/viewmodels/monthly_goal_viewmodel.dart';
+import 'package:hrms_app/viewmodels/employee_report_viewmodel.dart';
 import 'package:hrms_app/viewmodels/task_viewmodel.dart';
 import 'package:hrms_app/views/HR_views/apply_screen.dart';
 import 'package:hrms_app/views/HR_views/employee_screen.dart';
@@ -222,6 +223,7 @@ class HRMSApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(create: (_) => TaskViewModel()),
         ChangeNotifierProvider(create: (_) => MonthlyGoalViewModel()),
+        ChangeNotifierProvider(create: (_) => EmployeeReportViewModel()),
         ChangeNotifierProvider(create: (_) => AttendanceViewModel()),
         ChangeNotifierProvider(create: (_) => BranchViewModel()),
         Provider<PayrollService>(create: (_) => PayrollService()),

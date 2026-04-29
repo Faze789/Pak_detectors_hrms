@@ -19,8 +19,7 @@ class LeaderMonthlyReportScreen extends StatefulWidget {
       _LeaderMonthlyReportScreenState();
 }
 
-class _LeaderMonthlyReportScreenState
-    extends State<LeaderMonthlyReportScreen> {
+class _LeaderMonthlyReportScreenState extends State<LeaderMonthlyReportScreen> {
   String? _empId;
   String? _empName;
   bool _loadingUser = true;
@@ -139,10 +138,8 @@ class _LeaderMonthlyReportScreenState
     for (final entry in _pickedPdfs.entries) {
       final goalId = entry.key;
       final file = entry.value;
-      final fileName =
-          '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
-      final ref = FirebaseStorage.instance
-          .ref('monthly_report_pdfs/$fileName');
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
+      final ref = FirebaseStorage.instance.ref('monthly_report_pdfs/$fileName');
 
       if (file.bytes != null) {
         await ref.putData(file.bytes!);
@@ -182,8 +179,7 @@ class _LeaderMonthlyReportScreenState
           final screenWidth = MediaQuery.of(context).size.width;
           final isDesktop = screenWidth >= 768;
           final hasExistingReport = vm.currentReport != null;
-          final reportStatus =
-              (vm.currentReport?['status'] ?? '').toString();
+          final reportStatus = (vm.currentReport?['status'] ?? '').toString();
 
           return Column(
             children: [
@@ -251,7 +247,7 @@ class _LeaderMonthlyReportScreenState
                               ),
                             ),
                             child: DropdownButtonFormField<String>(
-                              value: _selectedMonth,
+                              initialValue: _selectedMonth,
                               isExpanded: true,
                               decoration: const InputDecoration(
                                 border: InputBorder.none,
@@ -323,9 +319,7 @@ class _LeaderMonthlyReportScreenState
                               ),
                             ),
                             const SizedBox(height: 12),
-                            ...vm.reports.map(
-                              (r) => _buildHistoryCard(r),
-                            ),
+                            ...vm.reports.map((r) => _buildHistoryCard(r)),
                           ],
                         ],
                       ),
@@ -340,27 +334,19 @@ class _LeaderMonthlyReportScreenState
     );
   }
 
-  Widget _buildReportStatusBanner(
-    String status,
-    Map<String, dynamic> report,
-  ) {
+  Widget _buildReportStatusBanner(String status, Map<String, dynamic> report) {
     final isAssessed = status == 'assessed';
-    final assessment =
-        report['assessment'] as Map<String, dynamic>?;
+    final assessment = report['assessment'] as Map<String, dynamic>?;
 
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 20),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isAssessed
-            ? const Color(0xFFD1FAE5)
-            : const Color(0xFFEDE9FE),
+        color: isAssessed ? const Color(0xFFD1FAE5) : const Color(0xFFEDE9FE),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isAssessed
-              ? const Color(0xFFA7F3D0)
-              : const Color(0xFFDDD6FE),
+          color: isAssessed ? const Color(0xFFA7F3D0) : const Color(0xFFDDD6FE),
         ),
       ),
       child: Column(
@@ -475,12 +461,9 @@ class _LeaderMonthlyReportScreenState
   }
 
   Widget _buildSubmittedReport(MonthlyGoalViewModel vm) {
-    final entries =
-        (vm.currentReport?['goalEntries'] as List<dynamic>?) ?? [];
-    final assessment =
-        vm.currentReport?['assessment'] as Map<String, dynamic>?;
-    final goalRatings =
-        (assessment?['goalRatings'] as List<dynamic>?) ?? [];
+    final entries = (vm.currentReport?['goalEntries'] as List<dynamic>?) ?? [];
+    final assessment = vm.currentReport?['assessment'] as Map<String, dynamic>?;
+    final goalRatings = (assessment?['goalRatings'] as List<dynamic>?) ?? [];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -504,8 +487,7 @@ class _LeaderMonthlyReportScreenState
           // Find per-goal rating if assessed
           Map<String, dynamic>? goalRating;
           for (final gr in goalRatings) {
-            if (gr is Map<String, dynamic> &&
-                gr['goalId'] == goalId) {
+            if (gr is Map<String, dynamic> && gr['goalId'] == goalId) {
               goalRating = gr;
               break;
             }
@@ -628,9 +610,7 @@ class _LeaderMonthlyReportScreenState
                     decoration: BoxDecoration(
                       color: const Color(0xFFF0FDF4),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: const Color(0xFFA7F3D0),
-                      ),
+                      border: Border.all(color: const Color(0xFFA7F3D0)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -652,8 +632,7 @@ class _LeaderMonthlyReportScreenState
                               ),
                               decoration: BoxDecoration(
                                 color: const Color(0xFF065F46),
-                                borderRadius:
-                                    BorderRadius.circular(4),
+                                borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
                                 goalRating['rating'] ?? '',
@@ -694,10 +673,7 @@ class _LeaderMonthlyReportScreenState
     // Initialize controllers for each goal
     for (final goal in vm.goals) {
       final id = goal['id'] as String? ?? '';
-      _progressControllers.putIfAbsent(
-        id,
-        () => TextEditingController(),
-      );
+      _progressControllers.putIfAbsent(id, () => TextEditingController());
     }
 
     return StatefulBuilder(
@@ -718,10 +694,7 @@ class _LeaderMonthlyReportScreenState
             const SizedBox(height: 4),
             Text(
               '${vm.goals.length} goal${vm.goals.length == 1 ? '' : 's'} assigned — fill in progress for each',
-              style: const TextStyle(
-                fontSize: 13,
-                color: Color(0xFF94A3B8),
-              ),
+              style: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
             ),
             const SizedBox(height: 16),
 
@@ -742,9 +715,7 @@ class _LeaderMonthlyReportScreenState
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: const Color(0xFFE2E8F0),
-                  ),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -780,8 +751,7 @@ class _LeaderMonthlyReportScreenState
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       goal['goalTitle'] ?? '',
@@ -994,25 +964,16 @@ class _LeaderMonthlyReportScreenState
                           setState(() => _isUploadingPdfs = false);
                         }
 
-                        final goalEntries =
-                            vm.goals.map((goal) {
-                          final goalId =
-                              goal['id'] as String? ?? '';
+                        final goalEntries = vm.goals.map((goal) {
+                          final goalId = goal['id'] as String? ?? '';
                           return {
                             'goalId': goalId,
-                            'goalTitle':
-                                goal['goalTitle'] ?? '',
-                            'goalDescription':
-                                goal['goalDescription'] ?? '',
+                            'goalTitle': goal['goalTitle'] ?? '',
+                            'goalDescription': goal['goalDescription'] ?? '',
                             'progressText':
-                                _progressControllers[goalId]
-                                        ?.text
-                                        .trim() ??
-                                    '',
-                            'pdfUrl':
-                                _uploadedPdfUrls[goalId] ?? '',
-                            'pdfName':
-                                _uploadedPdfNames[goalId] ?? '',
+                                _progressControllers[goalId]?.text.trim() ?? '',
+                            'pdfUrl': _uploadedPdfUrls[goalId] ?? '',
+                            'pdfName': _uploadedPdfNames[goalId] ?? '',
                           };
                         }).toList();
 
@@ -1030,26 +991,21 @@ class _LeaderMonthlyReportScreenState
                           _uploadedPdfUrls.clear();
                           _uploadedPdfNames.clear();
                           _loadData(_empId!);
-                          ScaffoldMessenger.of(context)
-                              .showSnackBar(
+                          ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text(
                                 'Monthly report submitted successfully',
                               ),
-                              backgroundColor:
-                                  Color(0xFF16A34A),
+                              backgroundColor: Color(0xFF16A34A),
                             ),
                           );
                         } else {
-                          ScaffoldMessenger.of(context)
-                              .showSnackBar(
+                          ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
-                                vm.errorMessage ??
-                                    'Failed to submit report',
+                                vm.errorMessage ?? 'Failed to submit report',
                               ),
-                              backgroundColor:
-                                  const Color(0xFFEF4444),
+                              backgroundColor: const Color(0xFFEF4444),
                             ),
                           );
                         }
@@ -1068,8 +1024,8 @@ class _LeaderMonthlyReportScreenState
                   _isUploadingPdfs
                       ? 'Uploading PDFs...'
                       : vm.isSubmitting
-                          ? 'Submitting...'
-                          : 'Submit Monthly Report',
+                      ? 'Submitting...'
+                      : 'Submit Monthly Report',
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
@@ -1078,8 +1034,7 @@ class _LeaderMonthlyReportScreenState
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF2563EB),
                   foregroundColor: Colors.white,
-                  disabledBackgroundColor:
-                      const Color(0xFF93C5FD),
+                  disabledBackgroundColor: const Color(0xFF93C5FD),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
@@ -1091,10 +1046,7 @@ class _LeaderMonthlyReportScreenState
                 padding: EdgeInsets.only(top: 8),
                 child: Text(
                   '* All goal progress fields must be filled to submit',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFFEF4444),
-                  ),
+                  style: TextStyle(fontSize: 12, color: Color(0xFFEF4444)),
                 ),
               ),
           ],
@@ -1117,7 +1069,11 @@ class _LeaderMonthlyReportScreenState
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.picture_as_pdf, size: 15, color: Color(0xFFDC2626)),
+            const Icon(
+              Icons.picture_as_pdf,
+              size: 15,
+              color: Color(0xFFDC2626),
+            ),
             const SizedBox(width: 6),
             Flexible(
               child: Text(
@@ -1147,8 +1103,7 @@ class _LeaderMonthlyReportScreenState
         ? '${submittedAt.toDate().day}/${submittedAt.toDate().month}/${submittedAt.toDate().year}'
         : '';
 
-    final assessment =
-        report['assessment'] as Map<String, dynamic>?;
+    final assessment = report['assessment'] as Map<String, dynamic>?;
     final rating = assessment?['overallRating'] ?? '';
 
     return Container(
@@ -1159,9 +1114,7 @@ class _LeaderMonthlyReportScreenState
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isAssessed
-              ? const Color(0xFFA7F3D0)
-              : const Color(0xFFE2E8F0),
+          color: isAssessed ? const Color(0xFFA7F3D0) : const Color(0xFFE2E8F0),
         ),
       ),
       child: Row(
@@ -1203,10 +1156,7 @@ class _LeaderMonthlyReportScreenState
           ),
           if (isAssessed && rating.isNotEmpty)
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 10,
-                vertical: 4,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                 color: const Color(0xFF065F46),
                 borderRadius: BorderRadius.circular(6),
@@ -1222,10 +1172,7 @@ class _LeaderMonthlyReportScreenState
             )
           else
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 10,
-                vertical: 4,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                 color: const Color(0xFFEDE9FE),
                 borderRadius: BorderRadius.circular(6),

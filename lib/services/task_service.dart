@@ -220,6 +220,20 @@ class TaskService {
     final durationDays = _durationToDays(duration);
     final deadline = DateTime.now().add(Duration(days: durationDays));
 
+    // Calculate weekly breakdown for multi-week tasks
+    final totalWeeks = (durationDays / 7).ceil();
+    final List<Map<String, dynamic>> weeklyDeadlines = [];
+    for (int w = 1; w <= totalWeeks; w++) {
+      final weekEnd = DateTime.now().add(Duration(days: 7 * w));
+      weeklyDeadlines.add({
+        'week': w,
+        'deadline': Timestamp.fromDate(
+          weekEnd.isAfter(deadline) ? deadline : weekEnd,
+        ),
+        'assigned': false,
+      });
+    }
+
     final taskData = <String, dynamic>{
       'members': membersMap,
       'lead_id': lead_id,
@@ -233,6 +247,8 @@ class TaskService {
       'createdAt': FieldValue.serverTimestamp(),
       'deadline': Timestamp.fromDate(deadline),
       'version': 1,
+      'totalWeeks': totalWeeks,
+      'weeklyDeadlines': weeklyDeadlines,
     };
 
     if (attachments != null && attachments.isNotEmpty) {
@@ -545,6 +561,7 @@ class TaskService {
     required String empId,
     required String memberName,
     required String instructions,
+    int? weekNumber,
     List<Map<String, dynamic>>? attachments,
   }) async {
     final data = <String, dynamic>{
@@ -553,10 +570,92 @@ class TaskService {
       'forwardedAt': FieldValue.serverTimestamp(),
       'status': 'assigned',
     };
+    if (weekNumber != null) {
+      data['weekNumber'] = weekNumber;
+    }
     if (attachments != null && attachments.isNotEmpty) {
       data['attachments'] = attachments;
     }
-    await _tasks.doc(taskId).update({'member_tasks.$empId': data});
+
+    final updateData = <String, dynamic>{'member_tasks.$empId': data};
+
+    // Mark the week as assigned in weeklyDeadlines
+    if (weekNumber != null) {
+      final taskDoc = await _tasks.doc(taskId).get();
+      final taskData = taskDoc.data();
+      if (taskData != null) {
+        final deadlines = List<Map<String, dynamic>>.from(
+          (taskData['weeklyDeadlines'] as List? ?? []).map(
+            (e) => Map<String, dynamic>.from(e as Map),
+          ),
+        );
+        for (int i = 0; i < deadlines.length; i++) {
+          if (deadlines[i]['week'] == weekNumber) {
+            deadlines[i]['assigned'] = true;
+            break;
+          }
+        }
+        updateData['weeklyDeadlines'] = deadlines;
+      }
+    }
+
+    await _tasks.doc(taskId).update(updateData);
+  }
+
+  /// Forward a task to ALL members at once for a specific week.
+  /// Marks the week as assigned in weeklyDeadlines.
+  Future<void> forwardTaskToAllMembers({
+    required String taskId,
+    required Map<String, dynamic> members,
+    required String instructions,
+    required int weekNumber,
+    List<Map<String, dynamic>>? attachments,
+  }) async {
+    final updateData = <String, dynamic>{};
+
+    // Create member_tasks entry for each member and clear old submissions
+    for (final entry in members.entries) {
+      final m = entry.value as Map<String, dynamic>;
+      final empId = (m['emp_id'] ?? '').toString();
+      if (empId.isEmpty) continue;
+
+      final data = <String, dynamic>{
+        'memberName': m['name'] ?? '',
+        'instructions': instructions,
+        'forwardedAt': FieldValue.serverTimestamp(),
+        'status': 'assigned',
+        'weekNumber': weekNumber,
+      };
+      if (attachments != null && attachments.isNotEmpty) {
+        data['attachments'] = attachments;
+      }
+      updateData['member_tasks.$empId'] = data;
+
+      // Clear previous week's submission so members show as pending for new week
+      if (weekNumber > 1) {
+        updateData['member_submissions.$empId'] = FieldValue.delete();
+      }
+    }
+
+    // Mark the week as assigned in weeklyDeadlines
+    final taskDoc = await _tasks.doc(taskId).get();
+    final taskData = taskDoc.data();
+    if (taskData != null) {
+      final deadlines = List<Map<String, dynamic>>.from(
+        (taskData['weeklyDeadlines'] as List? ?? []).map(
+          (e) => Map<String, dynamic>.from(e as Map),
+        ),
+      );
+      for (int i = 0; i < deadlines.length; i++) {
+        if (deadlines[i]['week'] == weekNumber) {
+          deadlines[i]['assigned'] = true;
+          break;
+        }
+      }
+      updateData['weeklyDeadlines'] = deadlines;
+    }
+
+    await _tasks.doc(taskId).update(updateData);
   }
 
   /// Fetch active team members for a lead (accepted members only)

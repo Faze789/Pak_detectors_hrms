@@ -56,8 +56,14 @@ class _EmployeeProfileViewState extends State<EmployeeProfileView>
   }
 
   static const List<String> _departments = [
-    'IT', 'Marketing', 'Finance', 'HR',
-    'Sales', 'Operations', 'Design', 'Support',
+    'IT',
+    'Marketing',
+    'Finance',
+    'HR',
+    'Sales',
+    'Operations',
+    'Design',
+    'Support',
   ];
 
   void _showEditDepartmentDialog() {
@@ -67,15 +73,19 @@ class _EmployeeProfileViewState extends State<EmployeeProfileView>
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
           shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14)),
+            borderRadius: BorderRadius.circular(14),
+          ),
           title: const Text('Change Department'),
           content: DropdownButtonFormField<String>(
-            value: _departments.contains(selected) ? selected : null,
+            initialValue: _departments.contains(selected) ? selected : null,
             decoration: InputDecoration(
               border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10)),
+                borderRadius: BorderRadius.circular(10),
+              ),
               contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 12),
+                horizontal: 16,
+                vertical: 12,
+              ),
             ),
             items: _departments
                 .map((d) => DropdownMenuItem(value: d, child: Text(d)))
@@ -85,25 +95,26 @@ class _EmployeeProfileViewState extends State<EmployeeProfileView>
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Cancel',
-                  style: TextStyle(color: Color(0xFF64748B))),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: Color(0xFF64748B)),
+              ),
             ),
             ElevatedButton(
               onPressed: () async {
-                if (selected == null || selected == widget.employee.department) {
+                if (selected == null ||
+                    selected == widget.employee.department) {
                   Navigator.of(ctx).pop();
                   return;
                 }
                 Navigator.of(ctx).pop();
                 final ok = await context
                     .read<TaskViewModel>()
-                    .updateEmployeeDepartment(
-                        widget.employee.uid, selected!);
+                    .updateEmployeeDepartment(widget.employee.uid, selected!);
                 if (ok && mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text(
-                          'Department changed to $selected'),
+                      content: Text('Department changed to $selected'),
                       backgroundColor: const Color(0xFF16A34A),
                     ),
                   );
@@ -115,10 +126,10 @@ class _EmployeeProfileViewState extends State<EmployeeProfileView>
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF2563EB),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
-              child: const Text('Save',
-                  style: TextStyle(color: Colors.white)),
+              child: const Text('Save', style: TextStyle(color: Colors.white)),
             ),
           ],
         ),

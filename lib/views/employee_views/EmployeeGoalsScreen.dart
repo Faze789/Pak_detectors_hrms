@@ -50,10 +50,13 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
       if (empId.isNotEmpty) {
         final taskVm = context.read<TaskViewModel>();
         // Load all tasks where user is lead OR member
-        taskVm.loadTasksForUser(empId);
+        await taskVm.loadTasksForUser(empId);
         taskVm.loadMembersByLeadId(empId);
         taskVm.loadUnassignedEmployees();
         taskVm.loadPendingMembers(empId);
+
+        // Check for weekly assignment reminders
+        taskVm.checkWeeklyReminders(empId);
       }
     });
   }
@@ -616,6 +619,8 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
     final isApproved = status == 'approved';
     final members = task['members'] as Map<String, dynamic>? ?? {};
     final isLead = _isLeadForTask(task);
+    final totalWeeks = (task['totalWeeks'] ?? 0) as int;
+    final weeklyDeadlines = task['weeklyDeadlines'] as List? ?? [];
 
     // Build the status label
     String statusLabel;
@@ -827,6 +832,37 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                 ),
               ),
 
+              // Weekly progress for multi-week tasks (lead only)
+              if (isLead && totalWeeks > 1 && isApproved) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Icon(Icons.date_range, size: 13, color: Color(0xFF2563EB)),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Weekly Progress: ${weeklyDeadlines.where((w) => (w as Map)['assigned'] == true).length}/$totalWeeks weeks assigned',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF2563EB),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: weeklyDeadlines.isEmpty
+                        ? 0
+                        : weeklyDeadlines.where((w) => (w as Map)['assigned'] == true).length / totalWeeks,
+                    minHeight: 6,
+                    backgroundColor: const Color(0xFFE2E8F0),
+                    valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF2563EB)),
+                  ),
+                ),
+              ],
+
               // Remaining days countdown
               if (remainingDays != null && !isApproved) ...[
                 const SizedBox(height: 6),
@@ -862,6 +898,50 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                 ),
               ],
               const SizedBox(height: 12),
+
+              // Week badge for members on multi-week tasks
+              if (!isLead && totalWeeks > 1) ...[
+                Builder(builder: (_) {
+                  final memberTasks = task['member_tasks'] as Map<String, dynamic>? ?? {};
+                  final currentEmpId = (_empId ?? '').toLowerCase();
+                  Map<String, dynamic>? myTask;
+                  for (final key in memberTasks.keys) {
+                    if (key.toLowerCase() == currentEmpId) {
+                      myTask = memberTasks[key] as Map<String, dynamic>?;
+                      break;
+                    }
+                  }
+                  final weekNum = myTask?['weekNumber'] as int?;
+                  if (weekNum == null) return const SizedBox.shrink();
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2563EB).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFBFDBFE)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.date_range, size: 14, color: Color(0xFF2563EB)),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Your Assignment: Week $weekNum of $totalWeeks',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF2563EB),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+              ],
 
               // Lead info (for employees)
               if (!isLead && task['leadName'] != null) ...[
@@ -1126,6 +1206,76 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                               ),
                             ),
                           ),
+                          // Week progress info for multi-week tasks
+                          Builder(builder: (_) {
+                            final tw = (task['totalWeeks'] ?? 0) as int;
+                            if (tw <= 1) return const SizedBox.shrink();
+
+                            final wd = task['weeklyDeadlines'] as List? ?? [];
+                            final assignedWeeks = wd.where((w) => (w as Map)['assigned'] == true).length;
+
+                            final memberSubs = task['member_submissions'] as Map<String, dynamic>? ?? {};
+                            final taskMembers = task['members'] as Map<String, dynamic>? ?? {};
+                            final totalMembers = taskMembers.length;
+
+                            int submittedCount = 0;
+                            int acceptedCount = 0;
+                            for (final entry in memberSubs.values) {
+                              if (entry is Map<String, dynamic>) {
+                                final st = (entry['status'] ?? '').toString();
+                                if (st == 'submitted') submittedCount++;
+                                if (st == 'accepted') acceptedCount++;
+                              }
+                            }
+
+                            final allDone = assignedWeeks >= tw;
+                            final statusText = allDone
+                                ? 'All $tw weeks assigned'
+                                : 'Week $assignedWeeks of $tw — ${acceptedCount + submittedCount}/$totalMembers submitted';
+
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: allDone
+                                      ? const Color(0xFFECFDF5)
+                                      : const Color(0xFFFFF7ED),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: allDone
+                                        ? const Color(0xFF6EE7B7)
+                                        : const Color(0xFFFED7AA),
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      allDone ? Icons.check_circle : Icons.schedule,
+                                      size: 16,
+                                      color: allDone
+                                          ? const Color(0xFF059669)
+                                          : const Color(0xFFF59E0B),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        statusText,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: allDone
+                                              ? const Color(0xFF059669)
+                                              : const Color(0xFFB45309),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }),
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton.icon(
@@ -2314,7 +2464,8 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
 
                           // If bytes not provided (common on Windows),
                           // read manually from the file path
-                          if ((fileBytes == null || fileBytes.isEmpty) &&
+                          if (!kIsWeb &&
+                              (fileBytes == null || fileBytes.isEmpty) &&
                               file.path != null &&
                               file.path!.isNotEmpty) {
                             // Brief delay — file picker may hold a
@@ -2339,7 +2490,7 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                           if (fileBytes != null && fileBytes.isNotEmpty) {
                             setSheetState(() {
                               pickedFileName = file.name;
-                              pickedFilePath = file.path;
+                              pickedFilePath = kIsWeb ? null : file.path;
                               pickedFileBytes = fileBytes;
                             });
                           } else {
@@ -2945,7 +3096,7 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                             ),
                           );
                         }),
-                      // ── Lead instructions for this member ──
+                      // ── Lead instructions for this member (weekly view) ──
                       if (!_isLeadForTask(task) && isAlreadyApproved) ...[
                         Builder(builder: (_) {
                           final memberTasks = task['member_tasks'] as Map<String, dynamic>? ?? {};
@@ -2960,12 +3111,63 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                           if (myTask == null) return const SizedBox.shrink();
                           final instr = (myTask['instructions'] ?? '').toString();
                           final atts = myTask['attachments'] as List? ?? [];
+                          final weekNum = myTask['weekNumber'] as int?;
+                          final tw = (task['totalWeeks'] ?? 0) as int;
+
+                          // Calculate week deadline for this member
+                          String weekDeadlineStr = '';
+                          if (weekNum != null && tw > 1) {
+                            final wd = task['weeklyDeadlines'] as List? ?? [];
+                            if (weekNum <= wd.length) {
+                              final weekData = wd[weekNum - 1] as Map;
+                              final dl = weekData['deadline'] as Timestamp?;
+                              if (dl != null) {
+                                final d = dl.toDate();
+                                weekDeadlineStr = '${d.day}/${d.month}/${d.year}';
+                              }
+                            }
+                          }
+
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const SizedBox(height: 16),
+                              // Week badge + title
+                              Row(
+                                children: [
+                                  if (weekNum != null && tw > 1) ...[
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF2563EB),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Text(
+                                        'Week $weekNum of $tw',
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    if (weekDeadlineStr.isNotEmpty)
+                                      Text(
+                                        'Due: $weekDeadlineStr',
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFFD97706),
+                                        ),
+                                      ),
+                                  ],
+                                ],
+                              ),
+                              if (weekNum != null && tw > 1)
+                                const SizedBox(height: 8),
                               const Text(
-                                'Lead Instructions for You',
+                                'Your Weekly Task Instructions',
                                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF475569)),
                               ),
                               const SizedBox(height: 8),
@@ -3014,29 +3216,6 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                         }),
                       ],
 
-                      // ── Forward task to member (lead only, approved tasks) ──
-                      if (_isLeadForTask(task) && isAlreadyApproved) ...[
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: () {
-                              Navigator.of(sheetContext).pop();
-                              _showForwardTaskSheet(context, task);
-                            },
-                            icon: const Icon(Icons.forward_to_inbox, size: 16, color: Color(0xFF2563EB)),
-                            label: const Text(
-                              'Forward Task to Member',
-                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF2563EB)),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              side: const BorderSide(color: Color(0xFF2563EB)),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            ),
-                          ),
-                        ),
-                      ],
 
                       // ── Attachments section (show HR attachments if any) ──
                       if ((task['attachments'] as List?)?.isNotEmpty ?? false) ...[
@@ -3561,7 +3740,7 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                     }
 
                     return Scrollbar(
-                      thumbVisibility: true,
+                      thumbVisibility: false,
                       child: ListView(
                       children: allUsers.map((m) {
                         final empId = (m['emp_id'] ?? '').toString();
@@ -3671,274 +3850,6 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
 
   // ─── Forward Task to Member Sheet ───────────────────────────────────────────
 
-  void _showForwardTaskSheet(BuildContext context, Map<String, dynamic> task) {
-    final members = task['members'] as Map<String, dynamic>? ?? {};
-    if (members.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No members assigned to this task'),
-          backgroundColor: Color(0xFFEF4444),
-        ),
-      );
-      return;
-    }
-
-    String? selectedEmpId;
-    String? selectedName;
-    final instructionsCtrl = TextEditingController();
-    final List<PlatformFile> forwardFiles = [];
-    bool forwarding = false;
-    final parentContext = context;
-
-    final fww = MediaQuery.of(context).size.width;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      constraints: fww >= 768
-          ? const BoxConstraints(maxWidth: 640, minWidth: 400)
-          : null,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) {
-        return StatefulBuilder(
-          builder: (sheetCtx, setSheetState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                left: 24, right: 24, top: 24,
-                bottom: MediaQuery.of(sheetCtx).viewInsets.bottom + 24,
-              ),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 40, height: 4,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFCBD5E1),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Forward Task to Member',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      task['title'] ?? '',
-                      style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Select member
-                    const Text(
-                      'Select Member',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Column(
-                        children: members.entries.map((entry) {
-                          final m = entry.value as Map<String, dynamic>;
-                          final empId = (m['emp_id'] ?? '').toString();
-                          final name = (m['name'] ?? 'Unknown').toString();
-                          final isSelected = selectedEmpId == empId;
-                          return RadioListTile<String>(
-                            value: empId,
-                            groupValue: selectedEmpId,
-                            activeColor: const Color(0xFF2563EB),
-                            title: Text(name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                            subtitle: Text(empId, style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
-                            secondary: isSelected ? const Icon(Icons.check_circle, color: Color(0xFF2563EB), size: 18) : null,
-                            onChanged: (v) {
-                              setSheetState(() {
-                                selectedEmpId = v;
-                                selectedName = name;
-                              });
-                            },
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Additional instructions
-                    const Text(
-                      'Additional Instructions',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
-                    ),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: instructionsCtrl,
-                      maxLines: 4,
-                      decoration: InputDecoration(
-                        hintText: 'Add specific instructions for this member...',
-                        hintStyle: const TextStyle(fontSize: 13, color: Color(0xFFCBD5E1)),
-                        filled: true,
-                        fillColor: const Color(0xFFF8FAFC),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Attach files
-                    const Text(
-                      'Attach Files (optional)',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
-                    ),
-                    const SizedBox(height: 6),
-                    if (forwardFiles.isNotEmpty) ...[
-                      ...forwardFiles.asMap().entries.map((entry) {
-                        final i = entry.key;
-                        final f = entry.value;
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.attach_file, size: 14, color: Color(0xFF2563EB)),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(f.name, style: const TextStyle(fontSize: 12, color: Color(0xFF1E293B)), overflow: TextOverflow.ellipsis),
-                              ),
-                              GestureDetector(
-                                onTap: () => setSheetState(() => forwardFiles.removeAt(i)),
-                                child: const Icon(Icons.close, size: 14, color: Color(0xFFEF4444)),
-                              ),
-                            ],
-                          ),
-                        );
-                      }),
-                      const SizedBox(height: 4),
-                    ],
-                    OutlinedButton.icon(
-                      onPressed: () async {
-                        final result = await FilePicker.platform.pickFiles(
-                          allowMultiple: true,
-                          type: kIsWeb ? FileType.custom : FileType.any,
-                          allowedExtensions: kIsWeb ? ['pdf', 'doc', 'docx', 'png', 'jpg'] : null,
-                          withData: true,
-                        );
-                        if (result != null) {
-                          setSheetState(() => forwardFiles.addAll(result.files));
-                        }
-                      },
-                      icon: const Icon(Icons.upload_file_rounded, size: 16),
-                      label: const Text('Choose Files', style: TextStyle(fontSize: 13)),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF2563EB),
-                        side: const BorderSide(color: Color(0xFFCBD5E1)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Forward button
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: forwarding ? null : () async {
-                          if (selectedEmpId == null) {
-                            ScaffoldMessenger.of(parentContext).showSnackBar(
-                              const SnackBar(content: Text('Please select a member'), backgroundColor: Color(0xFFEF4444)),
-                            );
-                            return;
-                          }
-                          if (instructionsCtrl.text.trim().isEmpty) {
-                            ScaffoldMessenger.of(parentContext).showSnackBar(
-                              const SnackBar(content: Text('Please add instructions'), backgroundColor: Color(0xFFEF4444)),
-                            );
-                            return;
-                          }
-
-                          setSheetState(() => forwarding = true);
-
-                          // Upload attached files
-                          List<Map<String, dynamic>>? attachments;
-                          if (forwardFiles.isNotEmpty) {
-                            try {
-                              attachments = [];
-                              for (final file in forwardFiles) {
-                                final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
-                                final ref = FirebaseStorage.instance.ref('task_attachments/$fileName');
-                                if (file.bytes != null) {
-                                  await ref.putData(file.bytes!);
-                                } else if (file.path != null) {
-                                  await ref.putFile(File(file.path!));
-                                } else {
-                                  continue;
-                                }
-                                final url = await ref.getDownloadURL();
-                                attachments.add({
-                                  'name': file.name,
-                                  'url': url,
-                                  'type': file.extension?.toLowerCase() ?? '',
-                                });
-                              }
-                            } catch (e) {
-                              setSheetState(() => forwarding = false);
-                              if (!parentContext.mounted) return;
-                              ScaffoldMessenger.of(parentContext).showSnackBar(
-                                SnackBar(content: Text('File upload failed: $e'), backgroundColor: const Color(0xFFEF4444)),
-                              );
-                              return;
-                            }
-                          }
-
-                          final taskVm = parentContext.read<TaskViewModel>();
-                          final ok = await taskVm.forwardTaskToMember(
-                            taskId: task['id'],
-                            empId: selectedEmpId!,
-                            memberName: selectedName!,
-                            instructions: instructionsCtrl.text.trim(),
-                            leadEmpId: _empId!,
-                            taskTitle: task['title'] ?? '',
-                            attachments: attachments,
-                          );
-
-                          if (!mounted) return;
-                          Navigator.of(sheetCtx).pop();
-                          if (ok) {
-                            ScaffoldMessenger.of(parentContext).showSnackBar(
-                              SnackBar(
-                                content: Text('Task forwarded to ${selectedName!}'),
-                                backgroundColor: const Color(0xFF16A34A),
-                              ),
-                            );
-                            _refreshTasks();
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF2563EB),
-                          disabledBackgroundColor: const Color(0xFF93C5FD),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                        child: forwarding
-                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : const Text('Forward Task', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
 
   Widget _chipWidget(IconData icon, String text) {
     return Container(

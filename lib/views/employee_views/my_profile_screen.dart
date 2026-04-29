@@ -386,11 +386,37 @@ class _ProfileHeader extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      role,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 13,
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _roleColor(role).withOpacity(0.25),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: _roleColor(role).withOpacity(0.5),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _roleIcon(role),
+                            color: Colors.white,
+                            size: 14,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            _roleLabel(role),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -419,6 +445,27 @@ class _ProfileHeader extends StatelessWidget {
     if (parts.isEmpty) return '?';
     if (parts.length == 1) return parts[0][0].toUpperCase();
     return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+  }
+
+  String _roleLabel(String role) {
+    final r = role.toLowerCase();
+    if (r.contains('project lead')) return 'Project Lead';
+    if (r == 'hr' || r == 'admin') return 'HR';
+    return 'Team Member';
+  }
+
+  IconData _roleIcon(String role) {
+    final r = role.toLowerCase();
+    if (r.contains('project lead')) return Icons.supervised_user_circle;
+    if (r == 'hr' || r == 'admin') return Icons.admin_panel_settings;
+    return Icons.person;
+  }
+
+  Color _roleColor(String role) {
+    final r = role.toLowerCase();
+    if (r.contains('project lead')) return const Color(0xFFF59E0B);
+    if (r == 'hr' || r == 'admin') return const Color(0xFF8B5CF6);
+    return const Color(0xFF10B981);
   }
 }
 
@@ -500,6 +547,13 @@ class _ProfileTab extends StatelessWidget {
               label: 'Phone',
               value: employee!.phone,
             ),
+            if (employee!.emergencyPhone != null &&
+                employee!.emergencyPhone!.isNotEmpty)
+              _InfoRow(
+                icon: Icons.emergency_outlined,
+                label: 'Emergency Phone',
+                value: employee!.emergencyPhone!,
+              ),
             _InfoRow(
               icon: Icons.location_on_outlined,
               label: 'Location',
@@ -522,11 +576,7 @@ class _ProfileTab extends StatelessWidget {
               label: 'Department',
               value: employee!.department,
             ),
-            _InfoRow(
-              icon: Icons.work_outline,
-              label: 'Job Title',
-              value: employee!.role,
-            ),
+            _RoleBadgeRow(role: employee!.role),
             _InfoRow(
               icon: Icons.calendar_today_outlined,
               label: 'Join Date',
@@ -534,6 +584,24 @@ class _ProfileTab extends StatelessWidget {
             ),
           ],
         ),
+        if (employee!.jobDescription != null &&
+            employee!.jobDescription!.trim().isNotEmpty) ...[
+          const SizedBox(height: 16),
+          _SectionCard(
+            title: 'Job Description',
+            icon: Icons.description_outlined,
+            children: [
+              Text(
+                employee!.jobDescription!,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFF334155),
+                  height: 1.6,
+                ),
+              ),
+            ],
+          ),
+        ],
         const SizedBox(height: 16),
         Container(
           padding: const EdgeInsets.all(14),
@@ -1626,6 +1694,71 @@ class _SectionCard extends StatelessWidget {
       ],
     ),
   );
+}
+
+class _RoleBadgeRow extends StatelessWidget {
+  final String role;
+  const _RoleBadgeRow({required this.role});
+
+  @override
+  Widget build(BuildContext context) {
+    final r = role.toLowerCase();
+    final isLead = r.contains('project lead');
+    final label = isLead ? 'Project Lead' : 'Team Member';
+    final color = isLead ? const Color(0xFFF59E0B) : const Color(0xFF10B981);
+    final icon = isLead ? Icons.supervised_user_circle : Icons.person;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: color, size: 16),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Assigned Role',
+                style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+              ),
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: color.withOpacity(0.3)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, size: 14, color: color),
+                    const SizedBox(width: 5),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: color,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _InfoRow extends StatelessWidget {
