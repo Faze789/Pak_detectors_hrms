@@ -70,6 +70,7 @@ class EmployeeReportViewModel extends ChangeNotifier {
           'lead_id': hrEmpId,
           'title': '$typeLabel Report Submitted',
           'body': '$employeeName$roleTag has submitted a $reportType report',
+          'type': 'report',
           'createdAt': FieldValue.serverTimestamp(),
           'read': false,
         });
@@ -91,6 +92,7 @@ class EmployeeReportViewModel extends ChangeNotifier {
             'lead_id': leadEmpId,
             'title': '$typeLabel Report Submitted',
             'body': '$employeeName has submitted a $reportType report',
+            'type': 'report',
             'createdAt': FieldValue.serverTimestamp(),
             'read': false,
           });
@@ -200,6 +202,7 @@ class EmployeeReportViewModel extends ChangeNotifier {
           'title': 'Report Assessed by Lead',
           'body':
               '$leadName assessed $employeeName\'s $reportType report',
+          'type': 'report',
           'createdAt': FieldValue.serverTimestamp(),
           'read': false,
         });

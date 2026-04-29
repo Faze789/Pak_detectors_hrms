@@ -99,6 +99,7 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
         'title': 'Task Completed - New Task Request',
         'body':
             '${user.name} ($_empId) has completed all assigned tasks and is requesting a new task.',
+        'type': 'task',
         'createdAt': FieldValue.serverTimestamp(),
         'read': false,
       });
@@ -135,6 +136,7 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
         'lead_id': hrEmpId,
         'title': 'No Task Assigned',
         'body': '${user.name} ($_empId): No task assigned to me. Please assign a task.',
+        'type': 'task',
         'createdAt': FieldValue.serverTimestamp(),
         'read': false,
       });

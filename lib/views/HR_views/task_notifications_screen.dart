@@ -1,10 +1,42 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../services/task_service.dart';
+import '../../viewmodels/auth_viewmodel.dart';
+import '../employee_views/EmployeeGoalsScreen.dart';
+import '../employee_views/team_reports_screen.dart';
+import '../HR_views/employee_reports_screen.dart';
 
 class TaskNotificationsScreen extends StatelessWidget {
   final String recipientId;
   const TaskNotificationsScreen({super.key, required this.recipientId});
+
+  /// Determine the target screen based on notification type/title and user role
+  void _navigateToScreen(BuildContext context, Map<String, dynamic> n) {
+    final type = (n['type'] ?? '').toString();
+    final title = (n['title'] ?? '').toString();
+    final user = context.read<AuthViewModel>().currentUser;
+    final role = user?.role ?? '';
+
+    Widget targetScreen;
+
+    // Report-related notifications
+    if (type == 'report' || title.contains('Report')) {
+      if (role == 'hr') {
+        targetScreen = const EmployeeReportsScreen();
+      } else {
+        targetScreen = const TeamReportsScreen();
+      }
+    } else {
+      // Task, team, and all other notifications → Goals/Tasks screen
+      targetScreen = const EmployeeGoalsScreen();
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => targetScreen),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -106,6 +138,9 @@ class TaskNotificationsScreen extends StatelessWidget {
               } else if (title.contains('Forwarded') || title.contains('Assigned')) {
                 icon = Icons.forward_to_inbox_rounded;
                 color = const Color(0xFF3B82F6);
+              } else if (title.contains('Report')) {
+                icon = Icons.description_rounded;
+                color = const Color(0xFF8B5CF6);
               } else if (title.contains('Member')) {
                 icon = Icons.person_rounded;
                 color = const Color(0xFF6366F1);
@@ -152,6 +187,7 @@ class TaskNotificationsScreen extends StatelessWidget {
                     if (!isRead) {
                       service.markTaskNotificationRead(notifId);
                     }
+                    _navigateToScreen(context, n);
                   },
                   child: Container(
                     margin: const EdgeInsets.only(bottom: 10),
@@ -224,12 +260,22 @@ class TaskNotificationsScreen extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(height: 6),
-                              Text(
-                                timeAgo,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.grey.shade400,
-                                ),
+                              Row(
+                                children: [
+                                  Text(
+                                    timeAgo,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey.shade400,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  Icon(
+                                    Icons.arrow_forward_ios_rounded,
+                                    size: 12,
+                                    color: Colors.grey.shade400,
+                                  ),
+                                ],
                               ),
                             ],
                           ),

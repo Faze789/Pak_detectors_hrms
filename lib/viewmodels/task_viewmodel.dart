@@ -210,6 +210,7 @@ class TaskViewModel extends ChangeNotifier {
           'lead_id': lead_id,
           'title': 'New Task Assigned',
           'body': '"$title" has been assigned to you by HR',
+          'type': 'task',
           'createdAt': FieldValue.serverTimestamp(),
           'read': false,
         });
@@ -263,6 +264,7 @@ class TaskViewModel extends ChangeNotifier {
           'taskId': taskId,
           'title': 'Task Modified',
           'body': '"$newTitle" was updated by $modifiedBy ($modifiedByRole)',
+          'type': 'task',
           'modifiedBy': modifiedBy,
           'modifiedByRole': modifiedByRole,
           'createdAt': FieldValue.serverTimestamp(),
@@ -285,6 +287,7 @@ class TaskViewModel extends ChangeNotifier {
                     'title': 'Task Approved',
                     'body':
                         '"$newTitle" has been approved by $modifiedBy ($modifiedByRole)',
+                    'type': 'task',
                     'modifiedBy': modifiedBy,
                     'modifiedByRole': modifiedByRole,
                     'createdAt': FieldValue.serverTimestamp(),
@@ -327,6 +330,7 @@ class TaskViewModel extends ChangeNotifier {
                 'body': wasModified
                     ? '"$newTitle" was edited and approved by $modifiedBy. Description was modified.'
                     : '"$newTitle" has been approved by $modifiedBy without changes.',
+                'type': 'task',
                 'modifiedBy': modifiedBy,
                 'modifiedByRole': modifiedByRole,
                 'createdAt': FieldValue.serverTimestamp(),
@@ -380,6 +384,7 @@ class TaskViewModel extends ChangeNotifier {
           'lead_id': hrEmpId,
           'title': 'Task Submitted',
           'body': '"$submittedBy" has submitted a task for review',
+          'type': 'task',
           'taskId': taskId,
           'createdAt': FieldValue.serverTimestamp(),
           'read': false,
@@ -426,6 +431,7 @@ class TaskViewModel extends ChangeNotifier {
           'lead_id': leadEmpId,
           'title': 'Member Submission',
           'body': '$memberName has submitted work for "$taskTitle"',
+          'type': 'task',
           'taskId': taskId,
           'createdAt': FieldValue.serverTimestamp(),
           'read': false,
@@ -471,6 +477,7 @@ class TaskViewModel extends ChangeNotifier {
           'lead_id': leadEmpId,
           'title': 'Task Rejected by HR',
           'body': 'Your submission was rejected. Reason: $reason',
+          'type': 'task',
           'taskId': taskId,
           'createdAt': FieldValue.serverTimestamp(),
           'read': false,
@@ -500,6 +507,7 @@ class TaskViewModel extends ChangeNotifier {
         'lead_id': empId,
         'title': 'Work Accepted',
         'body': 'Your submission has been accepted by the lead',
+        'type': 'task',
         'taskId': taskId,
         'createdAt': FieldValue.serverTimestamp(),
         'read': false,
@@ -578,6 +586,7 @@ class TaskViewModel extends ChangeNotifier {
             'title': 'Week $nextWeek Assigned',
             'body':
                 'All submissions accepted! Week $nextWeek of "$taskTitle" is now assigned.',
+            'type': 'task',
             'taskId': taskId,
             'createdAt': FieldValue.serverTimestamp(),
             'read': false,
@@ -605,6 +614,7 @@ class TaskViewModel extends ChangeNotifier {
         'lead_id': empId,
         'title': 'Work Rejected',
         'body': 'Your submission was rejected. Reason: $reason',
+        'type': 'task',
         'taskId': taskId,
         'createdAt': FieldValue.serverTimestamp(),
         'read': false,
@@ -636,6 +646,7 @@ class TaskViewModel extends ChangeNotifier {
               'title': 'Task Pushed Back',
               'body':
                   'The lead has requested corrections. Please resubmit your work.',
+              'type': 'task',
               'taskId': taskId,
               'createdAt': FieldValue.serverTimestamp(),
               'read': false,
@@ -711,6 +722,7 @@ class TaskViewModel extends ChangeNotifier {
         'lead_id': employeeUid,
         'title': 'Team Request Accepted',
         'body': 'You have been accepted into the team',
+        'type': 'team',
         'createdAt': FieldValue.serverTimestamp(),
         'read': false,
       });
@@ -738,6 +750,7 @@ class TaskViewModel extends ChangeNotifier {
         'lead_id': employeeUid,
         'title': 'Team Request Declined',
         'body': 'Your team assignment was declined by the lead',
+        'type': 'team',
         'createdAt': FieldValue.serverTimestamp(),
         'read': false,
       });
@@ -787,6 +800,7 @@ class TaskViewModel extends ChangeNotifier {
               'title': 'Week $weekNumber Assigned',
               'body':
                   'You have been assigned Week $weekNumber of "$taskTitle"',
+              'type': 'task',
               'taskId': taskId,
               'createdAt': FieldValue.serverTimestamp(),
               'read': false,
@@ -835,6 +849,7 @@ class TaskViewModel extends ChangeNotifier {
         'lead_id': empId,
         'title': 'Task Forwarded to You',
         'body': 'Lead has assigned you work on "$taskTitle"',
+        'type': 'task',
         'taskId': taskId,
         'createdAt': FieldValue.serverTimestamp(),
         'read': false,

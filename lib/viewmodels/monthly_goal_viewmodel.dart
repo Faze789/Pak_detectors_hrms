@@ -171,6 +171,7 @@ class MonthlyGoalViewModel extends ChangeNotifier {
           'title': 'Monthly Report Submitted',
           'body':
               '$leaderName has submitted their monthly report for $assignedMonth',
+          'type': 'report',
           'createdAt': FieldValue.serverTimestamp(),
           'read': false,
         });

@@ -94,7 +94,11 @@ class NotificationsScreen extends StatelessWidget {
                 ),
                 onDismissed: (_) => service.markNotificationRead(n.id),
                 child: GestureDetector(
-                  onTap: () => service.markNotificationRead(n.id),
+                  onTap: () {
+                    service.markNotificationRead(n.id);
+                    // Navigate back to the meetings screen
+                    Navigator.pop(context);
+                  },
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     margin: const EdgeInsets.only(bottom: 10),
@@ -169,12 +173,22 @@ class NotificationsScreen extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(height: 6),
-                              Text(
-                                MeetingTheme.formatTimeAgo(n.createdAt),
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.grey.shade400,
-                                ),
+                              Row(
+                                children: [
+                                  Text(
+                                    MeetingTheme.formatTimeAgo(n.createdAt),
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey.shade400,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  Icon(
+                                    Icons.arrow_forward_ios_rounded,
+                                    size: 12,
+                                    color: Colors.grey.shade400,
+                                  ),
+                                ],
                               ),
                             ],
                           ),
