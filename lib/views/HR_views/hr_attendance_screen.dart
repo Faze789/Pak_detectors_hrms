@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -375,6 +377,7 @@ class _HRAttendanceScreenState extends State<HRAttendanceScreen> {
                 ),
                 const SizedBox(height: 16),
                 _TableCard(
+                  employees_data: _employees,
                   rows: _filteredRows,
                   loading: _loading,
                   isMobile: isMobile,
@@ -406,6 +409,7 @@ class _EmpInfo {
 // ══════════════════════════════════════════════════════════════════════════════
 class _HRAttendanceAppBar extends StatelessWidget {
   final bool isMobile;
+
   const _HRAttendanceAppBar({required this.isMobile});
 
   @override
@@ -725,7 +729,7 @@ class _FilterBar extends StatelessWidget {
               children: [
                 Row(children: [filters[0], filters[1], filters[2]]),
                 const SizedBox(height: 10),
-                Row(children: [filters[3], filters[4], filters[5]]),
+                Row(children: [filters[3]]),
               ],
             )
           : Row(children: filters),
@@ -847,12 +851,15 @@ class _DateButton extends StatelessWidget {
 // Table Card
 // ══════════════════════════════════════════════════════════════════════════════
 class _TableCard extends StatelessWidget {
+  final List<_EmpInfo>? employees_data;
   final List<_AttendanceRow> rows;
   final bool loading;
   final bool isMobile;
   final DateTime date;
 
   const _TableCard({
+    this.employees_data,
+
     required this.rows,
     required this.loading,
     required this.isMobile,
@@ -908,6 +915,23 @@ class _TableCard extends StatelessWidget {
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
                           color: Color(0xFF0F172A),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () {
+                          if (employees_data != null &&
+                              employees_data!.isNotEmpty) {
+                            debugPrint(
+                              "First Employee: ${employees_data!.first.name}",
+                            );
+                          } else {
+                            debugPrint("No employee data available");
+                          }
+                        },
+                        icon: Icon(
+                          Icons.person_search_rounded,
+                          size: 18,
+                          color: Colors.grey.shade500,
                         ),
                       ),
                       Text(

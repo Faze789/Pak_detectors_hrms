@@ -218,17 +218,18 @@ class TaskService {
 
     // Calculate deadline from duration
     final durationDays = _durationToDays(duration);
+    final cycleDays = _durationToCycleDays(duration);
     final deadline = DateTime.now().add(Duration(days: durationDays));
 
-    // Calculate weekly breakdown for multi-week tasks
-    final totalWeeks = (durationDays / 7).ceil();
+    // Cycle-based breakdown: monthly = 4 weekly cycles, quarterly = 6 bi-weekly cycles, etc.
+    final totalWeeks = (durationDays / cycleDays).ceil();
     final List<Map<String, dynamic>> weeklyDeadlines = [];
     for (int w = 1; w <= totalWeeks; w++) {
-      final weekEnd = DateTime.now().add(Duration(days: 7 * w));
+      final cycleEnd = DateTime.now().add(Duration(days: cycleDays * w));
       weeklyDeadlines.add({
         'week': w,
         'deadline': Timestamp.fromDate(
-          weekEnd.isAfter(deadline) ? deadline : weekEnd,
+          cycleEnd.isAfter(deadline) ? deadline : cycleEnd,
         ),
         'assigned': false,
       });
@@ -365,7 +366,8 @@ class TaskService {
     });
   }
 
-  /// Convert duration string to number of days
+  /// Convert duration string to total days (clean week multiples so that
+  /// totalDays is always divisible by the cycle length).
   static int _durationToDays(String duration) {
     switch (duration.toLowerCase()) {
       case 'weekly':
@@ -373,13 +375,25 @@ class TaskService {
       case 'bi-weekly':
         return 14;
       case 'monthly':
-        return 30;
+        return 28; // 4 weeks
       case 'bi-monthly':
-        return 60;
+        return 56; // 8 weeks
       case 'quarterly':
-        return 90;
+        return 84; // 12 weeks
       default:
-        return 30;
+        return 28;
+    }
+  }
+
+  /// Days per assignment cycle. Members get a fresh assignment each cycle.
+  /// Longer tasks use 2-week cycles so members aren't churning every 7 days.
+  static int _durationToCycleDays(String duration) {
+    switch (duration.toLowerCase()) {
+      case 'quarterly':
+      case 'bi-monthly':
+        return 14; // bi-weekly cycles
+      default:
+        return 7; // weekly cycles (weekly/bi-weekly/monthly)
     }
   }
 
@@ -677,6 +691,33 @@ class TaskService {
           return data;
         })
         .toList();
+  }
+
+  // ── Non-Submission Reasons ─────────────────────────────────────
+
+  /// Append a "reason for not submitting" entry to the task's
+  /// `no_submission_reasons` array. Visible in task history.
+  Future<void> submitNoSubmissionReason({
+    required String taskId,
+    required String empId,
+    required String empName,
+    required String role, // 'member' or 'lead'
+    required String reason,
+    int? forWeek,
+  }) async {
+    final entry = <String, dynamic>{
+      'empId': empId,
+      'empName': empName,
+      'role': role,
+      'reason': reason,
+      'submittedAt': Timestamp.now(),
+      'sentTo': role == 'member' ? 'lead' : 'hr',
+    };
+    if (forWeek != null) entry['forWeek'] = forWeek;
+
+    await _tasks.doc(taskId).update({
+      'no_submission_reasons': FieldValue.arrayUnion([entry]),
+    });
   }
 
   // ── Task Notifications ─────────────────────────────────────────

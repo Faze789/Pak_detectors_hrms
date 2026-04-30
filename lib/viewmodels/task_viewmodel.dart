@@ -664,6 +664,74 @@ class TaskViewModel extends ChangeNotifier {
     }
   }
 
+  /// Submit a "reason for not submitting" entry. Saved on the task doc and
+  /// notification is sent to the lead (if member submitting) or all HR
+  /// (if lead submitting). Visible in task history.
+  Future<bool> submitNoSubmissionReason({
+    required String taskId,
+    required String empId,
+    required String empName,
+    required String role, // 'member' or 'lead'
+    required String reason,
+    required String taskTitle,
+    String? leadEmpId,
+    int? forWeek,
+  }) async {
+    try {
+      await _service.submitNoSubmissionReason(
+        taskId: taskId,
+        empId: empId,
+        empName: empName,
+        role: role,
+        reason: reason,
+        forWeek: forWeek,
+      );
+
+      final weekTag = forWeek != null ? ' (Week $forWeek)' : '';
+
+      if (role == 'member' && leadEmpId != null && leadEmpId.isNotEmpty) {
+        await FirebaseFirestore.instance
+            .collection('task_notifications')
+            .add({
+          'lead_id': leadEmpId,
+          'taskId': taskId,
+          'title': 'Non-Submission Reason from $empName',
+          'body': '"$taskTitle"$weekTag — $reason',
+          'type': 'task',
+          'createdAt': FieldValue.serverTimestamp(),
+          'read': false,
+        });
+      } else if (role == 'lead') {
+        final hrUsers = await FirebaseFirestore.instance
+            .collection('users')
+            .where('role', isEqualTo: 'hr')
+            .get();
+        for (final hrDoc in hrUsers.docs) {
+          final hrEmpId = hrDoc.data()['emp_id'] ?? hrDoc.id;
+          await FirebaseFirestore.instance
+              .collection('task_notifications')
+              .add({
+            'lead_id': hrEmpId,
+            'taskId': taskId,
+            'title': 'Non-Submission Reason from $empName (Lead)',
+            'body': '"$taskTitle"$weekTag — $reason',
+            'type': 'task',
+            'createdAt': FieldValue.serverTimestamp(),
+            'read': false,
+          });
+        }
+      }
+
+      await loadTasksForUser(empId);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      errorMessage = 'Failed to submit reason: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
   /// HR updates an employee's department
   Future<bool> updateEmployeeDepartment(String uid, String department) async {
     try {

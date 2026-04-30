@@ -1057,23 +1057,10 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                       final isOverdue =
                           remainingDays != null && remainingDays < 0;
                       if (isOverdue) {
-                        return Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFEF2F2),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFFFECACA)),
-                          ),
-                          child: const Text(
-                            'Deadline passed — cannot submit',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFFDC2626),
-                            ),
-                          ),
+                        return _buildOverdueBlock(
+                          context,
+                          task,
+                          role: 'lead',
                         );
                       }
                       // Lead: show member submissions + Submit Task to HR
@@ -1313,6 +1300,18 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                     } else {
                       // Member: check submission status
                       final mySub = _getMemberSubmission(task);
+                      final memberIsOverdue =
+                          remainingDays != null && remainingDays < 0;
+                      // If overdue and not yet accepted, block submit
+                      final mySubStatus =
+                          (mySub?['status'] ?? '').toString();
+                      if (memberIsOverdue && mySubStatus != 'accepted') {
+                        return _buildOverdueBlock(
+                          context,
+                          task,
+                          role: 'member',
+                        );
+                      }
                       if (mySub != null) {
                         final myStatus =
                             (mySub['status'] ?? 'submitted').toString();
@@ -1493,6 +1492,216 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  // ─── Overdue Block: shown when deadline passed and not submitted ──────────
+  // Shows a "Deadline passed" message + a button to submit a reason.
+  Widget _buildOverdueBlock(
+    BuildContext context,
+    Map<String, dynamic> task, {
+    required String role, // 'lead' or 'member'
+  }) {
+    final reasons = (task['no_submission_reasons'] as List?) ?? [];
+    final myEmpId = (_empId ?? '').toLowerCase();
+    final hasMyReason = reasons.any((r) {
+      if (r is! Map) return false;
+      final rEmp = (r['empId'] ?? '').toString().toLowerCase();
+      final rRole = (r['role'] ?? '').toString();
+      return rEmp == myEmpId && rRole == role;
+    });
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFEF2F2),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFFECACA)),
+          ),
+          child: const Text(
+            'Deadline passed — cannot submit',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFFDC2626),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: hasMyReason
+                ? null
+                : () => _showNoSubmissionReasonDialog(context, task, role),
+            icon: Icon(
+              hasMyReason ? Icons.check_circle : Icons.edit_note_rounded,
+              size: 14,
+              color: hasMyReason
+                  ? const Color(0xFF94A3B8)
+                  : const Color(0xFFB45309),
+            ),
+            label: Text(
+              hasMyReason
+                  ? 'Reason Submitted'
+                  : 'Reason for Non-Submission',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: hasMyReason
+                    ? const Color(0xFF94A3B8)
+                    : const Color(0xFFB45309),
+              ),
+            ),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              side: BorderSide(
+                color: hasMyReason
+                    ? const Color(0xFFCBD5E1)
+                    : const Color(0xFFB45309),
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ─── Non-Submission Reason Dialog ──────────────────────────────────────────
+  void _showNoSubmissionReasonDialog(
+    BuildContext context,
+    Map<String, dynamic> task,
+    String role, // 'lead' or 'member'
+  ) {
+    final reasonCtrl = TextEditingController();
+    final user = context.read<AuthViewModel>().currentUser;
+    if (user == null || _empId == null) return;
+
+    final recipientLabel = role == 'member' ? 'lead' : 'HR';
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) {
+        bool submitting = false;
+        return StatefulBuilder(
+          builder: (ctx, setLocalState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: const Text(
+                'Reason for Non-Submission',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'This will be sent to your $recipientLabel and saved in the task history.',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: reasonCtrl,
+                    maxLines: 4,
+                    decoration: InputDecoration(
+                      hintText: 'Explain why you couldn\'t submit on time...',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      contentPadding: const EdgeInsets.all(12),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed:
+                      submitting ? null : () => Navigator.pop(dialogCtx),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: submitting
+                      ? null
+                      : () async {
+                          final reason = reasonCtrl.text.trim();
+                          if (reason.isEmpty) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              const SnackBar(
+                                content: Text('Please enter a reason'),
+                                backgroundColor: Color(0xFFDC2626),
+                              ),
+                            );
+                            return;
+                          }
+                          setLocalState(() => submitting = true);
+
+                          final taskVm = context.read<TaskViewModel>();
+                          final ok = await taskVm.submitNoSubmissionReason(
+                            taskId: task['id'],
+                            empId: _empId!,
+                            empName: user.name,
+                            role: role,
+                            reason: reason,
+                            taskTitle: (task['title'] ?? '').toString(),
+                            leadEmpId: role == 'member'
+                                ? (task['lead_id'] ?? '').toString()
+                                : null,
+                          );
+
+                          if (!ctx.mounted) return;
+                          Navigator.pop(dialogCtx);
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                ok
+                                    ? 'Reason sent to your $recipientLabel'
+                                    : 'Failed to submit reason',
+                              ),
+                              backgroundColor: ok
+                                  ? const Color(0xFF16A34A)
+                                  : const Color(0xFFDC2626),
+                            ),
+                          );
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFB45309),
+                  ),
+                  child: submitting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text(
+                          'Submit Reason',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 

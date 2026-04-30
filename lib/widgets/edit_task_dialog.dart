@@ -396,6 +396,44 @@ void showTaskHistorySheet(
                         ),
                       ),
 
+                    // ─── Non-Submission Reasons ──────────────────────────
+                    Builder(builder: (_) {
+                      final reasons =
+                          (currentTask['no_submission_reasons'] as List?) ??
+                              [];
+                      if (reasons.isEmpty) return const SizedBox.shrink();
+
+                      // Sort by submittedAt descending (newest first)
+                      final sorted = List<Map>.from(
+                        reasons.whereType<Map>(),
+                      );
+                      sorted.sort((a, b) {
+                        final at = a['submittedAt'] as Timestamp?;
+                        final bt = b['submittedAt'] as Timestamp?;
+                        if (at == null && bt == null) return 0;
+                        if (at == null) return 1;
+                        if (bt == null) return -1;
+                        return bt.compareTo(at);
+                      });
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 24),
+                          const Text(
+                            'Non-Submission Reasons',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          ...sorted.map((r) => _reasonCard(r)),
+                        ],
+                      );
+                    }),
+
                     const SizedBox(height: 16),
                   ],
                 ),
@@ -527,6 +565,113 @@ Widget _versionCard({
               ),
             ],
           ],
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _reasonCard(Map r) {
+  final empName = (r['empName'] ?? '').toString();
+  final role = (r['role'] ?? '').toString();
+  final reason = (r['reason'] ?? '').toString();
+  final sentTo = (r['sentTo'] ?? '').toString();
+  final forWeek = r['forWeek'];
+  final ts = r['submittedAt'] as Timestamp?;
+  final dateStr = ts != null
+      ? '${ts.toDate().day}/${ts.toDate().month}/${ts.toDate().year} ${ts.toDate().hour}:${ts.toDate().minute.toString().padLeft(2, '0')}'
+      : '';
+
+  final isLead = role == 'lead';
+  final accentColor = isLead
+      ? const Color(0xFF7C3AED)
+      : const Color(0xFFB45309);
+  final bgColor = isLead
+      ? const Color(0xFFF5F3FF)
+      : const Color(0xFFFFF7ED);
+
+  return Container(
+    margin: const EdgeInsets.only(bottom: 10),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: bgColor,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: accentColor.withOpacity(0.3)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: accentColor,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                role.toUpperCase(),
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            if (forWeek != null)
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE5E7EB),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  'Week $forWeek',
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF374151),
+                  ),
+                ),
+              ),
+            const Spacer(),
+            if (dateStr.isNotEmpty)
+              Text(
+                dateStr,
+                style:
+                    const TextStyle(fontSize: 10, color: Color(0xFF94A3B8)),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          empName,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF0F172A),
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          'Sent to ${sentTo.toUpperCase()}',
+          style: const TextStyle(
+            fontSize: 10,
+            fontStyle: FontStyle.italic,
+            color: Color(0xFF94A3B8),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          reason,
+          style: const TextStyle(
+            fontSize: 12,
+            color: Color(0xFF374151),
+            height: 1.4,
+          ),
         ),
       ],
     ),

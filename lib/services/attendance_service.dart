@@ -287,6 +287,32 @@ class AttendanceService {
     return getValidatedPosition(branch: branch, fieldDuty: false);
   }
 
+  String detectCity(double userLat, double userLng) {
+    final cities = {
+      "Lahore": {"lat": 31.376609, "lng": 74.1747195},
+      "Islamabad": {"lat": 33.593685, "lng": 73.161049},
+      "Karachi": {"lat": 25.042857, "lng": 67.337571},
+    };
+
+    String nearestCity = "Unknown";
+    double minDistance = double.infinity;
+
+    for (var entry in cities.entries) {
+      final lat = entry.value["lat"]!;
+      final lng = entry.value["lng"]!;
+
+      final distance =
+          (userLat - lat).abs() + (userLng - lng).abs(); // simple approx
+
+      if (distance < minDistance) {
+        minDistance = distance;
+        nearestCity = entry.key;
+      }
+    }
+
+    return nearestCity;
+  }
+
   // ══════════════════════════════════════════════════════════════════════════
   // REVERSE GEOCODING
   // ══════════════════════════════════════════════════════════════════════════
