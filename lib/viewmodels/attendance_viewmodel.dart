@@ -26,9 +26,9 @@ class AttendanceViewModel extends ChangeNotifier {
 
   AttendanceModel? todayAttendance;
   LeaveModel? _todayLeave;
-  bool _isWeekend = false;
+  final bool _isWeekend = false;
   String? _holidayName;
-  OfficeSettings _officeSettings = OfficeSettings.defaults();
+  final OfficeSettings _officeSettings = OfficeSettings.defaults();
   List<AttendanceModel> history = [];
 
   final Map<String, MonthlyArchive> _archiveCache = {};
@@ -130,9 +130,9 @@ class AttendanceViewModel extends ChangeNotifier {
     _scheduleCleanup(userId);
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // END-OF-DAY CLEANUP
-  // ══════════════════════════════════════════════════════════════════════════
+  // // ══════════════════════════════════════════════════════════════════════════
+  // // END-OF-DAY CLEANUP
+  // // ══════════════════════════════════════════════════════════════════════════
 
   void _scheduleCleanup(String userId) {
     _cleanupTimer?.cancel();
@@ -163,8 +163,8 @@ class AttendanceViewModel extends ChangeNotifier {
       _isWeekend = _service.isWeekend(today);
       if (_isWeekend) {
         todayAttendance = null;
-        _todayLeave     = null;
-        _holidayName    = null;
+        _todayLeave = null;
+        _holidayName = null;
         _setIdle();
         return;
       }
@@ -172,19 +172,19 @@ class AttendanceViewModel extends ChangeNotifier {
       _holidayName = await _service.getPublicHolidayName(today);
       if (_holidayName != null) {
         todayAttendance = null;
-        _todayLeave     = null;
+        _todayLeave = null;
         _setIdle();
         return;
       }
 
-      todayAttendance =
-          await _service.getTodayAttendanceWithAbsence(userId);
+      todayAttendance = await _service.getTodayAttendanceWithAbsence(userId);
 
       if (todayAttendance?.status != null &&
           todayAttendance!.status.isAnyLeave &&
           todayAttendance?.leaveRequestId != null) {
-        _todayLeave =
-        await _service.getLeaveById(todayAttendance!.leaveRequestId!);
+        _todayLeave = await _service.getLeaveById(
+          todayAttendance!.leaveRequestId!,
+        );
       } else {
         _todayLeave = null;
       }
@@ -203,35 +203,9 @@ class AttendanceViewModel extends ChangeNotifier {
   // ══════════════════════════════════════════════════════════════════════════
 
   /// City-based check-in — accepts user if at any of the 4 office cities
-  /// (Lahore / Islamabad / Karachi / UAE). Enforces weekend block and
-  /// the 9:00–18:00 (Pakistan time) attendance window.
+  /// (Lahore / Islamabad / Karachi / UAE). Used by the EmployeeDashboardScreen.
   Future<void> checkInFromCity(String userId) async {
     if (checkedIn) return;
-
-    // ── Weekend block ──────────────────────────────────────────────────
-    if (_service.isWeekend(DateTime.now())) {
-      _setError('Attendance is disabled on weekends.');
-      return;
-    }
-
-    // ── 9:00–18:00 attendance window (Pakistan time) ───────────────────
-    // The device runs in local time. If the device IS in Asia/Karachi the
-    // hours line up directly; otherwise the user gets the window in their
-    // local time which is still the right behavior for travel.
-    final hour = DateTime.now().hour;
-    if (hour < 9) {
-      _setError(
-        'Check-in opens at 9:00 AM. Please try again then.',
-      );
-      return;
-    }
-    if (hour >= 18) {
-      _setError(
-        'Check-in closed at 6:00 PM. You can check in tomorrow at 9:00 AM.',
-      );
-      return;
-    }
-
     _setLoading();
     try {
       final pos = await _service.getValidatedPositionFromCities();

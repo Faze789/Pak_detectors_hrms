@@ -244,13 +244,13 @@ class _HRAttendanceScreenState extends State<HRAttendanceScreen> {
       rec = await vm.getArchivedAttendanceForDay(emp.uid, _selectedDate);
 
       // FIX: For today, use getEmployeeLiveRecord instead of getLiveAttendance.
-      //
+
       // getLiveAttendance called loadToday() which is designed for the currently
       // logged-in user. Calling it in a loop for multiple employees corrupted
       // the ViewModel's shared state (todayAttendance, officeSettings etc.)
       // causing wrong statuses: checked-in-late shown as Present, absent shown
       // as Late, etc.
-      //
+
       // getEmployeeLiveRecord reads directly from the Firestore live collection
       // without touching any ViewModel state — safe for any employee.
       if (isToday) {
