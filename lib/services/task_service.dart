@@ -693,6 +693,70 @@ class TaskService {
         .toList();
   }
 
+  // ── Ad-hoc Task Assignment ─────────────────────────────────────
+  // Lead → Member, deadline must be < 6 days from now. Skips HR approval
+  // (status starts at 'approved' since the lead controls these). Visible
+  // in the Member's task list, the Lead's view, and HR (because we
+  // store with isAdHoc:true and HR can filter).
+
+  Future<String> assignAdHocTask({
+    required String leadEmpId,
+    required String leadName,
+    required String memberEmpId,
+    required String memberName,
+    required String department,
+    required String title,
+    required String description,
+    required DateTime deadline,
+  }) async {
+    final now = DateTime.now();
+    final maxDeadline = now.add(const Duration(days: 6));
+    if (!deadline.isAfter(now)) {
+      throw Exception('Deadline must be in the future.');
+    }
+    if (deadline.isAfter(maxDeadline)) {
+      throw Exception('Ad-hoc deadline must be less than 6 days from now.');
+    }
+
+    final taskData = <String, dynamic>{
+      'isAdHoc': true,
+      'taskType': 'ad-hoc',
+      'lead_id': leadEmpId,
+      'leadName': leadName,
+      'department': department,
+      'title': title,
+      'description': description,
+      'duration': 'ad-hoc',
+      'status': 'approved',
+      'createdAt': FieldValue.serverTimestamp(),
+      'deadline': Timestamp.fromDate(deadline),
+      'version': 1,
+      'totalWeeks': 1,
+      'weeklyDeadlines': [
+        {
+          'week': 1,
+          'deadline': Timestamp.fromDate(deadline),
+          'assigned': true,
+        },
+      ],
+      'members': {
+        '1': {'name': memberName, 'emp_id': memberEmpId},
+      },
+      'member_tasks': {
+        memberEmpId: {
+          'memberName': memberName,
+          'instructions': description,
+          'forwardedAt': FieldValue.serverTimestamp(),
+          'status': 'assigned',
+          'weekNumber': 1,
+        },
+      },
+    };
+
+    final ref = await _tasks.add(taskData);
+    return ref.id;
+  }
+
   // ── Non-Submission Reasons ─────────────────────────────────────
 
   /// Append a "reason for not submitting" entry to the task's

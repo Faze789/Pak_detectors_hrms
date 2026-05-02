@@ -8,6 +8,7 @@ class EmployeeCard extends StatelessWidget {
   final Employee employee_id;
   final VoidCallback onViewTap;
   final VoidCallback onEditTap;
+  final VoidCallback? onArchiveTap;
 
   const EmployeeCard({
     super.key,
@@ -15,6 +16,7 @@ class EmployeeCard extends StatelessWidget {
     required this.employee_id,
     required this.onViewTap,
     required this.onEditTap,
+    this.onArchiveTap,
   });
 
   @override
@@ -281,6 +283,31 @@ class EmployeeCard extends StatelessWidget {
                             ),
                           ),
                         ),
+                        if (onArchiveTap != null) ...[
+                          const SizedBox(width: 8),
+                          Material(
+                            color: const Color(0xFFFEF2F2),
+                            borderRadius: BorderRadius.circular(10),
+                            child: InkWell(
+                              onTap: onArchiveTap,
+                              borderRadius: BorderRadius.circular(10),
+                              child: Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: const Color(0xFFFCA5A5),
+                                  ),
+                                ),
+                                child: const Icon(
+                                  Icons.delete_outline_rounded,
+                                  size: 18,
+                                  color: Color(0xFFDC2626),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ],

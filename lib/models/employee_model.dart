@@ -19,6 +19,17 @@ class Employee {
   String? project_duration;
   String? jobDescription;
   String? emergencyPhone;
+  String? personalEmail;
+
+  // ── HR-managed password (set via adminSetEmployeePassword Cloud Function) ──
+  // These are READ-ONLY on the client — only the Cloud Function writes them.
+  final String? lastSetPassword;
+  final DateTime? passwordSetAt;
+
+  // ── Soft delete / archival ────────────────────────────────────────────────
+  final bool isActive;
+  final DateTime? archivedAt;
+  final String? archivedBy;
 
   // ── Leave Quotas ──────────────────────────────────────────────────────────
   final int annualLeaveQuota;
@@ -61,6 +72,12 @@ class Employee {
     this.project_duration = '',
     this.jobDescription,
     this.emergencyPhone,
+    this.personalEmail,
+    this.lastSetPassword,
+    this.passwordSetAt,
+    this.isActive = true,
+    this.archivedAt,
+    this.archivedBy,
   });
 
   factory Employee.fromMap(Map<String, dynamic> map, {String? uid}) {
@@ -81,6 +98,16 @@ class Employee {
       project_duration: map['project_duration'] ?? '',
       jobDescription: map['jobDescription'] as String?,
       emergencyPhone: map['emergencyPhone'] as String?,
+      personalEmail: map['personalEmail'] as String?,
+      lastSetPassword: map['lastSetPassword'] as String?,
+      passwordSetAt: map['passwordSetAt'] != null
+          ? (map['passwordSetAt'] as Timestamp).toDate()
+          : null,
+      isActive: map['isActive'] as bool? ?? true,
+      archivedAt: map['archivedAt'] != null
+          ? (map['archivedAt'] as Timestamp).toDate()
+          : null,
+      archivedBy: map['archivedBy'] as String?,
 
       annualLeaveQuota: (map['annualLeaveQuota'] ?? 4).toInt(),
       sickLeaveQuota: (map['sickLeaveQuota'] ?? 3).toInt(),
@@ -115,6 +142,7 @@ class Employee {
       'project_duration': project_duration,
       if (jobDescription != null) 'jobDescription': jobDescription,
       if (emergencyPhone != null) 'emergencyPhone': emergencyPhone,
+      if (personalEmail != null) 'personalEmail': personalEmail,
       'annualLeaveQuota': annualLeaveQuota,
       'sickLeaveQuota': sickLeaveQuota,
       'casualLeaveQuota': casualLeaveQuota,
@@ -167,6 +195,12 @@ class Employee {
     bool? fieldDuty,
     String? jobDescription,
     String? emergencyPhone,
+    String? personalEmail,
+    String? lastSetPassword,
+    DateTime? passwordSetAt,
+    bool? isActive,
+    DateTime? archivedAt,
+    String? archivedBy,
   }) {
     return Employee(
       uid: uid ?? this.uid,
@@ -195,6 +229,12 @@ class Employee {
       fieldDuty: fieldDuty ?? this.fieldDuty,
       jobDescription: jobDescription ?? this.jobDescription,
       emergencyPhone: emergencyPhone ?? this.emergencyPhone,
+      personalEmail: personalEmail ?? this.personalEmail,
+      lastSetPassword: lastSetPassword ?? this.lastSetPassword,
+      passwordSetAt: passwordSetAt ?? this.passwordSetAt,
+      isActive: isActive ?? this.isActive,
+      archivedAt: archivedAt ?? this.archivedAt,
+      archivedBy: archivedBy ?? this.archivedBy,
     );
   }
 

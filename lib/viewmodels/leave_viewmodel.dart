@@ -201,6 +201,53 @@ class LeaveViewModel extends ChangeNotifier {
     }
   }
 
+  // ── Lead: approve / reject (multi-lead workflow) ─────────────────────────
+
+  Future<bool> leadApproveLeave({
+    required LeaveModel leave,
+    required String leadEmpId,
+    required String leadName,
+    String? note,
+  }) async {
+    try {
+      await _service.leadApproveLeave(
+        leaveId: leave.id,
+        leadEmpId: leadEmpId,
+        leadName: leadName,
+        note: note,
+      );
+      return true;
+    } catch (e) {
+      _setError('Failed to approve: $e');
+      return false;
+    }
+  }
+
+  Future<bool> leadRejectLeave({
+    required LeaveModel leave,
+    required String leadEmpId,
+    required String leadName,
+    required String reason,
+  }) async {
+    try {
+      await _service.leadRejectLeave(
+        leaveId: leave.id,
+        leadEmpId: leadEmpId,
+        leadName: leadName,
+        reason: reason,
+      );
+      return true;
+    } catch (e) {
+      _setError('Failed to reject: $e');
+      return false;
+    }
+  }
+
+  /// Stream pending leaves where this lead is in `requiredApproverEmpIds`
+  /// and hasn't decided yet.
+  Stream<List<LeaveModel>> streamLeavesPendingForLead(String leadEmpId) =>
+      _service.streamLeavesPendingForLead(leadEmpId);
+
   // ── Filter helpers ────────────────────────────────────────────────────────
 
   List<LeaveModel> filtered({

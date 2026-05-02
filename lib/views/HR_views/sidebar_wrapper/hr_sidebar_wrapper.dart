@@ -11,6 +11,7 @@ import 'package:hrms_app/views/HR_views/hr_report_screen.dart';
 import 'package:hrms_app/views/HR_views/payroll_screen.dart';
 import 'package:hrms_app/views/HR_views/recruitment_screen.dart';
 import 'package:hrms_app/views/HR_views/employee_reports_screen.dart';
+import 'package:hrms_app/views/HR_views/ex_employees_screen.dart';
 import 'package:hrms_app/views/HR_views/task_notifications_screen.dart';
 import 'package:hrms_app/views/meetings_screens/hr_meeting_screen.dart';
 import 'package:hrms_app/views/performance_screens/hr_performance_screen.dart';
@@ -153,6 +154,8 @@ class _HRDashboardWithSidebarState extends State<HRDashboardWithSidebar> {
         return const HRDashboardScreen();
       case 'employees':
         return const EmployeeListView();
+      case 'ex-employees':
+        return const ExEmployeesScreen();
 
       // will implement this feature tomorrow
 

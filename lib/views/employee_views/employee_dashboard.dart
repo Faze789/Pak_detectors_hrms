@@ -1,13 +1,20 @@
 // lib/screens/employee_dashboard_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:hrms_app/services/attendance_service.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:table_calendar/table_calendar.dart';
 
+import '../../models/attendance_model.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/leave_viewmodel.dart';
 import '../../viewmodels/attendance_viewmodel.dart';
 import '../../viewmodels/employee_viewmodel.dart';
 import '../../models/leave_model.dart';
+
+enum _LocPermStatus { unknown, enabled, denied, permanentlyDenied, servicesOff }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Breakpoints
@@ -28,7 +35,13 @@ class EmployeeDashboardScreen extends StatefulWidget {
       _EmployeeDashboardScreenState();
 }
 
-class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
+class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
+    with WidgetsBindingObserver {
+  _LocPermStatus _locStatus = _LocPermStatus.unknown;
+  bool _initialDialogShown = false;
+  DateTime _selectedCalendarDay = DateTime.now();
+  DateTime _focusedCalendarMonth = DateTime.now();
+
   // Static project data (replace with real VM when available)
   static const List<Map<String, dynamic>> _projects = [
     {
@@ -54,18 +67,271 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       final uid = context.read<AuthViewModel>().currentUser?.uid ?? '';
+
+      // Check location permission and prompt if not granted
+      await _checkLocationPermission(promptIfNotGranted: true);
+      if (!mounted) return;
+
       if (uid.isNotEmpty) {
         context.read<LeaveViewModel>().initForEmployee(uid);
-        context.read<AttendanceViewModel>().getMonthlyArchive(
+        final attVm = context.read<AttendanceViewModel>();
+        await attVm.loadToday(uid);
+        if (!mounted) return;
+
+        await attVm.getMonthlyArchive(
           uid,
           DateTime.now().year,
           DateTime.now().month,
         );
+        if (!mounted) return;
+
         context.read<EmployeeViewModel>().loadEmployees(uid);
       }
     });
+  }
+
+  Future<void> _onCheckIn() async {
+    if (_locStatus != _LocPermStatus.enabled) {
+      _handleLocationAction();
+      return;
+    }
+    final uid = context.read<AuthViewModel>().currentUser?.uid ?? '';
+    if (uid.isEmpty) return;
+
+    final attVm = context.read<AttendanceViewModel>();
+    await attVm.checkInFromCity(uid);
+
+    if (!mounted) return;
+    final err = attVm.errorMessage;
+    if (err != null && err.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(err), backgroundColor: const Color(0xFFDC2626)),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Checked in successfully'),
+          backgroundColor: Color(0xFF16A34A),
+        ),
+      );
+    }
+  }
+
+  Future<void> _onCheckOut() async {
+    final uid = context.read<AuthViewModel>().currentUser?.uid ?? '';
+    if (uid.isEmpty) return;
+
+    final attVm = context.read<AttendanceViewModel>();
+    await attVm.checkOutAnywhere(uid);
+
+    if (!mounted) return;
+    final err = attVm.errorMessage;
+    if (err != null && err.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(err), backgroundColor: const Color(0xFFDC2626)),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Checked out successfully'),
+          backgroundColor: Color(0xFF16A34A),
+        ),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // Re-check permission when user comes back from OS Settings.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      _checkLocationPermission(promptIfNotGranted: false);
+    }
+  }
+
+  void _logLocations() async {
+    // Add async here
+    const locations = {
+      'Lahore': {'lat': 31.376609, 'lng': 74.1747195},
+      'Islamabad': {'lat': 33.593685, 'lng': 73.161049},
+      'Karachi': {'lat': 25.042857, 'lng': 67.337571},
+      'UAE': {'lat': 24.341222, 'lng': 54.532972},
+    };
+
+    // AttendanceService isn't registered with Provider — instantiate directly.
+    final attendanceService = AttendanceService();
+
+    debugPrint('───── Configured Locations (${locations.length}) ─────');
+    for (final entry in locations.entries) {
+      debugPrint(
+        '  • ${entry.key} | lat=${entry.value['lat']}, lng=${entry.value['lng']}',
+      );
+    }
+
+    try {
+      final position = await attendanceService.getMedianPosition();
+      debugPrint(
+        'Current Median Position: lat=${position.latitude}, '
+        'lng=${position.longitude}, accuracy=${position.accuracy}m',
+      );
+    } catch (e) {
+      debugPrint('Error getting position: $e');
+    }
+
+    debugPrint('────────────────────────────────────────');
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Logged ${locations.length} locations — check debug console',
+        ),
+        backgroundColor: const Color(0xFF2563EB),
+      ),
+    );
+  }
+
+  Future<void> _checkLocationPermission({
+    required bool promptIfNotGranted,
+  }) async {
+    try {
+      final servicesOn = await Geolocator.isLocationServiceEnabled();
+      if (!servicesOn) {
+        if (mounted) {
+          setState(() => _locStatus = _LocPermStatus.servicesOff);
+        }
+        if (promptIfNotGranted && mounted && !_initialDialogShown) {
+          _initialDialogShown = true;
+          _showLocationDialog();
+        }
+        return;
+      }
+
+      final perm = await Geolocator.checkPermission();
+      _LocPermStatus newStatus;
+      switch (perm) {
+        case LocationPermission.always:
+        case LocationPermission.whileInUse:
+          newStatus = _LocPermStatus.enabled;
+          break;
+        case LocationPermission.deniedForever:
+          newStatus = _LocPermStatus.permanentlyDenied;
+          break;
+        default:
+          newStatus = _LocPermStatus.denied;
+      }
+
+      if (mounted) setState(() => _locStatus = newStatus);
+
+      if (newStatus != _LocPermStatus.enabled &&
+          promptIfNotGranted &&
+          mounted &&
+          !_initialDialogShown) {
+        _initialDialogShown = true;
+        _showLocationDialog();
+      }
+    } catch (e) {
+      debugPrint('[LocationCheck] $e');
+    }
+  }
+
+  void _showLocationDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        final isServicesOff = _locStatus == _LocPermStatus.servicesOff;
+        final isPermDenied = _locStatus == _LocPermStatus.permanentlyDenied;
+        final title = isServicesOff
+            ? 'Turn On Location Services'
+            : isPermDenied
+            ? 'Location Permission Required'
+            : 'Enable Location Access';
+        final body = isServicesOff
+            ? 'GPS is turned off on your device. Attendance check-in needs '
+                  'location to verify you\'re at the office. Open settings to '
+                  'turn it on.'
+            : isPermDenied
+            ? 'You\'ve previously denied location access. Open the app '
+                  'settings to enable it manually.'
+            : 'This app needs your location to verify attendance '
+                  'check-in. We only access your location when you check '
+                  'in or out.';
+        final actionLabel = isServicesOff
+            ? 'Open Location Settings'
+            : isPermDenied
+            ? 'Open App Settings'
+            : 'Enable Location';
+
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          icon: const Icon(
+            Icons.location_on_rounded,
+            color: Color(0xFF2563EB),
+            size: 36,
+          ),
+          title: Text(
+            title,
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+          ),
+          content: Text(
+            body,
+            style: const TextStyle(fontSize: 13, height: 1.45),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text(
+                'Not Now',
+                style: TextStyle(color: Color(0xFF64748B)),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await _handleLocationAction();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2563EB),
+                foregroundColor: Colors.white,
+              ),
+              child: Text(actionLabel),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _handleLocationAction() async {
+    switch (_locStatus) {
+      case _LocPermStatus.servicesOff:
+        await Geolocator.openLocationSettings();
+        // didChangeAppLifecycleState will re-check on resume
+        break;
+      case _LocPermStatus.permanentlyDenied:
+        await Geolocator.openAppSettings();
+        break;
+      case _LocPermStatus.denied:
+      case _LocPermStatus.unknown:
+        await Geolocator.requestPermission();
+        await _checkLocationPermission(promptIfNotGranted: false);
+        break;
+      case _LocPermStatus.enabled:
+        // already enabled, nothing to do
+        break;
+    }
   }
 
   @override
@@ -74,6 +340,8 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
     final leaveVm = context.watch<LeaveViewModel>();
     final attVm = context.watch<AttendanceViewModel>();
     final empVm = context.watch<EmployeeViewModel>();
+
+    // final location_permission = context.watch<AttendanceService>();
 
     final user = auth.currentUser;
     final userName = user?.name ?? 'User';
@@ -209,8 +477,12 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            _LocationStatusBanner(
+              status: _locStatus,
+              onTap: _handleLocationAction,
+            ),
             _WelcomeHeader(userName: userName),
-            const SizedBox(height: 20),
+            const SizedBox(height: 18),
             _MetricCardsRow(metrics: metrics),
             const SizedBox(height: 18),
             isDesktop
@@ -253,6 +525,526 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Attendance Today Card
+// ─────────────────────────────────────────────────────────────────────────────
+class _AttendanceTodayCard extends StatelessWidget {
+  final AttendanceModel? attendance;
+  final bool busy;
+  final VoidCallback onCheckIn;
+  final VoidCallback onCheckOut;
+
+  const _AttendanceTodayCard({
+    required this.attendance,
+    required this.busy,
+    required this.onCheckIn,
+    required this.onCheckOut,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final dateStr = DateFormat('EEEE, MMM d').format(now);
+    final checkIn = attendance?.checkInTime;
+    final checkOut = attendance?.checkOutTime;
+    final isCheckedIn = checkIn != null && checkOut == null;
+    final isDone = checkIn != null && checkOut != null;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF2563EB), Color(0xFF3B82F6)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Row(
+          //   children: [
+          //     const Icon(
+          //       Icons.event_available_rounded,
+          //       color: Colors.white,
+          //       size: 20,
+          //     ),
+          //     const SizedBox(width: 8),
+          //     Text(
+          //       dateStr,
+          //       style: const TextStyle(
+          //         fontSize: 14,
+          //         fontWeight: FontWeight.w700,
+          //         color: Colors.white,
+          //       ),
+          //     ),
+          //   ],
+          // ),
+          // const SizedBox(height: 14),
+          // Row(
+          //   children: [
+          //     Expanded(
+          //       child: _timeBlock(
+          //         label: 'Check In',
+          //         value: checkIn != null
+          //             ? DateFormat('HH:mm').format(checkIn)
+          //             : '—',
+          //       ),
+          //     ),
+          //     const SizedBox(width: 12),
+          //     Expanded(
+          //       child: _timeBlock(
+          //         label: 'Check Out',
+          //         value: checkOut != null
+          //             ? DateFormat('HH:mm').format(checkOut)
+          //             : '—',
+          //       ),
+          //     ),
+          //   ],
+          // ),
+          const SizedBox(height: 14),
+          if (!isCheckedIn && !isDone)
+            _btn(
+              label: busy ? 'Checking In…' : 'Check In',
+              icon: Icons.login_rounded,
+              color: Colors.white,
+              fg: const Color(0xFF1D4ED8),
+              onPressed: busy ? null : onCheckIn,
+            )
+          else if (isCheckedIn)
+            _btn(
+              label: busy ? 'Checking Out…' : 'Check Out',
+              icon: Icons.logout_rounded,
+              color: const Color(0xFFFCA5A5),
+              fg: const Color(0xFF7F1D1D),
+              onPressed: busy ? null : onCheckOut,
+            )
+          else
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text(
+                '✓ Done for today',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _timeBlock({required String label, required String value}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11,
+              color: Color(0xFFBFDBFE),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 18,
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _btn({
+    required String label,
+    required IconData icon,
+    required Color color,
+    required Color fg,
+    required VoidCallback? onPressed,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 18, color: fg),
+        label: Text(
+          label,
+          style: TextStyle(color: fg, fontWeight: FontWeight.w700),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Attendance Calendar Card — monthly grid with day-status colors
+// ─────────────────────────────────────────────────────────────────────────────
+class _AttendanceCalendarCard extends StatelessWidget {
+  final MonthlyArchive? archive;
+  final DateTime focusedMonth;
+  final DateTime selectedDay;
+  final ValueChanged<DateTime> onDaySelected;
+  final ValueChanged<DateTime> onMonthChanged;
+
+  const _AttendanceCalendarCard({
+    required this.archive,
+    required this.focusedMonth,
+    required this.selectedDay,
+    required this.onDaySelected,
+    required this.onMonthChanged,
+  });
+
+  /// Returns the color & label for a day based on its attendance record.
+  ({Color bg, Color fg, String label}) _statusFor(DateTime day) {
+    if (archive == null) {
+      return (
+        bg: const Color(0xFFF1F5F9),
+        fg: const Color(0xFF64748B),
+        label: '',
+      );
+    }
+    final key = MonthlyArchive.dayKey(day);
+    final rec = archive!.days[key];
+    if (rec == null) {
+      // Past day with no record = absent. Future day = neutral.
+      final today = DateUtils.dateOnly(DateTime.now());
+      final dayOnly = DateUtils.dateOnly(day);
+      if (dayOnly.isAfter(today)) {
+        return (bg: Colors.transparent, fg: const Color(0xFF64748B), label: '');
+      }
+      return (
+        bg: const Color(0xFFF1F5F9),
+        fg: const Color(0xFF64748B),
+        label: '',
+      );
+    }
+
+    // Has record
+    final hasCheckIn = rec.checkInTime != null;
+    final hasCheckOut = rec.checkOutTime != null;
+    final isAbsent = rec.status.isAbsent;
+    final isLeave = rec.status.isAnyLeave;
+
+    if (isLeave) {
+      return (
+        bg: const Color(0xFFDBEAFE),
+        fg: const Color(0xFF1E40AF),
+        label: 'L',
+      );
+    }
+    if (isAbsent) {
+      return (
+        bg: const Color(0xFFFEE2E2),
+        fg: const Color(0xFF991B1B),
+        label: 'A',
+      );
+    }
+    if (hasCheckIn && !hasCheckOut) {
+      // ← Per spec: missing checkout = RED
+      return (
+        bg: const Color(0xFFFEE2E2),
+        fg: const Color(0xFF991B1B),
+        label: '!',
+      );
+    }
+    if (hasCheckIn && hasCheckOut) {
+      return (
+        bg: const Color(0xFFD1FAE5),
+        fg: const Color(0xFF065F46),
+        label: '✓',
+      );
+    }
+    return (bg: Colors.transparent, fg: const Color(0xFF64748B), label: '');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selKey = archive != null ? MonthlyArchive.dayKey(selectedDay) : '';
+    final selectedRec = archive?.days[selKey];
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            child: Text(
+              'Attendance History',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF0F172A),
+              ),
+            ),
+          ),
+          TableCalendar(
+            firstDay: DateTime(2024, 1, 1),
+            lastDay: DateTime.now().add(const Duration(days: 30)),
+            focusedDay: focusedMonth,
+            selectedDayPredicate: (d) => isSameDay(d, selectedDay),
+            onDaySelected: (sel, foc) => onDaySelected(sel),
+            onPageChanged: onMonthChanged,
+            availableCalendarFormats: const {CalendarFormat.month: 'Month'},
+            headerStyle: const HeaderStyle(
+              titleCentered: true,
+              formatButtonVisible: false,
+              titleTextStyle: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF0F172A),
+              ),
+            ),
+
+            calendarBuilders: CalendarBuilders(
+              defaultBuilder: (ctx, day, _) => _dayCell(day, isToday: false),
+              todayBuilder: (ctx, day, _) => _dayCell(day, isToday: true),
+              selectedBuilder: (ctx, day, _) => _dayCell(day, isSelected: true),
+              outsideBuilder: (ctx, day, _) => _dayCell(day, faded: true),
+            ),
+          ),
+          const SizedBox(height: 8),
+          _legend(),
+          const Divider(height: 16),
+          _selectedDayDetails(selectedDay, selectedRec),
+          if (archive != null) ...[
+            const SizedBox(height: 8),
+            _statsRow(archive!),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _dayCell(
+    DateTime day, {
+    bool isToday = false,
+    bool isSelected = false,
+    bool faded = false,
+  }) {
+    final s = _statusFor(day);
+    return Container(
+      margin: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: isSelected ? const Color(0xFF2563EB) : s.bg,
+        borderRadius: BorderRadius.circular(8),
+        border: isToday
+            ? Border.all(color: const Color(0xFF2563EB), width: 1.5)
+            : null,
+      ),
+      alignment: Alignment.center,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Text(
+            '${day.day}',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: isSelected
+                  ? Colors.white
+                  : faded
+                  ? const Color(0xFFCBD5E1)
+                  : s.fg,
+            ),
+          ),
+          if (s.label.isNotEmpty && !isSelected)
+            Positioned(
+              right: 2,
+              bottom: 1,
+              child: Text(
+                s.label,
+                style: TextStyle(
+                  fontSize: 8,
+                  fontWeight: FontWeight.w800,
+                  color: s.fg,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _legend() {
+    Widget chip(Color bg, Color fg, String label) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            color: fg,
+          ),
+        ),
+      );
+    }
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 6,
+      children: [
+        chip(const Color(0xFFD1FAE5), const Color(0xFF065F46), '✓ Present'),
+        chip(
+          const Color(0xFFFEE2E2),
+          const Color(0xFF991B1B),
+          '! Missed checkout',
+        ),
+        chip(const Color(0xFFFEE2E2), const Color(0xFF991B1B), 'A Absent'),
+        chip(const Color(0xFFDBEAFE), const Color(0xFF1E40AF), 'L Leave'),
+      ],
+    );
+  }
+
+  Widget _selectedDayDetails(DateTime day, AttendanceModel? rec) {
+    final dateStr = DateFormat('EEEE, MMM d, yyyy').format(day);
+    if (rec == null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              dateStr,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF0F172A),
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'No record',
+              style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+            ),
+          ],
+        ),
+      );
+    }
+    final ci = rec.checkInTime;
+    final co = rec.checkOutTime;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            dateStr,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF0F172A),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Check-in:  ${ci != null ? DateFormat('HH:mm').format(ci) : '—'}'
+            '   Check-out: ${co != null ? DateFormat('HH:mm').format(co) : '—'}',
+            style: const TextStyle(fontSize: 12, color: Color(0xFF334155)),
+          ),
+          if (rec.checkInAddress != null && rec.checkInAddress!.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              '📍 ${rec.checkInAddress}',
+              style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _statsRow(MonthlyArchive a) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          _stat(
+            label: 'Present',
+            value: a.presentDays,
+            color: const Color(0xFF065F46),
+          ),
+          _stat(
+            label: 'Absent',
+            value: a.absentDays,
+            color: const Color(0xFF991B1B),
+          ),
+          _stat(
+            label: 'Leave',
+            value: a.leaveDays,
+            color: const Color(0xFF1E40AF),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _stat({
+    required String label,
+    required int value,
+    required Color color,
+  }) {
+    return Column(
+      children: [
+        Text(
+          '$value',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+            color: color,
+          ),
+        ),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Data models
 // ─────────────────────────────────────────────────────────────────────────────
 class _MetricData {
@@ -280,6 +1072,112 @@ class _ProfileData {
     required this.joinDate,
     required this.uid,
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Location Status Banner
+// ─────────────────────────────────────────────────────────────────────────────
+class _LocationStatusBanner extends StatelessWidget {
+  final _LocPermStatus status;
+  final Future<void> Function() onTap;
+
+  const _LocationStatusBanner({required this.status, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    if (status == _LocPermStatus.unknown) return const SizedBox.shrink();
+
+    final isEnabled = status == _LocPermStatus.enabled;
+    final IconData icon;
+    final Color bg;
+    final Color border;
+    final Color fg;
+    final String label;
+    final String? actionLabel;
+
+    switch (status) {
+      case _LocPermStatus.enabled:
+        icon = Icons.check_circle_rounded;
+        bg = const Color(0xFFECFDF5);
+        border = const Color(0xFF6EE7B7);
+        fg = const Color(0xFF065F46);
+        label = 'Location enabled';
+        actionLabel = null;
+        break;
+      case _LocPermStatus.servicesOff:
+        icon = Icons.location_off_rounded;
+        bg = const Color(0xFFFEF2F2);
+        border = const Color(0xFFFCA5A5);
+        fg = const Color(0xFF991B1B);
+        label = 'Location services off — GPS is disabled on your device';
+        actionLabel = 'Open Settings';
+        break;
+      case _LocPermStatus.permanentlyDenied:
+        icon = Icons.block_rounded;
+        bg = const Color(0xFFFEF2F2);
+        border = const Color(0xFFFCA5A5);
+        fg = const Color(0xFF991B1B);
+        label = 'Location permission blocked — open app settings to enable';
+        actionLabel = 'Open Settings';
+        break;
+      case _LocPermStatus.denied:
+        icon = Icons.location_disabled_rounded;
+        bg = const Color(0xFFFFFBEB);
+        border = const Color(0xFFFCD34D);
+        fg = const Color(0xFF92400E);
+        label = 'Location permission needed for attendance check-in';
+        actionLabel = 'Enable';
+        break;
+      case _LocPermStatus.unknown:
+        return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        onTap: isEnabled ? null : onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: border),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: fg, size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: fg,
+                  ),
+                ),
+              ),
+              if (actionLabel != null) ...[
+                const SizedBox(width: 8),
+                Text(
+                  actionLabel,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: fg,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(Icons.chevron_right_rounded, color: fg, size: 16),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -20,14 +20,18 @@ class _SignupScreenState extends State<SignupScreen> {
   String? _selectedDepartment;
 
   static const List<String> _departments = [
-    'IT',
+    'Sales',
     'Marketing',
+    'Digital marketing',
+    'Technology',
+    'Assembly and production',
+    'IT (Information Technologies)',
+    'Engineering',
     'Finance',
     'HR',
-    'Sales',
-    'Operations',
-    'Design',
     'Support',
+    'R&D',
+    'Design',
   ];
 
   @override
@@ -212,6 +216,8 @@ class _SignupScreenState extends State<SignupScreen> {
                                   // Department
                                   DropdownButtonFormField<String>(
                                     initialValue: _selectedDepartment,
+                                    isExpanded: true,
+                                    menuMaxHeight: 360,
                                     decoration: InputDecoration(
                                       labelText: 'Department',
                                       hintText: 'Select your department',
@@ -225,7 +231,10 @@ class _SignupScreenState extends State<SignupScreen> {
                                     items: _departments.map((dept) {
                                       return DropdownMenuItem<String>(
                                         value: dept,
-                                        child: Text(dept),
+                                        child: Text(
+                                          dept,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       );
                                     }).toList(),
                                     validator: (value) {

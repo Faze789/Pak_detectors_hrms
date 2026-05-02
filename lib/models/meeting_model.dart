@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-enum MeetingStatus { pending, approved, rejected, completed }
+enum MeetingStatus { pending, approved, rejected, completed, cancelled }
 
 enum MeetingType { general, review, training, oneOnOne, event }
 
@@ -23,6 +23,9 @@ class MeetingModel {
   final bool isAllEmployees;
   final DateTime createdAt;
   final String? rejectionReason;
+  final String? conclusion;
+  final DateTime? cancelledAt;
+  final String? cancellationReason;
 
   MeetingModel({
     required this.id,
@@ -41,6 +44,9 @@ class MeetingModel {
     required this.isAllEmployees,
     required this.createdAt,
     this.rejectionReason,
+    this.conclusion,
+    this.cancelledAt,
+    this.cancellationReason,
   });
 
   factory MeetingModel.fromFirestore(DocumentSnapshot doc) {
@@ -75,6 +81,11 @@ class MeetingModel {
           ? (data['createdAt'] as Timestamp).toDate()
           : DateTime.now(),
       rejectionReason: data['rejectionReason'],
+      conclusion: data['conclusion'] as String?,
+      cancelledAt: data['cancelledAt'] is Timestamp
+          ? (data['cancelledAt'] as Timestamp).toDate()
+          : null,
+      cancellationReason: data['cancellationReason'] as String?,
     );
   }
 
@@ -95,10 +106,19 @@ class MeetingModel {
       'isAllEmployees': isAllEmployees,
       'createdAt': Timestamp.fromDate(createdAt),
       'rejectionReason': rejectionReason,
+      if (conclusion != null) 'conclusion': conclusion,
+      if (cancelledAt != null) 'cancelledAt': Timestamp.fromDate(cancelledAt!),
+      if (cancellationReason != null) 'cancellationReason': cancellationReason,
     };
   }
 
-  MeetingModel copyWith({MeetingStatus? status, String? rejectionReason}) {
+  MeetingModel copyWith({
+    MeetingStatus? status,
+    String? rejectionReason,
+    String? conclusion,
+    DateTime? cancelledAt,
+    String? cancellationReason,
+  }) {
     return MeetingModel(
       id: id,
       title: title,
@@ -116,6 +136,9 @@ class MeetingModel {
       isAllEmployees: isAllEmployees,
       createdAt: createdAt,
       rejectionReason: rejectionReason ?? this.rejectionReason,
+      conclusion: conclusion ?? this.conclusion,
+      cancelledAt: cancelledAt ?? this.cancelledAt,
+      cancellationReason: cancellationReason ?? this.cancellationReason,
     );
   }
 }

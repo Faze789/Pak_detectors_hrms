@@ -7,7 +7,7 @@ class EmployeeService {
   final CollectionReference _usersCollection = FirebaseFirestore.instance
       .collection('users');
 
-  /// Get all employees (HR role)
+  /// Get all ACTIVE employees (excludes soft-deleted / archived).
   Future<List<Employee>> getEmployees() async {
     try {
       final snapshot = await _usersCollection
@@ -21,9 +21,32 @@ class EmployeeService {
               uid: doc.id,
             ),
           )
+          .where((e) => e.isActive)
           .toList();
     } catch (e) {
       print("Error fetching employees: $e");
+      return [];
+    }
+  }
+
+  /// Get archived (soft-deleted) employees — for the Ex-Employees tab.
+  Future<List<Employee>> getExEmployees() async {
+    try {
+      final snapshot = await _usersCollection
+          .where('role', isEqualTo: 'employee')
+          .get();
+
+      return snapshot.docs
+          .map(
+            (doc) => Employee.fromMap(
+              doc.data() as Map<String, dynamic>,
+              uid: doc.id,
+            ),
+          )
+          .where((e) => !e.isActive)
+          .toList();
+    } catch (e) {
+      print("Error fetching ex-employees: $e");
       return [];
     }
   }
@@ -85,12 +108,31 @@ class EmployeeService {
     }
   }
 
-  /// Delete employee
-  Future<void> deleteEmployee(String uid) async {
+  /// Soft-delete (archive) an employee. The doc and all related history
+  /// stays in Firestore — it just won't appear in the active list anymore.
+  /// `archivedByUid` should be the HR user's UID for audit.
+  Future<void> deleteEmployee(String uid, {String? archivedByUid}) async {
     try {
-      await _usersCollection.doc(uid).delete();
+      await _usersCollection.doc(uid).update({
+        'isActive': false,
+        'archivedAt': FieldValue.serverTimestamp(),
+        if (archivedByUid != null) 'archivedBy': archivedByUid,
+      });
     } catch (e) {
-      print("Error deleting employee: $e");
+      print("Error archiving employee: $e");
+    }
+  }
+
+  /// Restore a soft-deleted employee back to the active list.
+  Future<void> restoreEmployee(String uid) async {
+    try {
+      await _usersCollection.doc(uid).update({
+        'isActive': true,
+        'archivedAt': FieldValue.delete(),
+        'archivedBy': FieldValue.delete(),
+      });
+    } catch (e) {
+      print("Error restoring employee: $e");
     }
   }
 

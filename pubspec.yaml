@@ -26,6 +26,8 @@ dependencies:
   firebase_core: ^4.4.0
   firebase_auth: ^6.1.4
   cloud_firestore: ^6.1.2
+  cloud_functions: ^6.1.0
+  table_calendar: ^3.0.9
   geolocator: ^14.0.2
   geocoding: ^2.0.5
   url_launcher: ^6.3.2

@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -63,6 +64,57 @@ class _EmployeeListViewState extends State<EmployeeListView> {
     );
 
     context.read<EmployeeViewModel>().loadEmployees('');
+  }
+
+  /// Soft-delete (archive) an employee. The doc + history stays in
+  /// Firestore; the employee just moves to the Ex-Employees tab.
+  Future<void> _confirmArchive(Employee employee) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+        title: const Text('Archive Employee?'),
+        content: Text(
+          'This will move ${employee.name} (${employee.emp_id}) to the '
+          'Ex-Employees tab. All their data, history, and credentials '
+          'are preserved — you can restore them later.',
+          style: const TextStyle(fontSize: 13, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Archive'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    final hrUid = FirebaseAuth.instance.currentUser?.uid;
+    await context.read<EmployeeViewModel>().deleteEmployee(
+          employee.uid,
+          archivedByUid: hrUid,
+        );
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '${employee.name} archived. Find them in Ex-Employees.',
+        ),
+        backgroundColor: const Color(0xFF16A34A),
+      ),
+    );
   }
 
   // / Show employee profile
@@ -226,6 +278,7 @@ class _EmployeeListViewState extends State<EmployeeListView> {
                     employee_id: employee,
                     onViewTap: () => _showEmployeeProfile(employee),
                     onEditTap: () => _goToEditEmployee(employee),
+                    onArchiveTap: () => _confirmArchive(employee),
                   );
                 }, childCount: vm.filteredEmployees.length),
               ),

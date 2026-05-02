@@ -78,6 +78,47 @@ class AttendanceService {
     }
   }
 
+  Future<void> ensureLocationPermission() async {
+    // 1. Check if GPS hardware is actually ON
+    bool serviceOn = await Geolocator.isLocationServiceEnabled();
+
+    if (!serviceOn) {
+      // Open settings. Note: Code continues after user returns to app.
+      await Geolocator.openLocationSettings();
+
+      // Give the OS 500ms to register the hardware change
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      serviceOn = await Geolocator.isLocationServiceEnabled();
+      if (!serviceOn) {
+        throw const GeofenceException(
+          'Location services are still disabled. Please enable GPS.',
+        );
+      }
+    }
+
+    // 2. Check App-level Permissions
+    LocationPermission perm = await Geolocator.checkPermission();
+
+    if (perm == LocationPermission.denied) {
+      perm = await Geolocator.requestPermission();
+      if (perm == LocationPermission.denied) {
+        throw const GeofenceException(
+          'Location permission denied. Verification requires access.',
+        );
+      }
+    }
+
+    if (perm == LocationPermission.deniedForever) {
+      // If permanently denied, system dialog won't show anymore.
+      // User MUST go to App Settings.
+      await Geolocator.openAppSettings();
+      throw const GeofenceException(
+        'Permissions permanently denied. Please enable in App Settings.',
+      );
+    }
+  }
+
   // ══════════════════════════════════════════════════════════════════════════
   // CORE METHOD — TODAY WITH FULL LOGIC
   // ══════════════════════════════════════════════════════════════════════════
@@ -172,36 +213,11 @@ class AttendanceService {
   // LOCATION PERMISSION
   // ══════════════════════════════════════════════════════════════════════════
 
-  Future<void> ensureLocationPermission() async {
-    final serviceOn = await Geolocator.isLocationServiceEnabled();
-    if (!serviceOn) {
-      throw const GeofenceException(
-        'Location services are disabled. Please turn on GPS.',
-      );
-    }
-
-    LocationPermission perm = await Geolocator.checkPermission();
-    if (perm == LocationPermission.denied) {
-      perm = await Geolocator.requestPermission();
-      if (perm == LocationPermission.denied) {
-        throw const GeofenceException(
-          'Location permission denied. Please allow location access.',
-        );
-      }
-    }
-    if (perm == LocationPermission.deniedForever) {
-      throw const GeofenceException(
-        'Location permission permanently denied. '
-        'Go to app settings and enable location.',
-      );
-    }
-  }
-
   // ══════════════════════════════════════════════════════════════════════════
   // ANTI-CHEAT POSITION
   // ══════════════════════════════════════════════════════════════════════════
 
-  Future<Position> _getMedianPosition() async {
+  Future<Position> getMedianPosition() async {
     await ensureLocationPermission();
     final samples = <Position>[];
     for (int i = 0; i < _sampleCount; i++) {
@@ -220,7 +236,7 @@ class AttendanceService {
     BranchModel? branch,
     bool fieldDuty = false,
   }) async {
-    final pos = await _getMedianPosition();
+    final pos = await getMedianPosition();
 
     if (pos.isMocked) {
       throw const GeofenceException(
@@ -287,30 +303,78 @@ class AttendanceService {
     return getValidatedPosition(branch: branch, fieldDuty: false);
   }
 
-  String detectCity(double userLat, double userLng) {
-    final cities = {
-      "Lahore": {"lat": 31.376609, "lng": 74.1747195},
-      "Islamabad": {"lat": 33.593685, "lng": 73.161049},
-      "Karachi": {"lat": 25.042857, "lng": 67.337571},
-    };
+  // ══════════════════════════════════════════════════════════════════════════
+  // OFFICE GEOFENCE — strict, allows check-in only AT the office premises
+  // ══════════════════════════════════════════════════════════════════════════
 
-    String nearestCity = "Unknown";
-    double minDistance = double.infinity;
+  /// Exact office coordinates. Check-in is allowed only if the user is
+  /// within `_officeRadiusMeters` of one of these points.
+  static const Map<String, Map<String, double>> _allowedOffices = {
+    'Lahore': {'lat': 31.376609, 'lng': 74.1747195},
+    'Islamabad': {'lat': 33.593685, 'lng': 73.161049},
+    'Karachi': {'lat': 25.042857, 'lng': 67.337571},
+    'UAE': {'lat': 24.341222, 'lng': 54.532972},
+  };
 
-    for (var entry in cities.entries) {
-      final lat = entry.value["lat"]!;
-      final lng = entry.value["lng"]!;
+  /// 200 m — allows check-in from inside the office building or its
+  /// immediate perimeter (parking, lobby, adjacent block).
+  static const double _officeRadiusMeters = 200.0;
 
-      final distance =
-          (userLat - lat).abs() + (userLng - lng).abs(); // simple approx
+  /// Returns the user's GPS position if they are within 40 m of ANY office.
+  /// Throws GeofenceException otherwise. Anti-cheat checks
+  /// (mock GPS, accuracy, speed) are still applied.
+  Future<Position> getValidatedPositionFromCities() async {
+    final pos = await getMedianPosition();
 
-      if (distance < minDistance) {
-        minDistance = distance;
-        nearestCity = entry.key;
+    if (pos.isMocked) {
+      throw const GeofenceException(
+        'Fake GPS detected. Disable mock location apps and try again.',
+      );
+    }
+    if (pos.accuracy > _maxAccuracy) {
+      throw GeofenceException(
+        'GPS signal too weak (accuracy: ${pos.accuracy.toStringAsFixed(0)}m). '
+        'Move to an open area and try again.',
+      );
+    }
+    if (pos.accuracy == 0.0) {
+      throw const GeofenceException(
+        'Suspicious GPS reading. Disable mock location apps.',
+      );
+    }
+    if (pos.speed > _maxIdleSpeed) {
+      throw GeofenceException(
+        'Unusual movement detected (${pos.speed.toStringAsFixed(1)} m/s). '
+        'Stand still and try again.',
+      );
+    }
+
+    double closest = double.infinity;
+    bool insideAny = false;
+    for (final entry in _allowedOffices.entries) {
+      final cityLat = entry.value['lat']!;
+      final cityLng = entry.value['lng']!;
+      final distance = Geolocator.distanceBetween(
+        cityLat,
+        cityLng,
+        pos.latitude,
+        pos.longitude,
+      );
+      if (distance < closest) closest = distance;
+      if (distance <= _officeRadiusMeters) {
+        insideAny = true;
+        break;
       }
     }
 
-    return nearestCity;
+    if (!insideAny) {
+      throw GeofenceException(
+        'You are not at any office location. '
+        'Closest office is ${closest.toStringAsFixed(0)} m away. '
+        'Check-in is allowed only at Lahore, Islamabad, Karachi, or UAE office.',
+      );
+    }
+    return pos;
   }
 
   // ══════════════════════════════════════════════════════════════════════════

@@ -172,6 +172,21 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
+      floatingActionButton: Consumer<TaskViewModel>(
+        builder: (_, taskVm, __) {
+          // Show ad-hoc assignment FAB only if user has team members (i.e. is a lead).
+          if (taskVm.members.isEmpty) return const SizedBox.shrink();
+          return FloatingActionButton.extended(
+            onPressed: () => _showAssignAdHocDialog(context, taskVm.members),
+            backgroundColor: const Color(0xFF2563EB),
+            icon: const Icon(Icons.bolt_rounded, color: Colors.white),
+            label: const Text(
+              'Quick Assign',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+            ),
+          );
+        },
+      ),
       body: Consumer<TaskViewModel>(
         builder: (context, taskVm, _) {
           if (taskVm.isLoading) {
@@ -1492,6 +1507,189 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  // ─── Ad-hoc task assignment dialog (Lead → Member, <6 days) ──────────────
+  void _showAssignAdHocDialog(
+    BuildContext ctx,
+    List<Map<String, dynamic>> members,
+  ) {
+    final user = ctx.read<AuthViewModel>().currentUser;
+    if (user == null || _empId == null) return;
+
+    String? selectedMemberEmpId;
+    String? selectedMemberName;
+    final titleCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
+    DateTime? deadline;
+    final now = DateTime.now();
+    final maxDate = now.add(const Duration(days: 5));
+
+    showDialog(
+      context: ctx,
+      builder: (dialogCtx) {
+        return StatefulBuilder(
+          builder: (sCtx, setLocalState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: const Text(
+                'Quick Assign — Ad-hoc Task',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+              ),
+              content: SizedBox(
+                width: 460,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Deadline must be less than 6 days from today.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        initialValue: selectedMemberEmpId,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Member',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: members
+                            .where((m) => (m['emp_id'] ?? '').toString().isNotEmpty)
+                            .map((m) {
+                          final empId = (m['emp_id'] ?? '').toString();
+                          final name = (m['name'] ?? '').toString();
+                          return DropdownMenuItem<String>(
+                            value: empId,
+                            child: Text('$name ($empId)',
+                                overflow: TextOverflow.ellipsis),
+                          );
+                        }).toList(),
+                        onChanged: (v) => setLocalState(() {
+                          selectedMemberEmpId = v;
+                          final m = members.firstWhere(
+                            (e) => (e['emp_id'] ?? '').toString() == v,
+                            orElse: () => {},
+                          );
+                          selectedMemberName = (m['name'] ?? '').toString();
+                        }),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: titleCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Task Title',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: descCtrl,
+                        maxLines: 3,
+                        decoration: const InputDecoration(
+                          labelText: 'Description / Instructions',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      InkWell(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: sCtx,
+                            initialDate: deadline ?? now.add(const Duration(days: 1)),
+                            firstDate: now,
+                            lastDate: maxDate,
+                            helpText: 'Pick deadline (max 5 days from today)',
+                          );
+                          if (picked != null) {
+                            setLocalState(() => deadline = picked);
+                          }
+                        },
+                        child: InputDecorator(
+                          decoration: const InputDecoration(
+                            labelText: 'Deadline',
+                            border: OutlineInputBorder(),
+                            suffixIcon: Icon(Icons.calendar_today_rounded),
+                          ),
+                          child: Text(
+                            deadline != null
+                                ? '${deadline!.day}/${deadline!.month}/${deadline!.year}'
+                                : 'Tap to pick',
+                            style: TextStyle(
+                              color: deadline != null
+                                  ? const Color(0xFF0F172A)
+                                  : const Color(0xFF94A3B8),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogCtx),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (selectedMemberEmpId == null ||
+                        titleCtrl.text.trim().isEmpty ||
+                        descCtrl.text.trim().isEmpty ||
+                        deadline == null) {
+                      ScaffoldMessenger.of(sCtx).showSnackBar(
+                        const SnackBar(
+                          content: Text('All fields are required'),
+                          backgroundColor: Color(0xFFDC2626),
+                        ),
+                      );
+                      return;
+                    }
+                    final taskVm = ctx.read<TaskViewModel>();
+                    final ok = await taskVm.assignAdHocTask(
+                      leadEmpId: _empId!,
+                      leadName: user.name,
+                      memberEmpId: selectedMemberEmpId!,
+                      memberName: selectedMemberName ?? '',
+                      department: user.department,
+                      title: titleCtrl.text.trim(),
+                      description: descCtrl.text.trim(),
+                      deadline: deadline!,
+                    );
+                    if (!sCtx.mounted) return;
+                    Navigator.pop(dialogCtx);
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          ok
+                              ? 'Ad-hoc task assigned to ${selectedMemberName ?? "member"}'
+                              : taskVm.errorMessage ?? 'Failed',
+                        ),
+                        backgroundColor: ok
+                            ? const Color(0xFF16A34A)
+                            : const Color(0xFFDC2626),
+                      ),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Assign'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 

@@ -12,6 +12,7 @@
 const { setGlobalOptions } = require("firebase-functions");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
 
@@ -375,6 +376,245 @@ exports.sendDailyTaskReminders = onSchedule(
     logger.info(`[sendDailyTaskReminders] Done. Created ${notifCount} reminder notification(s).`);
   }
 );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Check-in reminder schedule (Mon–Fri, Asia/Karachi):
+//   • 8:50 AM  — pre-shift heads-up
+//   • 9:00 AM  — shift start
+//   • 9:20 AM  — first late nudge
+//   • 9:40 AM  — second late nudge
+//   • 10:00 AM — final late nudge
+// All five fire only if the employee hasn't checked in for today.
+// ─────────────────────────────────────────────────────────────────────────────
+async function _sendCheckInReminders(label, title, body) {
+  const dateKey = new Date().toLocaleDateString("en-CA", {
+    timeZone: "Asia/Karachi",
+  });
+
+  const usersSnap = await db.collection("users")
+    .where("role", "in", ["employee", "project lead"])
+    .get();
+
+  let count = 0;
+  for (const userDoc of usersSnap.docs) {
+    const u = userDoc.data();
+    const empId = (u.emp_id || "").toString();
+    if (!empId) continue;
+
+    const liveDoc = await db.collection("attendance_live").doc(userDoc.id).get();
+    const live = liveDoc.data();
+    if (live && live.dateString === dateKey && live.checkInTime) continue;
+
+    await db.collection("task_notifications").add({
+      lead_id: empId,
+      title: title,
+      body: body,
+      type: "task",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      read: false,
+    });
+    count++;
+  }
+  logger.info(`[${label}] Sent ${count} reminders.`);
+}
+
+// 8:50 AM — pre-shift
+exports.checkInReminder0850 = onSchedule(
+  { schedule: "50 8 * * 1-5", timeZone: "Asia/Karachi", maxInstances: 1 },
+  async () => _sendCheckInReminders(
+    "checkInReminder0850",
+    "Heads up — work starts in 10 min",
+    "Get ready to mark your attendance. Office hours start at 9:00 AM.",
+  ),
+);
+
+// 9:00, 9:20, 9:40 AM — start + first two late nudges in a single cron
+exports.checkInReminderShiftStart = onSchedule(
+  { schedule: "0,20,40 9 * * 1-5", timeZone: "Asia/Karachi", maxInstances: 1 },
+  async () => _sendCheckInReminders(
+    "checkInReminderShiftStart",
+    "Time to check in",
+    "Don't forget to mark your attendance for today.",
+  ),
+);
+
+// 10:00 AM — final late nudge
+exports.checkInReminder1000 = onSchedule(
+  { schedule: "0 10 * * 1-5", timeZone: "Asia/Karachi", maxInstances: 1 },
+  async () => _sendCheckInReminders(
+    "checkInReminder1000",
+    "Last reminder to check in",
+    "It's 10:00 AM and you still haven't checked in. Mark your attendance now.",
+  ),
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// sendCheckOutReminder — 5:50 PM Mon–Fri, Asia/Karachi
+// Notifies employees who checked in but haven't checked out yet.
+// ─────────────────────────────────────────────────────────────────────────────
+exports.sendCheckOutReminder = onSchedule(
+  {
+    schedule: "50 17 * * 1-5",
+    timeZone: "Asia/Karachi",
+    maxInstances: 1,
+  },
+  async (_event) => {
+    const dateKey = new Date().toLocaleDateString("en-CA", {
+      timeZone: "Asia/Karachi",
+    });
+
+    const liveSnap = await db.collection("attendance_live").get();
+    let count = 0;
+
+    for (const doc of liveSnap.docs) {
+      const live = doc.data();
+      if (live.dateString !== dateKey) continue;
+      if (!live.checkInTime) continue;
+      if (live.checkOutTime) continue;
+
+      // Look up emp_id
+      const userDoc = await db.collection("users").doc(doc.id).get();
+      const empId = (userDoc.data()?.emp_id || "").toString();
+      if (!empId) continue;
+
+      await db.collection("task_notifications").add({
+        lead_id: empId,
+        title: "Don't forget to check out",
+        body: "Work ends at 6 PM. Check out before midnight or the day won't count.",
+        type: "task",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        read: false,
+      });
+      count++;
+    }
+    logger.info(`[sendCheckOutReminder] Sent ${count} reminders.`);
+  }
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// markAbsentAtSixPM — 6:01 PM Mon–Fri, Asia/Karachi
+// Final cutoff: anyone who hasn't checked in by 6 PM is marked absent.
+// (In addition to the existing noon/2 PM cutoffs.)
+// ─────────────────────────────────────────────────────────────────────────────
+exports.markAbsentAtSixPM = onSchedule(
+  {
+    schedule: "1 18 * * 1-5",
+    timeZone: "Asia/Karachi",
+    maxInstances: 1,
+  },
+  async (_event) => {
+    const dateKey = new Date().toLocaleDateString("en-CA", {
+      timeZone: "Asia/Karachi",
+    });
+
+    const usersSnap = await db.collection("users")
+      .where("role", "in", ["employee", "project lead"])
+      .get();
+
+    let count = 0;
+    for (const userDoc of usersSnap.docs) {
+      const liveRef = db.collection("attendance_live").doc(userDoc.id);
+      const live = (await liveRef.get()).data();
+
+      // Already checked in today → skip
+      if (live && live.dateString === dateKey && live.checkInTime) continue;
+
+      // Already marked absent for today → skip
+      if (live && live.dateString === dateKey && live.status === "absent") continue;
+
+      await liveRef.set(
+        {
+          userId: userDoc.id,
+          dateString: dateKey,
+          status: "absent",
+          checkInTime: null,
+          checkOutTime: null,
+        },
+        { merge: true }
+      );
+      count++;
+    }
+    logger.info(`[markAbsentAtSixPM] Marked ${count} employees absent.`);
+  }
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// adminSetEmployeePassword — HR-only callable to set/reset an employee's
+// Firebase Auth password by uid. Also stores the plaintext password on the
+// users/{uid} doc so HR can view it later (per workplace policy).
+//
+// Caller must be signed in AND have role == 'hr' in their users/{callerUid} doc.
+// Returns { success: true } on success, throws HttpsError otherwise.
+// ─────────────────────────────────────────────────────────────────────────────
+exports.adminSetEmployeePassword = onCall(async (request) => {
+  // 1. Verify caller is signed in
+  const callerUid = request.auth?.uid;
+  if (!callerUid) {
+    throw new HttpsError("unauthenticated", "You must be signed in.");
+  }
+
+  // 2. Verify caller is HR
+  const callerDoc = await db.collection("users").doc(callerUid).get();
+  const callerRole = (callerDoc.data()?.role || "").toLowerCase();
+  if (callerRole !== "hr") {
+    throw new HttpsError(
+      "permission-denied",
+      "Only HR can reset employee passwords."
+    );
+  }
+
+  // 3. Validate input
+  const { uid, newPassword } = request.data || {};
+  if (!uid || typeof uid !== "string") {
+    throw new HttpsError("invalid-argument", "uid is required.");
+  }
+  if (!newPassword || typeof newPassword !== "string") {
+    throw new HttpsError("invalid-argument", "newPassword is required.");
+  }
+  if (newPassword.length < 6) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Password must be at least 6 characters."
+    );
+  }
+
+  try {
+    // 4. Update Firebase Auth password
+    await admin.auth().updateUser(uid, { password: newPassword });
+
+    // 5. Store plaintext on Firestore doc so HR can view it later
+    await db.collection("users").doc(uid).update({
+      lastSetPassword: newPassword,
+      passwordSetAt: admin.firestore.FieldValue.serverTimestamp(),
+      passwordSetByUid: callerUid,
+    });
+
+    // 6. Notify the employee in-app
+    const targetDoc = await db.collection("users").doc(uid).get();
+    const empId = (targetDoc.data()?.emp_id || "").toString();
+    if (empId) {
+      await db.collection("task_notifications").add({
+        lead_id: empId,
+        title: "Password Reset by HR",
+        body: "Your account password was reset. Contact HR for the new password.",
+        type: "task",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        read: false,
+      });
+    }
+
+    logger.info(
+      `[adminSetEmployeePassword] HR ${callerUid} reset password for ${uid}`
+    );
+    return { success: true };
+  } catch (err) {
+    logger.error(`[adminSetEmployeePassword] Failed: ${err.message}`);
+    if (err.code === "auth/user-not-found") {
+      throw new HttpsError("not-found", "No Firebase Auth user with that uid.");
+    }
+    throw new HttpsError("internal", err.message || "Unknown error");
+  }
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Core absent logic — called by both scheduled functions

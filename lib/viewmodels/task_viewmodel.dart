@@ -664,6 +664,60 @@ class TaskViewModel extends ChangeNotifier {
     }
   }
 
+  /// Lead assigns an ad-hoc task to a member. Deadline must be < 6 days.
+  /// Notifies the member; HR can also see it via the `isAdHoc:true` flag.
+  Future<bool> assignAdHocTask({
+    required String leadEmpId,
+    required String leadName,
+    required String memberEmpId,
+    required String memberName,
+    required String department,
+    required String title,
+    required String description,
+    required DateTime deadline,
+  }) async {
+    _submitting = true;
+    notifyListeners();
+    try {
+      final taskId = await _service.assignAdHocTask(
+        leadEmpId: leadEmpId,
+        leadName: leadName,
+        memberEmpId: memberEmpId,
+        memberName: memberName,
+        department: department,
+        title: title,
+        description: description,
+        deadline: deadline,
+      );
+
+      // Notify the member
+      await FirebaseFirestore.instance
+          .collection('task_notifications')
+          .add({
+        'lead_id': memberEmpId,
+        'taskId': taskId,
+        'title': 'Ad-hoc Task Assigned',
+        'body': '$leadName assigned you a quick task: "$title". '
+            'Due ${deadline.day}/${deadline.month}/${deadline.year}.',
+        'type': 'task',
+        'createdAt': FieldValue.serverTimestamp(),
+        'read': false,
+      });
+
+      // Refresh lead's view
+      await loadTasksForUser(leadEmpId);
+
+      _submitting = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      errorMessage = 'Failed to assign ad-hoc task: $e';
+      _submitting = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
   /// Submit a "reason for not submitting" entry. Saved on the task doc and
   /// notification is sent to the lead (if member submitting) or all HR
   /// (if lead submitting). Visible in task history.

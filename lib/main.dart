@@ -487,8 +487,10 @@ class _AppInitState extends State<_AppInit> {
   /// and shows a local pop-up notification in real time.
   void _startTaskNotificationListener(String uid) async {
     // Get the user's emp_id
-    final userDoc =
-        await FirebaseFirestore.instance.collection('users').doc(uid).get();
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .get();
     final empId = (userDoc.data()?['emp_id'] ?? '').toString().toLowerCase();
     if (empId.isEmpty) return;
 
@@ -498,29 +500,29 @@ class _AppInitState extends State<_AppInit> {
         .limit(20)
         .snapshots()
         .listen((snapshot) {
-      // Skip the first snapshot (existing data)
-      if (_isFirstNotifSnapshot) {
-        _isFirstNotifSnapshot = false;
-        return;
-      }
-
-      for (final change in snapshot.docChanges) {
-        if (change.type == DocumentChangeType.added) {
-          final data = change.doc.data();
-          if (data == null) continue;
-
-          final leadId = (data['lead_id'] ?? '').toString().toLowerCase();
-          final isRead = data['read'] == true;
-
-          // Only show for this user + unread
-          if (leadId == empId && !isRead) {
-            final title = data['title'] ?? 'Task Notification';
-            final body = data['body'] ?? '';
-            _showTaskNotification(title: title, body: body);
+          // Skip the first snapshot (existing data)
+          if (_isFirstNotifSnapshot) {
+            _isFirstNotifSnapshot = false;
+            return;
           }
-        }
-      }
-    });
+
+          for (final change in snapshot.docChanges) {
+            if (change.type == DocumentChangeType.added) {
+              final data = change.doc.data();
+              if (data == null) continue;
+
+              final leadId = (data['lead_id'] ?? '').toString().toLowerCase();
+              final isRead = data['read'] == true;
+
+              // Only show for this user + unread
+              if (leadId == empId && !isRead) {
+                final title = data['title'] ?? 'Task Notification';
+                final body = data['body'] ?? '';
+                _showTaskNotification(title: title, body: body);
+              }
+            }
+          }
+        });
   }
 
   Future<void> _saveFcmToken() async {

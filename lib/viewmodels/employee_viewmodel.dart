@@ -117,14 +117,17 @@ class EmployeeViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Search filter
+  /// Unified search across emp_id, name, work email, and personal email.
   void filterEmployees(String query) {
     if (query.isEmpty) {
       _filteredEmployees = List<Employee>.from(_employees);
     } else {
+      final q = query.toLowerCase().trim();
       _filteredEmployees = _employees.where((e) {
-        return e.name.toLowerCase().contains(query.toLowerCase()) ||
-            e.email.toLowerCase().contains(query.toLowerCase());
+        return e.emp_id.toLowerCase().contains(q) ||
+            e.name.toLowerCase().contains(q) ||
+            e.email.toLowerCase().contains(q) ||
+            (e.personalEmail ?? '').toLowerCase().contains(q);
       }).toList();
     }
 
@@ -152,37 +155,96 @@ class EmployeeViewModel extends ChangeNotifier {
     }
   }
 
-  /// Update employee
+  /// Update employee. If `jobDescription` changed, also notifies the
+  /// employee in-app so they know HR updated their JD.
   Future<void> updateEmployee(Employee employee) async {
     try {
+      // Capture the previous JD before mutating local state, so we can
+      // detect a change and notify the employee.
+      final oldIndex = _employees.indexWhere((e) => e.uid == employee.uid);
+      final oldJd = (oldIndex != -1 ? _employees[oldIndex].jobDescription : null) ?? '';
+      final newJd = (employee.jobDescription ?? '').trim();
+      final jdChanged = oldJd.trim() != newJd && newJd.isNotEmpty;
+
       await _firestore
           .collection('users')
           .doc(employee.uid)
           .update(employee.toMap());
 
-      final index = _employees.indexWhere((e) => e.uid == employee.uid);
-      if (index != -1) {
-        _employees[index] = employee;
+      if (oldIndex != -1) {
+        _employees[oldIndex] = employee;
       }
 
       _filteredEmployees = List<Employee>.from(_employees);
       notifyListeners();
+
+      if (jdChanged && employee.emp_id.isNotEmpty) {
+        await _firestore.collection('task_notifications').add({
+          'lead_id': employee.emp_id,
+          'title': 'Job Description Updated',
+          'body': 'Your job description was updated by HR. '
+              'Open your profile to review the changes.',
+          'type': 'task',
+          'createdAt': FieldValue.serverTimestamp(),
+          'read': false,
+        });
+      }
     } catch (e) {
       debugPrint("Error updating employee: $e");
     }
   }
 
-  /// Optional: Delete employee
-  Future<void> deleteEmployee(String uid) async {
+  /// Soft-delete: marks employee inactive but keeps the doc & all history.
+  /// Optionally pass `archivedByUid` (HR's UID) for audit.
+  Future<void> deleteEmployee(String uid, {String? archivedByUid}) async {
     try {
-      await _firestore.collection('users').doc(uid).delete();
+      await _firestore.collection('users').doc(uid).update({
+        'isActive': false,
+        'archivedAt': FieldValue.serverTimestamp(),
+        if (archivedByUid != null) 'archivedBy': archivedByUid,
+      });
 
       _employees.removeWhere((e) => e.uid == uid);
       _filteredEmployees = List<Employee>.from(_employees);
 
       notifyListeners();
     } catch (e) {
-      debugPrint("Error deleting employee: $e");
+      debugPrint("Error archiving employee: $e");
+    }
+  }
+
+  // ── Ex-Employees (archived) ─────────────────────────────────────────────
+  List<Employee> _exEmployees = [];
+  List<Employee> get exEmployees => List.unmodifiable(_exEmployees);
+
+  Future<void> loadExEmployees() async {
+    try {
+      final snap = await _firestore
+          .collection('users')
+          .where('role', isEqualTo: 'employee')
+          .get();
+      _exEmployees = snap.docs
+          .map((d) => Employee.fromMap(d.data(), uid: d.id))
+          .where((e) => !e.isActive)
+          .toList();
+      notifyListeners();
+    } catch (e) {
+      debugPrint("Error loading ex-employees: $e");
+    }
+  }
+
+  /// Restore an archived employee back to the active list.
+  Future<void> restoreEmployee(String uid) async {
+    try {
+      await _firestore.collection('users').doc(uid).update({
+        'isActive': true,
+        'archivedAt': FieldValue.delete(),
+        'archivedBy': FieldValue.delete(),
+      });
+      _exEmployees.removeWhere((e) => e.uid == uid);
+      notifyListeners();
+    } catch (e) {
+      debugPrint("Error restoring employee: $e");
     }
   }
 }

@@ -6,30 +6,33 @@ import '../../viewmodels/auth_viewmodel.dart';
 import '../employee_views/EmployeeGoalsScreen.dart';
 import '../employee_views/team_reports_screen.dart';
 import '../HR_views/employee_reports_screen.dart';
+import '../HR_views/AssignTaskByHR.dart';
 
 class TaskNotificationsScreen extends StatelessWidget {
   final String recipientId;
   const TaskNotificationsScreen({super.key, required this.recipientId});
 
-  /// Determine the target screen based on notification type/title and user role
+  /// Determine the target screen based on the notification type AND the
+  /// receiver's role. The receiver's role is the source of truth — never
+  /// the sender's context. This prevents HR from being routed to the
+  /// employee-side screen when an employee notifies them.
   void _navigateToScreen(BuildContext context, Map<String, dynamic> n) {
     final type = (n['type'] ?? '').toString();
     final title = (n['title'] ?? '').toString();
     final user = context.read<AuthViewModel>().currentUser;
-    final role = user?.role ?? '';
+    final role = (user?.role ?? '').toLowerCase();
+    final isHR = role == 'hr';
 
     Widget targetScreen;
 
     // Report-related notifications
     if (type == 'report' || title.contains('Report')) {
-      if (role == 'hr') {
-        targetScreen = const EmployeeReportsScreen();
-      } else {
-        targetScreen = const TeamReportsScreen();
-      }
+      targetScreen =
+          isHR ? const EmployeeReportsScreen() : const TeamReportsScreen();
     } else {
-      // Task, team, and all other notifications → Goals/Tasks screen
-      targetScreen = const EmployeeGoalsScreen();
+      // Task & team notifications — route by RECEIVER's role
+      targetScreen =
+          isHR ? const AssignTaskByHR() : const EmployeeGoalsScreen();
     }
 
     Navigator.push(

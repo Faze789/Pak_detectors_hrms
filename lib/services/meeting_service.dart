@@ -327,6 +327,104 @@ class MeetingService {
     );
   }
 
+  /// HR cancels a previously approved meeting. Notifies organizer + attendees.
+  Future<void> cancelMeeting({
+    required MeetingModel meeting,
+    required String reason,
+    required List<UserModel> allUsers,
+  }) async {
+    final batch = _firestore.batch();
+
+    batch.update(_firestore.collection('meetings').doc(meeting.id), {
+      'status': 'cancelled',
+      'cancelledAt': Timestamp.now(),
+      'cancellationReason': reason,
+    });
+
+    // Notify organizer + every attendee in-app
+    final recipientIds = <String>{
+      meeting.organizerId,
+      ...meeting.attendeeIds,
+    }..removeWhere((id) => id.isEmpty);
+
+    for (final uid in recipientIds) {
+      final notifRef = _firestore.collection('notifications').doc();
+      batch.set(notifRef, {
+        'userId': uid,
+        'title': 'Meeting Cancelled',
+        'body': '"${meeting.title}" on ${_formatDate(meeting.dateTime)} '
+            'was cancelled by HR. Reason: $reason',
+        'meetingId': meeting.id,
+        'isRead': false,
+        'createdAt': Timestamp.now(),
+        'type': 'meeting_rejected',
+      });
+    }
+
+    await batch.commit();
+
+    // FCM push to everyone
+    final recipientUsers = allUsers
+        .where((u) => recipientIds.contains(u.id))
+        .toList();
+    await _sendPushToUsers(
+      userIds: recipientIds.toList(),
+      employees: recipientUsers,
+      title: 'Meeting Cancelled',
+      body: '"${meeting.title}" was cancelled. Reason: $reason',
+      data: {'meetingId': meeting.id, 'type': 'meeting_cancelled'},
+    );
+  }
+
+  /// HR sets / updates a conclusion (summary) for a meeting after it ended.
+  /// The conclusion is visible to organizer and all attendees.
+  Future<void> setMeetingConclusion({
+    required MeetingModel meeting,
+    required String conclusion,
+    required List<UserModel> allUsers,
+    bool markCompleted = true,
+  }) async {
+    final batch = _firestore.batch();
+
+    final updates = <String, dynamic>{'conclusion': conclusion};
+    if (markCompleted && meeting.status != MeetingStatus.cancelled) {
+      updates['status'] = 'completed';
+    }
+    batch.update(_firestore.collection('meetings').doc(meeting.id), updates);
+
+    // Notify organizer + attendees
+    final recipientIds = <String>{
+      meeting.organizerId,
+      ...meeting.attendeeIds,
+    }..removeWhere((id) => id.isEmpty);
+
+    for (final uid in recipientIds) {
+      final notifRef = _firestore.collection('notifications').doc();
+      batch.set(notifRef, {
+        'userId': uid,
+        'title': 'Meeting Summary Available',
+        'body': 'Summary added for "${meeting.title}". Tap to read.',
+        'meetingId': meeting.id,
+        'isRead': false,
+        'createdAt': Timestamp.now(),
+        'type': 'meeting_approved',
+      });
+    }
+
+    await batch.commit();
+
+    final recipientUsers = allUsers
+        .where((u) => recipientIds.contains(u.id))
+        .toList();
+    await _sendPushToUsers(
+      userIds: recipientIds.toList(),
+      employees: recipientUsers,
+      title: 'Meeting Summary Available',
+      body: '"${meeting.title}" summary is ready.',
+      data: {'meetingId': meeting.id, 'type': 'meeting_summary'},
+    );
+  }
+
   // ─── Users ───────────────────────────────────────────────────
 
   Future<List<UserModel>> getAllEmployees() async {

@@ -92,26 +92,26 @@ class _HRDashboardScreenState extends State<HRDashboardScreen> {
     final employees = context.read<EmployeeViewModel>().employees;
     final today = DateTime.now();
 
-    final results = await Future.wait(
-      employees.map((emp) async {
-        final rec = await _attendanceVM.getArchivedAttendanceForDay(
-          emp.uid,
-          today,
-        );
-        return MapEntry(emp.uid, rec);
-      }),
-    );
+    // final results = await Future.wait(
+    //   employees.map((emp) async {
+    //     final rec = await _attendanceVM.getArchivedAttendanceForDay(
+    //       emp.uid,
+    //       today,
+    //     );
+    //     return MapEntry(emp.uid, rec);
+    //   }),
+    // );
 
-    if (!mounted) return;
-    setState(() {
-      _archiveRecords.clear();
-      for (final entry in results) {
-        if (entry.value != null) {
-          _archiveRecords[entry.key] = entry.value!;
-        }
-      }
-      _archiveLoading = false;
-    });
+    // if (!mounted) return;
+    // setState(() {
+    //   _archiveRecords.clear();
+    //   for (final entry in results) {
+    //     if (entry.value != null) {
+    //       _archiveRecords[entry.key] = entry.value!;
+    //     }
+    //   }
+    //   _archiveLoading = false;
+    // });
   }
 
   // ── Merge live + archive into one record per employee ─────────────────────
@@ -184,70 +184,25 @@ class _HRDashboardScreenState extends State<HRDashboardScreen> {
 
         return Scaffold(
           backgroundColor: const Color(0xFFF1F5F9),
-          body: _dashVM.isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : SafeArea(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildHeader(context),
-                        const SizedBox(height: 24),
-
-                        if (_dashVM.errorMessage != null) ...[
-                          _ErrorBanner(message: _dashVM.errorMessage!),
-                          const SizedBox(height: 16),
-                        ],
-
-                        // ── Real-time stat cards ──────────────────────
-                        _StatCardsGrid(
-                          totalEmployees: empVM.employees.length,
-                          presentCount: _presentCount,
-                          onBreakCount: _onBreakCount,
-                          absentCount: _absentCount,
-                          lateCount: _lateCount,
-                          onLeaveCount: _onLeaveCount,
-                          attendanceRate: _attendanceRate,
-                          employees: empVM.employees,
-                        ),
-                        const SizedBox(height: 24),
-
-                        // ── Charts + department summary ───────────────
-                        _ChartsAndDepartments(
-                          present: _presentCount,
-                          onBreak: _onBreakCount,
-                          absent: _absentCount,
-                          late: _lateCount,
-                          onLeave: _onLeaveCount,
-                          checkedOut: _checkedOutCount,
-                          total: empVM.employees.length,
-                          employees: empVM.employees,
-                        ),
-                        const SizedBox(height: 24),
-
-                        // ── Real-time team attendance table ───────────
-                        _LiveAttendanceTable(
-                          attendanceVM: _attendanceVM,
-                          employeeVM: empVM,
-                          liveRecords: _liveRecords,
-                          archiveRecords: _archiveRecords,
-                          archiveLoading: _archiveLoading,
-                          onLiveUpdate: (uid, rec) {
-                            setState(() {
-                              if (rec != null) {
-                                _liveRecords[uid] = rec;
-                              } else {
-                                _liveRecords.remove(uid);
-                              }
-                            });
-                          },
-                          onRefresh: _loadTodayArchive,
-                        ),
-                      ],
-                    ),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeader(context),
+                  const SizedBox(height: 24),
+                  // Attendance dashboard is temporarily disabled while
+                  // we rework the attendance flow. Header + notifications
+                  // remain functional; the heavy widgets (stats grid,
+                  // charts, live table) are intentionally omitted here.
+                  _AttendanceUnavailableCard(
+                    employeeCount: empVM.employees.length,
                   ),
-                ),
+                ],
+              ),
+            ),
+          ),
         );
       },
     );
@@ -281,20 +236,16 @@ class _HRDashboardScreenState extends State<HRDashboardScreen> {
         ),
         Row(
           children: [
-            // Refresh button — re-polls archive for today
+            // Refresh button — kept for parity. Attendance reload is
+            // disabled for now, so this just reloads the employee list.
             IconButton(
-              onPressed: _loadTodayArchive,
-              icon: _archiveLoading
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(
-                      Icons.refresh_rounded,
-                      size: 22,
-                      color: Color(0xFF475569),
-                    ),
+              onPressed: () =>
+                  context.read<EmployeeViewModel>().loadEmployees(''),
+              icon: const Icon(
+                Icons.refresh_rounded,
+                size: 22,
+                color: Color(0xFF475569),
+              ),
               style: IconButton.styleFrom(
                 backgroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
@@ -302,12 +253,14 @@ class _HRDashboardScreenState extends State<HRDashboardScreen> {
                 ),
                 padding: const EdgeInsets.all(12),
               ),
-              tooltip: 'Refresh attendance',
+              tooltip: 'Refresh',
             ),
             const SizedBox(width: 8),
             if (_hrEmpId != null)
               StreamBuilder<int>(
-                stream: _taskService.streamUnreadTaskNotificationCount(_hrEmpId!),
+                stream: _taskService.streamUnreadTaskNotificationCount(
+                  _hrEmpId!,
+                ),
                 builder: (context, snap) {
                   final count = snap.data ?? 0;
                   return Stack(
@@ -1850,6 +1803,154 @@ class _ErrorBanner extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Placeholder shown while the attendance dashboard is disabled.
+// Keeps the page useful (employee count visible, friendly empty state)
+// instead of showing an infinite spinner or red error banner.
+// ─────────────────────────────────────────────────────────────────────────────
+class _AttendanceUnavailableCard extends StatelessWidget {
+  final int employeeCount;
+  const _AttendanceUnavailableCard({required this.employeeCount});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Quick stat — total employees, since this still works.
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.people_alt_rounded,
+                  color: Color(0xFF2563EB),
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Total Employees',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '$employeeCount',
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // Friendly empty state for the (disabled) attendance section.
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(28),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Column(
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  Icons.schedule_rounded,
+                  size: 30,
+                  color: Color(0xFF64748B),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Attendance dashboard coming soon',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Real-time attendance, stats, and the live team table '
+                'will be enabled in the next release.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFF64748B),
+                  height: 1.45,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.bolt_rounded,
+                      size: 14,
+                      color: Color(0xFF92400E),
+                    ),
+                    SizedBox(width: 4),
+                    Text(
+                      'In progress',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF92400E),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

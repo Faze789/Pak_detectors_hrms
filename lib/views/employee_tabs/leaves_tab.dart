@@ -463,13 +463,46 @@ class _LeaveHistoryTile extends StatelessWidget {
                 ),
                 if (leave.hrNote != null && leave.hrNote!.isNotEmpty)
                   Text(
-                    'HR: ${leave.hrNote}',
+                    'Note: ${leave.hrNote}',
                     style: const TextStyle(
                       fontSize: 10,
                       color: Color(0xFF94A3B8),
                       fontStyle: FontStyle.italic,
                     ),
                   ),
+                if (leave.approvals.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  ...leave.approvals.map((a) {
+                    final action = (a['action'] ?? '').toString();
+                    final name = (a['name'] ?? '').toString();
+                    final ts = a['decidedAt'];
+                    final whenStr = ts != null
+                        ? (() {
+                            try {
+                              final d = (ts as dynamic).toDate() as DateTime;
+                              return DateFormat('MMM d, HH:mm').format(d);
+                            } catch (_) {
+                              return '';
+                            }
+                          })()
+                        : '';
+                    final isApproved = action == 'approved';
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        '${isApproved ? "✓" : "✗"} $name ${isApproved ? "approved" : "rejected"}'
+                        '${whenStr.isNotEmpty ? " · $whenStr" : ""}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isApproved
+                              ? const Color(0xFF065F46)
+                              : const Color(0xFF991B1B),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    );
+                  }),
+                ],
                 const SizedBox(height: 3),
                 Text(
                   'Submitted: ${fmt.format(leave.submittedAt)}',

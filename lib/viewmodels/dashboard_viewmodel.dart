@@ -22,8 +22,8 @@ class DashboardViewModel extends ChangeNotifier {
   DashboardViewModel({
     required EmployeeViewModel employeeViewModel,
     AttendanceService? service,
-  })  : _employeeVM = employeeViewModel,
-        _service = service ?? AttendanceService() {
+  }) : _employeeVM = employeeViewModel,
+       _service = service ?? AttendanceService() {
     // Re-notify whenever employee list changes (e.g. after loadEmployees())
     _employeeVM.addListener(_onEmployeeVMChanged);
   }
@@ -42,21 +42,21 @@ class DashboardViewModel extends ChangeNotifier {
 
   /// Present = checked in + on break (both are physically at work)
   int get presentCount => _liveRecords
-      .where((r) =>
-  r.status == AttendanceStatus.checkedIn ||
-      r.status == AttendanceStatus.onBreak)
+      .where(
+        (r) =>
+            r.status == AttendanceStatus.checkedIn ||
+            r.status == AttendanceStatus.onBreak,
+      )
       .length;
 
   /// On break right now
-  int get onBreakCount => _liveRecords
-      .where((r) => r.status == AttendanceStatus.onBreak)
-      .length;
+  int get onBreakCount =>
+      _liveRecords.where((r) => r.status == AttendanceStatus.onBreak).length;
 
   /// Already checked out today (live doc deleted after check-out, so this
   /// counts only those still in live — typically 0, but kept for safety)
-  int get checkedOutTodayCount => _liveRecords
-      .where((r) => r.status == AttendanceStatus.checkedOut)
-      .length;
+  int get checkedOutTodayCount =>
+      _liveRecords.where((r) => r.status == AttendanceStatus.checkedOut).length;
 
   /// Anyone with a live doc = has checked in at some point today
   int get checkedInTodayCount => _liveRecords.length;
@@ -84,7 +84,7 @@ class DashboardViewModel extends ChangeNotifier {
     notifyListeners();
 
     _liveSub = _service.streamTodayLiveAttendance().listen(
-          (records) {
+      (records) {
         _liveRecords = records;
         isLoading = false;
         errorMessage = null;

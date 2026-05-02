@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
@@ -48,6 +49,9 @@ class AttendanceScreen extends StatefulWidget {
 class _AttendanceScreenState extends State<AttendanceScreen> {
   late final Timer _clockTimer;
   DateTime _now = DateTime.now();
+  // Hides the attendance card behind a "Mark My Attendance" CTA until
+  // the user taps. Auto-reveals if there's already a record for today.
+  bool _attendanceRevealed = false;
 
   @override
   void initState() {
@@ -65,6 +69,109 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   void dispose() {
     _clockTimer.cancel();
     super.dispose();
+  }
+
+  /// Called when the user taps "Mark My Attendance".
+  /// Ensures location services + permission are granted before revealing
+  /// the check-in card. If denied, shows a dialog and offers to open
+  /// settings.
+  Future<void> _onMarkAttendanceTap() async {
+    final granted = await _ensureLocationReady();
+    if (!mounted) return;
+    if (!granted) return;
+    setState(() => _attendanceRevealed = true);
+  }
+
+  /// Returns true if GPS is on AND permission is granted (whileInUse/always).
+  /// Otherwise shows the appropriate dialog and returns false.
+  Future<bool> _ensureLocationReady() async {
+    // 1. GPS hardware on?
+    final servicesOn = await Geolocator.isLocationServiceEnabled();
+    if (!servicesOn) {
+      if (!mounted) return false;
+      await _showLocationDialog(
+        title: 'Turn On Location',
+        body: 'GPS is off on this device. Attendance check-in needs your '
+            'location to verify you\'re at the office. Open settings to '
+            'turn it on.',
+        actionLabel: 'Open Location Settings',
+        onAction: Geolocator.openLocationSettings,
+      );
+      return false;
+    }
+
+    // 2. App-level permission?
+    var perm = await Geolocator.checkPermission();
+    if (perm == LocationPermission.denied) {
+      perm = await Geolocator.requestPermission();
+    }
+    if (perm == LocationPermission.deniedForever) {
+      if (!mounted) return false;
+      await _showLocationDialog(
+        title: 'Location Permission Blocked',
+        body: 'You\'ve previously denied location for this app. Open the '
+            'app settings to enable it manually.',
+        actionLabel: 'Open App Settings',
+        onAction: Geolocator.openAppSettings,
+      );
+      return false;
+    }
+    if (perm != LocationPermission.always &&
+        perm != LocationPermission.whileInUse) {
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Location permission is required to check in.'),
+          backgroundColor: Color(0xFFDC2626),
+        ),
+      );
+      return false;
+    }
+    return true;
+  }
+
+  Future<void> _showLocationDialog({
+    required String title,
+    required String body,
+    required String actionLabel,
+    required Future<bool> Function() onAction,
+  }) {
+    return showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        icon: const Icon(
+          Icons.location_on_rounded,
+          color: Color(0xFF2563EB),
+          size: 36,
+        ),
+        title: Text(
+          title,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+        ),
+        content: Text(
+          body,
+          style: const TextStyle(fontSize: 13, height: 1.45),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Not Now'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await onAction();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2563EB),
+              foregroundColor: Colors.white,
+            ),
+            child: Text(actionLabel),
+          ),
+        ],
+      ),
+    );
   }
 
   // ── Status badge config ───────────────────────────────────────────────────
@@ -260,11 +367,19 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                             ),
                             const SizedBox(height: 12),
                           ],
-                          _buildMainCard(vm, uid),
-                          const SizedBox(height: 16),
-                          _StatsGrid(vm: vm),
-                          const SizedBox(height: 16),
-                          _ActivityLog(vm: vm),
+                          // "Mark My Attendance" entry — collapsed until tapped.
+                          // Once tapped (or if user has already checked in
+                          // today), shows the same card as the dashboard:
+                          // date, check-in time, check-out time, action btn.
+                          if (_attendanceRevealed ||
+                              vm.todayAttendance != null)
+                            _buildMainCard(vm, uid)
+                          else
+                            _MarkAttendanceCta(
+                              onTap: () => _onMarkAttendanceTap(),
+                            ),
+                          const SizedBox(height: 24),
+                          _MonthlyHistorySection(uid: uid),
                           const SizedBox(height: 32),
                         ]),
                       ),
@@ -1984,4 +2099,433 @@ class _ErrorBanner extends StatelessWidget {
       ],
     ),
   );
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// "Mark My Attendance" CTA — full-width button shown when the user hasn't
+// yet revealed today's attendance card. Tapping it sets _attendanceRevealed
+// = true and the parent rebuilds with the actual check-in card.
+// ─────────────────────────────────────────────────────────────────────────────
+class _MarkAttendanceCta extends StatelessWidget {
+  final VoidCallback onTap;
+  const _MarkAttendanceCta({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF2563EB), Color(0xFF3B82F6)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF2563EB).withOpacity(0.25),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Icon(
+              Icons.fingerprint_rounded,
+              size: 32,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Mark Your Attendance',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            "Tap to check in for today and view your attendance details.",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              color: Color(0xFFDBEAFE),
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: onTap,
+              icon: const Icon(
+                Icons.login_rounded,
+                size: 18,
+                color: Color(0xFF1D4ED8),
+              ),
+              label: const Text(
+                'Mark My Attendance',
+                style: TextStyle(
+                  color: Color(0xFF1D4ED8),
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 0,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Monthly attendance history section.
+// Shows a horizontal pill-strip of the last 12 months. Tapping a month
+// fetches that month's archive and displays present / absent / leave / late
+// counts in a stats panel below.
+// ─────────────────────────────────────────────────────────────────────────────
+class _MonthlyHistorySection extends StatefulWidget {
+  final String uid;
+  const _MonthlyHistorySection({required this.uid});
+
+  @override
+  State<_MonthlyHistorySection> createState() =>
+      _MonthlyHistorySectionState();
+}
+
+class _MonthlyHistorySectionState extends State<_MonthlyHistorySection> {
+  late DateTime _selectedMonth;
+  bool _loading = false;
+  MonthlyArchive? _archive;
+
+  static const _monthLabels = [
+    'Jan','Feb','Mar','Apr','May','Jun',
+    'Jul','Aug','Sep','Oct','Nov','Dec',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _selectedMonth = DateTime(now.year, now.month, 1);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load(_selectedMonth));
+  }
+
+  Future<void> _load(DateTime month) async {
+    if (!mounted) return;
+    setState(() => _loading = true);
+    try {
+      final vm = context.read<AttendanceViewModel>();
+      final archive = await vm.getMonthlyArchiveSilent(
+        widget.uid,
+        month.year,
+        month.month,
+      );
+      if (!mounted) return;
+      setState(() {
+        _archive = archive;
+        _selectedMonth = month;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _archive = null);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Last 12 months including current, newest first.
+  List<DateTime> get _months {
+    final now = DateTime.now();
+    return List.generate(12, (i) {
+      final m = now.month - i;
+      final yShift = (m - 1) ~/ 12;
+      final monthMod = ((m - 1) % 12 + 12) % 12 + 1;
+      return DateTime(now.year + yShift, monthMod, 1);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Attendance History',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF0F172A),
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Tap a month to see your stats',
+            style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+          ),
+          const SizedBox(height: 14),
+          // Month pill strip
+          SizedBox(
+            height: 64,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _months.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (_, i) {
+                final m = _months[i];
+                final selected = m.year == _selectedMonth.year &&
+                    m.month == _selectedMonth.month;
+                return GestureDetector(
+                  onTap: () => _load(m),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    width: 64,
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? const Color(0xFF2563EB)
+                          : const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: selected
+                            ? const Color(0xFF2563EB)
+                            : const Color(0xFFE2E8F0),
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          _monthLabels[m.month - 1],
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: selected
+                                ? Colors.white
+                                : const Color(0xFF0F172A),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: selected
+                                ? const Color(0xFFBFDBFE)
+                                : const Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Stats panel for the selected month
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.all(20),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else
+            _MonthlyStatsPanel(month: _selectedMonth, archive: _archive),
+        ],
+      ),
+    );
+  }
+}
+
+class _MonthlyStatsPanel extends StatelessWidget {
+  final DateTime month;
+  final MonthlyArchive? archive;
+  const _MonthlyStatsPanel({required this.month, required this.archive});
+
+  @override
+  Widget build(BuildContext context) {
+    final monthLabel = DateFormat('MMMM yyyy').format(month);
+    final present = archive?.presentDays ?? 0;
+    final absent = archive?.absentDays ?? 0;
+    final leave = archive?.leaveDays ?? 0;
+    final total = archive?.totalDays ?? 0;
+    final late = archive?.days.values
+            .where((d) => d.status == AttendanceStatus.late)
+            .length ??
+        0;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.calendar_month_rounded,
+                size: 16,
+                color: Color(0xFF2563EB),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                monthLabel,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '$total records',
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: Color(0xFF64748B),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (archive == null || total == 0)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                'No attendance records for this month yet.',
+                style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+              ),
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: _StatTile(
+                    label: 'Present',
+                    value: present,
+                    color: const Color(0xFF10B981),
+                    bg: const Color(0xFFD1FAE5),
+                    icon: Icons.check_circle_rounded,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _StatTile(
+                    label: 'Absent',
+                    value: absent,
+                    color: const Color(0xFFEF4444),
+                    bg: const Color(0xFFFEE2E2),
+                    icon: Icons.cancel_rounded,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _StatTile(
+                    label: 'Leave',
+                    value: leave,
+                    color: const Color(0xFF3B82F6),
+                    bg: const Color(0xFFDBEAFE),
+                    icon: Icons.beach_access_rounded,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _StatTile(
+                    label: 'Late',
+                    value: late,
+                    color: const Color(0xFFF59E0B),
+                    bg: const Color(0xFFFEF3C7),
+                    icon: Icons.schedule_rounded,
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatTile extends StatelessWidget {
+  final String label;
+  final int value;
+  final Color color;
+  final Color bg;
+  final IconData icon;
+
+  const _StatTile({
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.bg,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(height: 4),
+          Text(
+            '$value',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

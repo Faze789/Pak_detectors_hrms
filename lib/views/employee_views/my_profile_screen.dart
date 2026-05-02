@@ -44,7 +44,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<LeaveViewModel>().initForEmployee(widget.userId);
       context.read<EmployeeViewModel>().loadEmployees(widget.userId);
-      _loadAttendance();
+      // _loadAttendance();
     });
   }
 
@@ -161,7 +161,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                   _selectedYear = tempYear;
                   _selectedMonth = tempMonth;
                 });
-                _loadAttendance();
+                // _loadAttendance();
                 Navigator.pop(ctx);
               },
               child: const Text('Apply', style: TextStyle(color: Colors.white)),
@@ -402,11 +402,7 @@ class _ProfileHeader extends StatelessWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
-                            _roleIcon(role),
-                            color: Colors.white,
-                            size: 14,
-                          ),
+                          Icon(_roleIcon(role), color: Colors.white, size: 14),
                           const SizedBox(width: 5),
                           Text(
                             _roleLabel(role),
@@ -1731,7 +1727,10 @@ class _RoleBadgeRow extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(20),

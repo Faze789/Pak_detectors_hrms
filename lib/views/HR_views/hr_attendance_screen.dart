@@ -1,9 +1,6 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-
 import '../../models/attendance_model.dart';
 import '../../viewmodels/attendance_viewmodel.dart';
 import '../../viewmodels/employee_viewmodel.dart';
@@ -348,6 +345,7 @@ class _HRAttendanceScreenState extends State<HRAttendanceScreen> {
             padding: EdgeInsets.symmetric(horizontal: hPad, vertical: 16),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
+                const SizedBox(height: 12),
                 _StatsRow(
                   total: _total,
                   present: _present,

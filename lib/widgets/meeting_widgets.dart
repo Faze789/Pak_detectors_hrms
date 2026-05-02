@@ -10,6 +10,7 @@ class MeetingTheme {
       case MeetingStatus.pending:  return const Color(0xFFF59E0B);
       case MeetingStatus.rejected: return const Color(0xFFEF4444);
       case MeetingStatus.completed: return const Color(0xFF3B82F6);
+      case MeetingStatus.cancelled: return const Color(0xFF94A3B8);
     }
   }
 
@@ -19,6 +20,7 @@ class MeetingTheme {
       case MeetingStatus.pending:   return const Color(0xFFFFFBEB);
       case MeetingStatus.rejected:  return const Color(0xFFFEF2F2);
       case MeetingStatus.completed: return const Color(0xFFEFF6FF);
+      case MeetingStatus.cancelled: return const Color(0xFFF1F5F9);
     }
   }
 
@@ -28,6 +30,7 @@ class MeetingTheme {
       case MeetingStatus.pending:   return 'Pending';
       case MeetingStatus.rejected:  return 'Rejected';
       case MeetingStatus.completed: return 'Completed';
+      case MeetingStatus.cancelled: return 'Cancelled';
     }
   }
 
@@ -37,6 +40,7 @@ class MeetingTheme {
       case MeetingStatus.pending:   return Icons.schedule_rounded;
       case MeetingStatus.rejected:  return Icons.cancel_rounded;
       case MeetingStatus.completed: return Icons.task_alt_rounded;
+      case MeetingStatus.cancelled: return Icons.event_busy_rounded;
     }
   }
 

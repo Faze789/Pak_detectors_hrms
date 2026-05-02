@@ -1,4 +1,6 @@
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/employee_model.dart';
@@ -39,9 +41,13 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
   late TextEditingController unpaidLeaveCtrl;
   late TextEditingController jobDescriptionCtrl;
   late TextEditingController emergencyPhoneCtrl;
+  late TextEditingController personalEmailCtrl;
 
   EmployeeStatus status = EmployeeStatus.active;
   String _selectedRole = 'employee';
+  bool _resettingPassword = false;
+  bool _passwordVisible = false;
+  final _newPasswordCtrl = TextEditingController();
 
   bool get isEdit => widget.mode == EmployeeFormMode.edit;
 
@@ -88,6 +94,9 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
     emergencyPhoneCtrl = TextEditingController(
       text: widget.employee?.emergencyPhone ?? '',
     );
+    personalEmailCtrl = TextEditingController(
+      text: widget.employee?.personalEmail ?? '',
+    );
     status = widget.employee?.status ?? EmployeeStatus.active;
   }
 
@@ -107,7 +116,106 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
     unpaidLeaveCtrl.dispose();
     jobDescriptionCtrl.dispose();
     emergencyPhoneCtrl.dispose();
+    personalEmailCtrl.dispose();
+    _newPasswordCtrl.dispose();
     super.dispose();
+  }
+
+  /// Calls the `adminSetEmployeePassword` Cloud Function to set the
+  /// employee's Firebase Auth password AND store it in Firestore so HR
+  /// can view it later.
+  Future<void> _setEmployeePassword() async {
+    final newPassword = _newPasswordCtrl.text.trim();
+    if (newPassword.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Password must be at least 6 characters'),
+          backgroundColor: Color(0xFFDC2626),
+        ),
+      );
+      return;
+    }
+
+    final empUid = widget.employee?.uid ?? '';
+    final empName = widget.employee?.name ?? 'this employee';
+    if (empUid.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Employee uid is missing'),
+          backgroundColor: Color(0xFFDC2626),
+        ),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Text(
+          'Reset Password?',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          'Set a new password for $empName.\n\n'
+          'The employee will need to be told the new password — they\'ll '
+          'receive an in-app notification but not the password itself.',
+          style: const TextStyle(fontSize: 13, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Reset Password'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _resettingPassword = true);
+    try {
+      final callable = FirebaseFunctions.instance
+          .httpsCallable('adminSetEmployeePassword');
+      await callable.call({'uid': empUid, 'newPassword': newPassword});
+
+      if (!mounted) return;
+      _newPasswordCtrl.clear();
+      // Refresh employee data so the "last set" field updates
+      await context.read<EmployeeViewModel>().loadEmployees('');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Password reset successfully'),
+          backgroundColor: Color(0xFF16A34A),
+        ),
+      );
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed: ${e.message ?? e.code}'),
+          backgroundColor: const Color(0xFFDC2626),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed: $e'),
+          backgroundColor: const Color(0xFFDC2626),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _resettingPassword = false);
+    }
   }
 
   void saveEmployee() {
@@ -116,8 +224,8 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
     final vm = context.read<EmployeeViewModel>();
 
     if (isEdit) {
+      // emp_id is intentionally NOT updated — it's immutable after creation.
       final updatedEmployee = widget.employee!.copyWith(
-        emp_id: emp_id_controller.text.trim(),
         name: nameController.text.trim(),
         role: _selectedRole,
         department: departmentController.text.trim(),
@@ -132,6 +240,7 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
         unpaidLeaveQuota: int.tryParse(unpaidLeaveCtrl.text.trim()) ?? 0,
         jobDescription: jobDescriptionCtrl.text.trim(),
         emergencyPhone: emergencyPhoneCtrl.text.trim(),
+        personalEmail: personalEmailCtrl.text.trim(),
       );
       vm.updateEmployee(updatedEmployee);
     } else {
@@ -153,6 +262,7 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
         unpaidLeaveQuota: 0,
         jobDescription: jobDescriptionCtrl.text.trim(),
         emergencyPhone: emergencyPhoneCtrl.text.trim(),
+        personalEmail: personalEmailCtrl.text.trim(),
       );
       vm.addEmployee(newEmployee);
     }
@@ -193,9 +303,16 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
                   // ── Basic Info ───────────────────────────────────────────
                   TextFormField(
                     controller: emp_id_controller,
-                    decoration: const InputDecoration(
+                    enabled: !isEdit,
+                    decoration: InputDecoration(
                       labelText: 'Employee ID',
-                      border: OutlineInputBorder(),
+                      helperText: isEdit ? 'Cannot be changed' : null,
+                      border: const OutlineInputBorder(),
+                      filled: isEdit,
+                      fillColor: isEdit ? const Color(0xFFF1F5F9) : null,
+                      suffixIcon: isEdit
+                          ? const Icon(Icons.lock_outline, size: 18)
+                          : null,
                     ),
                     validator: (v) => v!.isEmpty ? 'Required' : null,
                   ),
@@ -288,6 +405,23 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
                     decoration: const InputDecoration(
                       labelText: 'Email',
                       border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.emailAddress,
+                    validator: (v) {
+                      if (v == null || v.isEmpty) return null;
+                      if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(v)) {
+                        return 'Invalid email';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: personalEmailCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Personal Email',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.alternate_email_rounded),
                     ),
                     keyboardType: TextInputType.emailAddress,
                     validator: (v) {
@@ -414,6 +548,85 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
                     ),
                   ),
 
+                  // ── Account Password (edit only) ─────────────────────────
+                  if (isEdit) ...[
+                    const SizedBox(height: 24),
+                    const Divider(),
+                    const SizedBox(height: 12),
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Account Password',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF374151),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildCurrentPasswordCard(),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _newPasswordCtrl,
+                      obscureText: !_passwordVisible,
+                      decoration: InputDecoration(
+                        labelText: 'New Password',
+                        hintText: 'min. 6 characters',
+                        border: const OutlineInputBorder(),
+                        prefixIcon: const Icon(Icons.lock_outline),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _passwordVisible
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                          ),
+                          onPressed: () => setState(
+                            () => _passwordVisible = !_passwordVisible,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed:
+                            _resettingPassword ? null : _setEmployeePassword,
+                        icon: _resettingPassword
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.lock_reset_rounded,
+                                size: 18,
+                                color: Colors.white,
+                              ),
+                        label: Text(
+                          _resettingPassword
+                              ? 'Resetting…'
+                              : 'Reset Password',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFDC2626),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+
                   const SizedBox(height: 24),
 
                   // ── Save Button ──────────────────────────────────────────
@@ -434,6 +647,104 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildCurrentPasswordCard() {
+    final pw = widget.employee?.lastSetPassword;
+    final setAt = widget.employee?.passwordSetAt;
+    final hasPassword = pw != null && pw.isNotEmpty;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF3C7),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFFDE68A)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Current password (last set by HR)',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF92400E),
+            ),
+          ),
+          const SizedBox(height: 6),
+          if (!hasPassword)
+            const Text(
+              'Unknown — set by employee',
+              style: TextStyle(
+                fontSize: 13,
+                fontStyle: FontStyle.italic,
+                color: Color(0xFF92400E),
+              ),
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: SelectableText(
+                    _passwordVisible ? pw : '•' * pw.length,
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  icon: Icon(
+                    _passwordVisible
+                        ? Icons.visibility_off
+                        : Icons.visibility,
+                    size: 18,
+                    color: const Color(0xFF92400E),
+                  ),
+                  onPressed: () => setState(
+                    () => _passwordVisible = !_passwordVisible,
+                  ),
+                ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(
+                    Icons.copy_rounded,
+                    size: 18,
+                    color: Color(0xFF92400E),
+                  ),
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: pw));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Password copied to clipboard'),
+                        backgroundColor: Color(0xFF16A34A),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          if (hasPassword && setAt != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Set on ${setAt.day}/${setAt.month}/${setAt.year} '
+              '${setAt.hour.toString().padLeft(2, '0')}:'
+              '${setAt.minute.toString().padLeft(2, '0')}',
+              style: const TextStyle(
+                fontSize: 10,
+                color: Color(0xFF92400E),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

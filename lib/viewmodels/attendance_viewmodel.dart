@@ -18,18 +18,18 @@ class AttendanceViewModel extends ChangeNotifier {
   AttendanceService get service => _service;
 
   AttendanceViewModel({AttendanceService? service})
-      : _service = service ?? AttendanceService();
+    : _service = service ?? AttendanceService();
 
   // ── State ─────────────────────────────────────────────────────────────────
-  ViewState      state        = ViewState.idle;
-  String?        errorMessage;
+  ViewState state = ViewState.idle;
+  String? errorMessage;
 
   AttendanceModel? todayAttendance;
-  LeaveModel?      _todayLeave;
-  bool             _isWeekend   = false;
-  String?          _holidayName;
-  OfficeSettings   _officeSettings = OfficeSettings.defaults();
-  List<AttendanceModel> history    = [];
+  LeaveModel? _todayLeave;
+  bool _isWeekend = false;
+  String? _holidayName;
+  OfficeSettings _officeSettings = OfficeSettings.defaults();
+  List<AttendanceModel> history = [];
 
   final Map<String, MonthlyArchive> _archiveCache = {};
   Map<String, MonthlyArchive> get monthlyArchiveCache => _archiveCache;
@@ -38,23 +38,23 @@ class AttendanceViewModel extends ChangeNotifier {
   Timer? _cleanupTimer;
 
   // ── Getters ───────────────────────────────────────────────────────────────
-  LeaveModel?    get todayLeave     => _todayLeave;
-  bool           get isWeekend      => _isWeekend;
-  String?        get holidayName    => _holidayName;
-  bool           get isNonWorkday   => _isWeekend || _holidayName != null;
+  LeaveModel? get todayLeave => _todayLeave;
+  bool get isWeekend => _isWeekend;
+  String? get holidayName => _holidayName;
+  bool get isNonWorkday => _isWeekend || _holidayName != null;
   OfficeSettings get officeSettings => _officeSettings;
 
   String get cutoffLabel {
-    final h      = _officeSettings.checkInCutoff;
+    final h = _officeSettings.checkInCutoff;
     final period = h >= 12 ? 'PM' : 'AM';
-    final hour   = h > 12 ? h - 12 : (h == 0 ? 12 : h);
+    final hour = h > 12 ? h - 12 : (h == 0 ? 12 : h);
     return '$hour:00 $period';
   }
 
   String get halfDayMarkLabel {
-    final h      = _officeSettings.halfDayMark;
+    final h = _officeSettings.halfDayMark;
     final period = h >= 12 ? 'PM' : 'AM';
-    final hour   = h > 12 ? h - 12 : (h == 0 ? 12 : h);
+    final hour = h > 12 ? h - 12 : (h == 0 ? 12 : h);
     return '$hour:00 $period';
   }
 
@@ -64,13 +64,13 @@ class AttendanceViewModel extends ChangeNotifier {
   }
 
   bool get checkedIn =>
-      todayAttendance?.checkInTime  != null &&
-          todayAttendance?.checkOutTime == null &&
-          (todayAttendance?.status == AttendanceStatus.checkedIn       ||
-              todayAttendance?.status == AttendanceStatus.onBreak         ||
-              todayAttendance?.status == AttendanceStatus.late            ||
-              todayAttendance?.status == AttendanceStatus.firstHalfLeave  ||
-              todayAttendance?.status == AttendanceStatus.secondHalfLeave);
+      todayAttendance?.checkInTime != null &&
+      todayAttendance?.checkOutTime == null &&
+      (todayAttendance?.status == AttendanceStatus.checkedIn ||
+          todayAttendance?.status == AttendanceStatus.onBreak ||
+          todayAttendance?.status == AttendanceStatus.late ||
+          todayAttendance?.status == AttendanceStatus.firstHalfLeave ||
+          todayAttendance?.status == AttendanceStatus.secondHalfLeave);
 
   bool get onBreak => todayAttendance?.status == AttendanceStatus.onBreak;
 
@@ -98,16 +98,16 @@ class AttendanceViewModel extends ChangeNotifier {
   // Used by endBreak() so the service writes the right value back.
   AttendanceStatus get _statusBeforeBreak {
     if (isFirstHalfLeave) return AttendanceStatus.firstHalfLeave;
-    if (wasLate)          return AttendanceStatus.late;
+    if (wasLate) return AttendanceStatus.late;
     return AttendanceStatus.checkedIn;
   }
 
-  List<BreakEntry> get breaks       => todayAttendance?.breaks ?? [];
-  int  get workSeconds              => todayAttendance?.totalWorkDuration.inSeconds  ?? 0;
-  int  get breakSeconds             => todayAttendance?.totalBreakDuration.inSeconds ?? 0;
-  int  get productivity             => todayAttendance?.productivityPercent           ?? 100;
+  List<BreakEntry> get breaks => todayAttendance?.breaks ?? [];
+  int get workSeconds => todayAttendance?.totalWorkDuration.inSeconds ?? 0;
+  int get breakSeconds => todayAttendance?.totalBreakDuration.inSeconds ?? 0;
+  int get productivity => todayAttendance?.productivityPercent ?? 100;
 
-  String get formattedWorkTime  => _fmt(workSeconds);
+  String get formattedWorkTime => _fmt(workSeconds);
   String get formattedBreakTime => _fmt(breakSeconds);
 
   static String _fmt(int secs) {
@@ -119,7 +119,7 @@ class AttendanceViewModel extends ChangeNotifier {
 
   static String formatTime(DateTime dt) =>
       '${dt.hour.toString().padLeft(2, '0')}:'
-          '${dt.minute.toString().padLeft(2, '0')}';
+      '${dt.minute.toString().padLeft(2, '0')}';
 
   // ══════════════════════════════════════════════════════════════════════════
   // INIT
@@ -136,10 +136,9 @@ class AttendanceViewModel extends ChangeNotifier {
 
   void _scheduleCleanup(String userId) {
     _cleanupTimer?.cancel();
-    final now      = DateTime.now();
-    final endHour  = _officeSettings.workEndHour;
-    final endOfDay =
-    DateTime(now.year, now.month, now.day, endHour, 55, 0);
+    final now = DateTime.now();
+    final endHour = _officeSettings.workEndHour;
+    final endOfDay = DateTime(now.year, now.month, now.day, endHour, 55, 0);
     if (now.isAfter(endOfDay)) return;
     _cleanupTimer = Timer(endOfDay.difference(now), () async {
       try {
@@ -179,7 +178,7 @@ class AttendanceViewModel extends ChangeNotifier {
       }
 
       todayAttendance =
-      await _service.getTodayAttendanceWithAbsence(userId);
+          await _service.getTodayAttendanceWithAbsence(userId);
 
       if (todayAttendance?.status != null &&
           todayAttendance!.status.isAnyLeave &&
@@ -203,17 +202,125 @@ class AttendanceViewModel extends ChangeNotifier {
   // CHECK-IN / CHECK-OUT / BREAKS
   // ══════════════════════════════════════════════════════════════════════════
 
+  /// City-based check-in — accepts user if at any of the 4 office cities
+  /// (Lahore / Islamabad / Karachi / UAE). Enforces weekend block and
+  /// the 9:00–18:00 (Pakistan time) attendance window.
+  Future<void> checkInFromCity(String userId) async {
+    if (checkedIn) return;
+
+    // ── Weekend block ──────────────────────────────────────────────────
+    if (_service.isWeekend(DateTime.now())) {
+      _setError('Attendance is disabled on weekends.');
+      return;
+    }
+
+    // ── 9:00–18:00 attendance window (Pakistan time) ───────────────────
+    // The device runs in local time. If the device IS in Asia/Karachi the
+    // hours line up directly; otherwise the user gets the window in their
+    // local time which is still the right behavior for travel.
+    final hour = DateTime.now().hour;
+    if (hour < 9) {
+      _setError(
+        'Check-in opens at 9:00 AM. Please try again then.',
+      );
+      return;
+    }
+    if (hour >= 18) {
+      _setError(
+        'Check-in closed at 6:00 PM. You can check in tomorrow at 9:00 AM.',
+      );
+      return;
+    }
+
+    _setLoading();
+    try {
+      final pos = await _service.getValidatedPositionFromCities();
+      todayAttendance = await _service.checkIn(
+        userId,
+        lat: pos.latitude,
+        lng: pos.longitude,
+      );
+
+      if (isFirstHalfLeave && todayAttendance?.leaveRequestId != null) {
+        _todayLeave = await _service.getLeaveById(
+          todayAttendance!.leaveRequestId!,
+        );
+      } else {
+        _todayLeave = null;
+      }
+
+      _startUITimer();
+    } on GeofenceException catch (e) {
+      _setError(e.message);
+    } catch (e) {
+      _setError('Check-in failed. Please try again.');
+    } finally {
+      _setIdle();
+    }
+  }
+
+  /// Check-out without location validation. Per company policy, checkout
+  /// doesn't require being at an office location, just a valid GPS sample.
+  /// Must be done before midnight; the day is "incomplete" otherwise.
+  Future<void> checkOutAnywhere(String userId) async {
+    if (!checkedIn || todayAttendance == null) return;
+
+    // Block check-out if it's already past midnight (i.e. attendance is for a
+    // previous day that the user is trying to close late).
+    final now = DateTime.now();
+    final attendanceDate = todayAttendance!.date;
+    if (now.day != attendanceDate.day ||
+        now.month != attendanceDate.month ||
+        now.year != attendanceDate.year) {
+      _setError('Check-out window expired (past midnight). Day not counted.');
+      return;
+    }
+
+    _setLoading();
+    try {
+      // Still take a GPS reading for the audit trail, but no geofence check.
+      double lat = todayAttendance!.checkInLatitude ?? 0;
+      double lng = todayAttendance!.checkInLongitude ?? 0;
+      try {
+        final pos = await _service.getMedianPosition();
+        lat = pos.latitude;
+        lng = pos.longitude;
+      } catch (_) {
+        // GPS unavailable → fall back to last known check-in coordinates.
+      }
+
+      todayAttendance = await _service.checkOut(
+        userId,
+        current: todayAttendance!,
+        lat: lat,
+        lng: lng,
+      );
+      _stopUITimer();
+      if (todayAttendance != null) {
+        await _service.archiveAttendance(todayAttendance!);
+      }
+    } catch (e) {
+      _setError('Check-out failed. Please try again.');
+    } finally {
+      _setIdle();
+    }
+  }
+
   Future<void> checkIn(String userId) async {
     if (checkedIn) return;
     _setLoading();
     try {
       final pos = await _service.getValidatedPositionForEmployee(userId);
       todayAttendance = await _service.checkIn(
-          userId, lat: pos.latitude, lng: pos.longitude);
+        userId,
+        lat: pos.latitude,
+        lng: pos.longitude,
+      );
 
       if (isFirstHalfLeave && todayAttendance?.leaveRequestId != null) {
-        _todayLeave =
-        await _service.getLeaveById(todayAttendance!.leaveRequestId!);
+        _todayLeave = await _service.getLeaveById(
+          todayAttendance!.leaveRequestId!,
+        );
       } else {
         _todayLeave = null;
       }
@@ -234,10 +341,11 @@ class AttendanceViewModel extends ChangeNotifier {
     try {
       final pos = await _service.getValidatedPositionForEmployee(userId);
       todayAttendance = await _service.checkOut(
-          userId,
-          current: todayAttendance!,
-          lat:     pos.latitude,
-          lng:     pos.longitude);
+        userId,
+        current: todayAttendance!,
+        lat: pos.latitude,
+        lng: pos.longitude,
+      );
       _stopUITimer();
       // archiveAttendance is now called inside service.checkOut() — this
       // call is kept for safety but will simply overwrite with same data.
@@ -260,8 +368,10 @@ class AttendanceViewModel extends ChangeNotifier {
 
     // Snapshot the status before switching to onBreak so endBreak
     // can restore it correctly via _statusBeforeBreak.
-    todayAttendance = todayAttendance!
-        .copyWith(status: AttendanceStatus.onBreak, breaks: updatedBreaks);
+    todayAttendance = todayAttendance!.copyWith(
+      status: AttendanceStatus.onBreak,
+      breaks: updatedBreaks,
+    );
     notifyListeners();
     try {
       await _service.startBreak(userId, updatedBreaks);
@@ -273,8 +383,10 @@ class AttendanceViewModel extends ChangeNotifier {
           : isFirstHalfLeave
           ? AttendanceStatus.firstHalfLeave
           : AttendanceStatus.checkedIn;
-      todayAttendance = todayAttendance!
-          .copyWith(status: prevStatus, breaks: rolledBack);
+      todayAttendance = todayAttendance!.copyWith(
+        status: prevStatus,
+        breaks: rolledBack,
+      );
       _setError('Start break failed: $e');
       notifyListeners();
     }
@@ -286,18 +398,21 @@ class AttendanceViewModel extends ChangeNotifier {
   // ─────────────────────────────────────────────────────────────────────────
   Future<void> endBreak(String userId) async {
     if (!onBreak || todayAttendance == null) return;
-    final now           = DateTime.now();
+    final now = DateTime.now();
     final updatedBreaks = List<BreakEntry>.from(breaks);
     if (updatedBreaks.isNotEmpty && updatedBreaks.last.breakEnd == null) {
-      updatedBreaks[updatedBreaks.length - 1] =
-          updatedBreaks.last.copyWith(breakEnd: now);
+      updatedBreaks[updatedBreaks.length - 1] = updatedBreaks.last.copyWith(
+        breakEnd: now,
+      );
     }
 
     // Restore the correct pre-break status using the immutable checkInTime
     final statusAfterBreak = _statusBeforeBreak;
 
-    todayAttendance = todayAttendance!
-        .copyWith(status: statusAfterBreak, breaks: updatedBreaks);
+    todayAttendance = todayAttendance!.copyWith(
+      status: statusAfterBreak,
+      breaks: updatedBreaks,
+    );
     notifyListeners();
     try {
       await _service.endBreak(
@@ -326,7 +441,10 @@ class AttendanceViewModel extends ChangeNotifier {
   }
 
   Future<MonthlyArchive?> getMonthlyArchive(
-      String userId, int year, int month) async {
+    String userId,
+    int year,
+    int month,
+  ) async {
     final key = '${userId}_${year}_${month.toString().padLeft(2, '0')}';
     if (_archiveCache.containsKey(key)) return _archiveCache[key];
     _setLoading();
@@ -343,7 +461,10 @@ class AttendanceViewModel extends ChangeNotifier {
   }
 
   Future<MonthlyArchive?> getMonthlyArchiveSilent(
-      String userId, int year, int month) async {
+    String userId,
+    int year,
+    int month,
+  ) async {
     final key = '${userId}_${year}_${month.toString().padLeft(2, '0')}';
     if (_archiveCache.containsKey(key)) return _archiveCache[key];
     try {
@@ -356,9 +477,14 @@ class AttendanceViewModel extends ChangeNotifier {
   }
 
   Future<AttendanceModel?> getArchivedAttendanceForDay(
-      String userId, DateTime date) async {
-    final archive =
-    await getMonthlyArchiveSilent(userId, date.year, date.month);
+    String userId,
+    DateTime date,
+  ) async {
+    final archive = await getMonthlyArchiveSilent(
+      userId,
+      date.year,
+      date.month,
+    );
     return archive?.days[DateTimeUtils.toDateKey(date)];
   }
 
@@ -389,13 +515,15 @@ class AttendanceViewModel extends ChangeNotifier {
   void _startUITimer() {
     _uiTimer?.cancel();
     _uiTimer = Timer.periodic(
-        const Duration(seconds: 1), (_) => notifyListeners());
+      const Duration(seconds: 1),
+      (_) => notifyListeners(),
+    );
   }
 
   void _stopUITimer() => _uiTimer?.cancel();
 
   void _setLoading() {
-    state        = ViewState.loading;
+    state = ViewState.loading;
     errorMessage = null;
     notifyListeners();
   }
@@ -406,14 +534,14 @@ class AttendanceViewModel extends ChangeNotifier {
   }
 
   void _setError(String msg) {
-    state        = ViewState.error;
+    state = ViewState.error;
     errorMessage = msg;
     notifyListeners();
   }
 
   void clearError() {
     errorMessage = null;
-    state        = ViewState.idle;
+    state = ViewState.idle;
     notifyListeners();
   }
 

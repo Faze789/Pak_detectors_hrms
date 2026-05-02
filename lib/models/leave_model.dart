@@ -161,6 +161,13 @@ class LeaveModel {
   final DateTime submittedAt;
   final String? hrNote;
 
+  // ── Multi-lead approval ───────────────────────────────────────────────────
+  /// emp_ids of leads who must approve. Empty for legacy / HR-only flows.
+  final List<String> requiredApproverEmpIds;
+  /// History of decisions, in chronological order. Each entry:
+  /// {empId, name, action: 'approved'|'rejected', decidedAt, note}
+  final List<Map<String, dynamic>> approvals;
+
   const LeaveModel({
     required this.id,
     required this.userId,
@@ -177,6 +184,8 @@ class LeaveModel {
     required this.status,
     required this.submittedAt,
     this.hrNote,
+    this.requiredApproverEmpIds = const [],
+    this.approvals = const [],
   });
 
   /// Convenience — is this a half-day leave of any kind?
@@ -208,6 +217,8 @@ class LeaveModel {
     'status': status.value,
     'submittedAt': Timestamp.fromDate(submittedAt),
     if (hrNote != null) 'hrNote': hrNote,
+    'requiredApproverEmpIds': requiredApproverEmpIds,
+    'approvals': approvals,
   };
 
   factory LeaveModel.fromMap(Map<String, dynamic> map, {required String id}) {
@@ -238,6 +249,14 @@ class LeaveModel {
       status: LeaveStatusX.fromString(map['status'] as String? ?? ''),
       submittedAt: ts(map['submittedAt']),
       hrNote: map['hrNote'] as String?,
+      requiredApproverEmpIds: List<String>.from(
+        (map['requiredApproverEmpIds'] as List?) ?? const [],
+      ),
+      approvals: List<Map<String, dynamic>>.from(
+        ((map['approvals'] as List?) ?? const []).map(
+          (e) => Map<String, dynamic>.from(e as Map),
+        ),
+      ),
     );
   }
 
@@ -246,6 +265,8 @@ class LeaveModel {
     LeaveDuration? duration,
     String? hrNote,
     double? deductedDays,
+    List<String>? requiredApproverEmpIds,
+    List<Map<String, dynamic>>? approvals,
   }) => LeaveModel(
     id: id,
     userId: userId,
@@ -262,6 +283,9 @@ class LeaveModel {
     status: status ?? this.status,
     submittedAt: submittedAt,
     hrNote: hrNote ?? this.hrNote,
+    requiredApproverEmpIds:
+        requiredApproverEmpIds ?? this.requiredApproverEmpIds,
+    approvals: approvals ?? this.approvals,
   );
 
   @override

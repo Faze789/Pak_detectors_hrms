@@ -54,6 +54,11 @@ class SidebarProvider {
           icon: Icons.people_outlined,
         ),
         SidebarItem(
+          id: 'ex-employees',
+          label: 'Ex-Employees',
+          icon: Icons.archive_outlined,
+        ),
+        SidebarItem(
           id: 'assign-task-employee-by-hr',
           label: 'Assign Task',
           icon: Icons.assignment_outlined,
@@ -154,11 +159,18 @@ class SidebarProvider {
               label: 'Team Reports',
               icon: Icons.group_outlined,
             ),
+          if (isLead)
+            const SidebarItem(
+              id: 'lead-leave-approvals',
+              label: 'Leave Approvals',
+              icon: Icons.fact_check_outlined,
+            ),
           const SidebarItem(
             id: 'my-profile',
             label: 'My Profile',
             icon: Icons.person_outline,
           ),
+
           const SidebarItem(
             id: 'my-meetings',
             label: 'My Meetings',
@@ -189,7 +201,11 @@ class SidebarProvider {
             label: 'Settings',
             icon: Icons.settings_outlined,
           ),
-          SidebarItem(id: 'help', label: 'Help Center', icon: Icons.help_outline),
+          SidebarItem(
+            id: 'help',
+            label: 'Help Center',
+            icon: Icons.help_outline,
+          ),
         ],
       ),
     ];
