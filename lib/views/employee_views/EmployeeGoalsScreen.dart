@@ -837,17 +837,26 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
               ),
               const SizedBox(height: 6),
 
-              // Description
-              Text(
-                task['description'] ?? '',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: Color(0xFF64748B),
-                  height: 1.4,
-                ),
+              // Primary description
+              _buildTaskDescBlock(
+                label: 'PRIMARY',
+                labelColor: const Color(0xFF1D4ED8),
+                labelBg: const Color(0xFFDBEAFE),
+                text: (task['description'] ?? '').toString(),
               ),
+              // Secondary description (if HR added one)
+              if ((task['secondaryDescription'] ?? '')
+                  .toString()
+                  .trim()
+                  .isNotEmpty) ...[
+                const SizedBox(height: 6),
+                _buildTaskDescBlock(
+                  label: 'SECONDARY',
+                  labelColor: const Color(0xFF7C3AED),
+                  labelBg: const Color(0xFFEDE9FE),
+                  text: (task['secondaryDescription'] ?? '').toString(),
+                ),
+              ],
 
               // Weekly progress for multi-week tasks (lead only)
               if (isLead && totalWeeks > 1 && isApproved) ...[
@@ -4256,6 +4265,50 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
   }
 
   // ─── Helper widgets ─────────────────────────────────────────────────────────
+
+  /// Compact "PRIMARY" / "SECONDARY" labelled description block used on
+  /// the lead's task card. Truncates to 2 lines.
+  Widget _buildTaskDescBlock({
+    required String label,
+    required Color labelColor,
+    required Color labelBg,
+    required String text,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          margin: const EdgeInsets.only(top: 2, right: 8),
+          decoration: BoxDecoration(
+            color: labelBg,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+              color: labelColor,
+              letterSpacing: 0.4,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            text,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 13,
+              color: Color(0xFF64748B),
+              height: 1.4,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 
   // ─── Forward Task to Member Sheet ───────────────────────────────────────────
 

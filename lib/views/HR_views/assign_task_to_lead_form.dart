@@ -18,6 +18,8 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
   final _formKey = GlobalKey<FormState>();
   final _titleCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
+  // Secondary task — optional
+  final _secondaryDescCtrl = TextEditingController();
 
   String? _selectedDuration;
   bool _isPrimary = true;
@@ -31,6 +33,8 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
 
   // Attachments — picked files ready to upload
   final List<PlatformFile> _pickedFiles = [];
+  // Secondary attachments — independent of primary
+  final List<PlatformFile> _secondaryPickedFiles = [];
   bool _uploading = false;
 
   static const List<String> _departments = [
@@ -65,10 +69,11 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
   void dispose() {
     _titleCtrl.dispose();
     _descCtrl.dispose();
+    _secondaryDescCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _pickFiles() async {
+  Future<void> _pickFiles({required List<PlatformFile> target}) async {
     final result = await FilePicker.platform.pickFiles(
       allowMultiple: true,
       type: kIsWeb ? FileType.custom : FileType.any,
@@ -76,13 +81,15 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
       withData: true,
     );
     if (result == null) return;
-    setState(() => _pickedFiles.addAll(result.files));
+    setState(() => target.addAll(result.files));
   }
 
-  /// Upload all picked files to Firebase Storage, returns list of attachment maps
-  Future<List<Map<String, dynamic>>> _uploadAttachments() async {
+  /// Upload picked files to Firebase Storage, returns list of attachment maps.
+  Future<List<Map<String, dynamic>>> _uploadAttachments(
+    List<PlatformFile> files,
+  ) async {
     final attachments = <Map<String, dynamic>>[];
-    for (final file in _pickedFiles) {
+    for (final file in files) {
       final fileName =
           '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
       final ref =
@@ -497,94 +504,42 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                   ),
                   const SizedBox(height: 20),
 
-                  // ── Task Description ────────────────────────────────
-                  _buildLabel('Task Description'),
+                  // ── Primary Task Description (required) ─────────────
+                  _buildLabel('Primary Task Description'),
                   const SizedBox(height: 8),
                   _buildTextField(
                     controller: _descCtrl,
-                    hint: 'Describe what needs to be done...',
+                    hint: 'Describe the primary task for the lead...',
                     icon: Icons.description_outlined,
                     maxLines: 5,
                     validator: (v) {
                       if (v == null || v.trim().isEmpty) {
-                        return 'Task description is required';
+                        return 'Primary task description is required';
                       }
                       return null;
                     },
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 8),
+                  _buildAttachmentsBox(
+                    label: 'Primary Attachments (optional)',
+                    files: _pickedFiles,
+                  ),
+                  const SizedBox(height: 24),
 
-                  // ── Attachments ────────────────────────────────────
-                  _buildLabel('Attachments (optional)'),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Attach PDF, DOC, or image files for this task.',
-                    style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                  // ── Secondary Task Description (optional) ───────────
+                  _buildLabel('Secondary Task Description (optional)'),
+                  const SizedBox(height: 8),
+                  _buildTextField(
+                    controller: _secondaryDescCtrl,
+                    hint: 'Optional second task — leave blank if none.',
+                    icon: Icons.notes_outlined,
+                    maxLines: 4,
+                    validator: (_) => null, // optional
                   ),
                   const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (_pickedFiles.isNotEmpty) ...[
-                          ..._pickedFiles.asMap().entries.map((entry) {
-                            final i = entry.key;
-                            final f = entry.value;
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 6),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.attach_file,
-                                      size: 16, color: Color(0xFF2563EB)),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: Text(
-                                      f.name,
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        color: Color(0xFF1E293B),
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  GestureDetector(
-                                    onTap: () =>
-                                        setState(() => _pickedFiles.removeAt(i)),
-                                    child: const Icon(Icons.close,
-                                        size: 16, color: Color(0xFFEF4444)),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }),
-                          const SizedBox(height: 6),
-                        ],
-                        OutlinedButton.icon(
-                          onPressed: _pickFiles,
-                          icon: const Icon(Icons.upload_file_rounded, size: 18),
-                          label: Text(
-                            _pickedFiles.isEmpty
-                                ? 'Choose Files'
-                                : 'Add More Files',
-                            style: const TextStyle(fontSize: 13),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF2563EB),
-                            side: const BorderSide(color: Color(0xFFCBD5E1)),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                  _buildAttachmentsBox(
+                    label: 'Secondary Attachments (optional)',
+                    files: _secondaryPickedFiles,
                   ),
                   const SizedBox(height: 32),
 
@@ -647,12 +602,22 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                                   )
                                   .toList();
 
-                              // Upload attachments if any
+                              // Upload primary + secondary attachments if any
                               List<Map<String, dynamic>>? attachments;
-                              if (_pickedFiles.isNotEmpty) {
+                              List<Map<String, dynamic>>? secondaryAttachments;
+                              if (_pickedFiles.isNotEmpty ||
+                                  _secondaryPickedFiles.isNotEmpty) {
                                 setState(() => _uploading = true);
                                 try {
-                                  attachments = await _uploadAttachments();
+                                  if (_pickedFiles.isNotEmpty) {
+                                    attachments =
+                                        await _uploadAttachments(_pickedFiles);
+                                  }
+                                  if (_secondaryPickedFiles.isNotEmpty) {
+                                    secondaryAttachments =
+                                        await _uploadAttachments(
+                                            _secondaryPickedFiles);
+                                  }
                                 } catch (e) {
                                   if (!context.mounted) return;
                                   setState(() => _uploading = false);
@@ -677,6 +642,11 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                                 members: selectedMembers,
                                 taskType: _isPrimary ? 'primary' : 'secondary',
                                 attachments: attachments,
+                                secondaryDescription:
+                                    _secondaryDescCtrl.text.trim().isEmpty
+                                        ? null
+                                        : _secondaryDescCtrl.text.trim(),
+                                secondaryAttachments: secondaryAttachments,
                               );
 
                               if (!context.mounted) return;
@@ -751,6 +721,83 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
         fontWeight: FontWeight.w600,
         color: Color(0xFF475569),
         letterSpacing: 0.2,
+      ),
+    );
+  }
+
+  /// Reusable file-picker box used by both primary + secondary attachments.
+  Widget _buildAttachmentsBox({
+    required String label,
+    required List<PlatformFile> files,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF64748B),
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (files.isNotEmpty) ...[
+            ...files.asMap().entries.map((entry) {
+              final i = entry.key;
+              final f = entry.value;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  children: [
+                    const Icon(Icons.attach_file,
+                        size: 16, color: Color(0xFF2563EB)),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        f.name,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF1E293B),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => setState(() => files.removeAt(i)),
+                      child: const Icon(Icons.close,
+                          size: 16, color: Color(0xFFEF4444)),
+                    ),
+                  ],
+                ),
+              );
+            }),
+            const SizedBox(height: 6),
+          ],
+          OutlinedButton.icon(
+            onPressed: () => _pickFiles(target: files),
+            icon: const Icon(Icons.upload_file_rounded, size: 18),
+            label: Text(
+              files.isEmpty ? 'Choose Files' : 'Add More Files',
+              style: const TextStyle(fontSize: 13),
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF2563EB),
+              side: const BorderSide(color: Color(0xFFCBD5E1)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

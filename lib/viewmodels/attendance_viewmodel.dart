@@ -26,9 +26,9 @@ class AttendanceViewModel extends ChangeNotifier {
 
   AttendanceModel? todayAttendance;
   LeaveModel? _todayLeave;
-  final bool _isWeekend = false;
+  bool _isWeekend = false;
   String? _holidayName;
-  final OfficeSettings _officeSettings = OfficeSettings.defaults();
+  OfficeSettings _officeSettings = OfficeSettings.defaults();
   List<AttendanceModel> history = [];
 
   final Map<String, MonthlyArchive> _archiveCache = {};

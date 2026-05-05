@@ -39,8 +39,8 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
     with WidgetsBindingObserver {
   _LocPermStatus _locStatus = _LocPermStatus.unknown;
   bool _initialDialogShown = false;
-  DateTime _selectedCalendarDay = DateTime.now();
-  DateTime _focusedCalendarMonth = DateTime.now();
+  final DateTime _selectedCalendarDay = DateTime.now();
+  final DateTime _focusedCalendarMonth = DateTime.now();
 
   // Static project data (replace with real VM when available)
   static const List<Map<String, dynamic>> _projects = [

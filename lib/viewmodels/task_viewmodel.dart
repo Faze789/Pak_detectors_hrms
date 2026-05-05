@@ -187,6 +187,8 @@ class TaskViewModel extends ChangeNotifier {
     required String duration,
     String taskType = 'primary',
     List<Map<String, dynamic>>? attachments,
+    String? secondaryDescription,
+    List<Map<String, dynamic>>? secondaryAttachments,
   }) async {
     _submitting = true;
     notifyListeners();
@@ -202,6 +204,8 @@ class TaskViewModel extends ChangeNotifier {
         duration: duration,
         taskType: taskType,
         attachments: attachments,
+        secondaryDescription: secondaryDescription,
+        secondaryAttachments: secondaryAttachments,
       );
 
       // Notify the lead about the new task assignment

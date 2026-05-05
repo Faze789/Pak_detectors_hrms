@@ -204,6 +204,8 @@ class TaskService {
     required String duration,
     required String taskType,
     List<Map<String, dynamic>>? attachments,
+    String? secondaryDescription,
+    List<Map<String, dynamic>>? secondaryAttachments,
   }) async {
     // Format members as numbered map: {1: {name, emp_id}, 2: {name, emp_id}}
     final Map<String, dynamic> membersMap = {};
@@ -254,6 +256,14 @@ class TaskService {
 
     if (attachments != null && attachments.isNotEmpty) {
       taskData['attachments'] = attachments;
+    }
+
+    // Optional secondary task — separate description + own attachments.
+    if (secondaryDescription != null && secondaryDescription.trim().isNotEmpty) {
+      taskData['secondaryDescription'] = secondaryDescription.trim();
+    }
+    if (secondaryAttachments != null && secondaryAttachments.isNotEmpty) {
+      taskData['secondaryAttachments'] = secondaryAttachments;
     }
 
     await _tasks.add(taskData);
