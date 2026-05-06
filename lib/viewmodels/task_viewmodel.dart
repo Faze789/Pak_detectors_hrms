@@ -184,8 +184,9 @@ class TaskViewModel extends ChangeNotifier {
     required String department,
     required String title,
     required String description,
+    required bool unscheduled_task,
     required String duration,
-    String taskType = 'primary',
+    // String taskType = 'primary',
     List<Map<String, dynamic>>? attachments,
     String? secondaryDescription,
     List<Map<String, dynamic>>? secondaryAttachments,
@@ -201,8 +202,9 @@ class TaskViewModel extends ChangeNotifier {
         department: department,
         title: title,
         description: description,
+        unscheduled_task: unscheduled_task,
         duration: duration,
-        taskType: taskType,
+        // taskType: taskType,
         attachments: attachments,
         secondaryDescription: secondaryDescription,
         secondaryAttachments: secondaryAttachments,
@@ -323,23 +325,21 @@ class TaskViewModel extends ChangeNotifier {
 
         for (final hrDoc in hrUsers.docs) {
           final hrEmpId = hrDoc.data()['emp_id'] ?? hrDoc.id;
-          await FirebaseFirestore.instance
-              .collection('task_notifications')
-              .add({
-                'lead_id': hrEmpId,
-                'taskId': taskId,
-                'title': wasModified
-                    ? 'Task Edited & Approved'
-                    : 'Task Approved by Lead',
-                'body': wasModified
-                    ? '"$newTitle" was edited and approved by $modifiedBy. Description was modified.'
-                    : '"$newTitle" has been approved by $modifiedBy without changes.',
-                'type': 'task',
-                'modifiedBy': modifiedBy,
-                'modifiedByRole': modifiedByRole,
-                'createdAt': FieldValue.serverTimestamp(),
-                'read': false,
-              });
+          await FirebaseFirestore.instance.collection('task_notifications').add({
+            'lead_id': hrEmpId,
+            'taskId': taskId,
+            'title': wasModified
+                ? 'Task Edited & Approved'
+                : 'Task Approved by Lead',
+            'body': wasModified
+                ? '"$newTitle" was edited and approved by $modifiedBy. Description was modified.'
+                : '"$newTitle" has been approved by $modifiedBy without changes.',
+            'type': 'task',
+            'modifiedBy': modifiedBy,
+            'modifiedByRole': modifiedByRole,
+            'createdAt': FieldValue.serverTimestamp(),
+            'read': false,
+          });
         }
       }
 
@@ -420,7 +420,9 @@ class TaskViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      debugPrint('[submitMemberWork] empId=$empId, pdfUrl=${pdfUrl != null ? "present (${pdfUrl.length} chars)" : "null"}');
+      debugPrint(
+        '[submitMemberWork] empId=$empId, pdfUrl=${pdfUrl != null ? "present (${pdfUrl.length} chars)" : "null"}',
+      );
       await _service.submitMemberWork(
         taskId: taskId,
         empId: empId,
@@ -540,7 +542,8 @@ class TaskViewModel extends ChangeNotifier {
     if (taskData == null) return;
 
     final members = taskData['members'] as Map<String, dynamic>? ?? {};
-    final submissions = taskData['member_submissions'] as Map<String, dynamic>? ?? {};
+    final submissions =
+        taskData['member_submissions'] as Map<String, dynamic>? ?? {};
     final totalWeeks = (taskData['totalWeeks'] ?? 0) as int;
     if (members.isEmpty || totalWeeks <= 1) return;
 
@@ -583,9 +586,7 @@ class TaskViewModel extends ChangeNotifier {
       if (entry is Map<String, dynamic>) {
         final memberEmpId = (entry['emp_id'] ?? '').toString();
         if (memberEmpId.isNotEmpty) {
-          await FirebaseFirestore.instance
-              .collection('task_notifications')
-              .add({
+          await FirebaseFirestore.instance.collection('task_notifications').add({
             'lead_id': memberEmpId,
             'title': 'Week $nextWeek Assigned',
             'body':
@@ -695,13 +696,12 @@ class TaskViewModel extends ChangeNotifier {
       );
 
       // Notify the member
-      await FirebaseFirestore.instance
-          .collection('task_notifications')
-          .add({
+      await FirebaseFirestore.instance.collection('task_notifications').add({
         'lead_id': memberEmpId,
         'taskId': taskId,
         'title': 'Ad-hoc Task Assigned',
-        'body': '$leadName assigned you a quick task: "$title". '
+        'body':
+            '$leadName assigned you a quick task: "$title". '
             'Due ${deadline.day}/${deadline.month}/${deadline.year}.',
         'type': 'task',
         'createdAt': FieldValue.serverTimestamp(),
@@ -748,9 +748,7 @@ class TaskViewModel extends ChangeNotifier {
       final weekTag = forWeek != null ? ' (Week $forWeek)' : '';
 
       if (role == 'member' && leadEmpId != null && leadEmpId.isNotEmpty) {
-        await FirebaseFirestore.instance
-            .collection('task_notifications')
-            .add({
+        await FirebaseFirestore.instance.collection('task_notifications').add({
           'lead_id': leadEmpId,
           'taskId': taskId,
           'title': 'Non-Submission Reason from $empName',
@@ -769,14 +767,14 @@ class TaskViewModel extends ChangeNotifier {
           await FirebaseFirestore.instance
               .collection('task_notifications')
               .add({
-            'lead_id': hrEmpId,
-            'taskId': taskId,
-            'title': 'Non-Submission Reason from $empName (Lead)',
-            'body': '"$taskTitle"$weekTag — $reason',
-            'type': 'task',
-            'createdAt': FieldValue.serverTimestamp(),
-            'read': false,
-          });
+                'lead_id': hrEmpId,
+                'taskId': taskId,
+                'title': 'Non-Submission Reason from $empName (Lead)',
+                'body': '"$taskTitle"$weekTag — $reason',
+                'type': 'task',
+                'createdAt': FieldValue.serverTimestamp(),
+                'read': false,
+              });
         }
       }
 
@@ -922,15 +920,15 @@ class TaskViewModel extends ChangeNotifier {
             await FirebaseFirestore.instance
                 .collection('task_notifications')
                 .add({
-              'lead_id': memberEmpId,
-              'title': 'Week $weekNumber Assigned',
-              'body':
-                  'You have been assigned Week $weekNumber of "$taskTitle"',
-              'type': 'task',
-              'taskId': taskId,
-              'createdAt': FieldValue.serverTimestamp(),
-              'read': false,
-            });
+                  'lead_id': memberEmpId,
+                  'title': 'Week $weekNumber Assigned',
+                  'body':
+                      'You have been assigned Week $weekNumber of "$taskTitle"',
+                  'type': 'task',
+                  'taskId': taskId,
+                  'createdAt': FieldValue.serverTimestamp(),
+                  'read': false,
+                });
           }
         }
       }
@@ -1047,9 +1045,7 @@ class TaskViewModel extends ChangeNotifier {
             );
 
             // Notify lead
-            await FirebaseFirestore.instance
-                .collection('task_notifications')
-                .add({
+            await FirebaseFirestore.instance.collection('task_notifications').add({
               'lead_id': leadEmpId,
               'taskId': task['id'],
               'title': 'Week $weekNum Auto-Assigned',
@@ -1069,14 +1065,14 @@ class TaskViewModel extends ChangeNotifier {
                   await FirebaseFirestore.instance
                       .collection('task_notifications')
                       .add({
-                    'lead_id': memberEmpId,
-                    'title': 'Week $weekNum Assigned',
-                    'body':
-                        'Week $weekNum of "${task['title']}" has been assigned to you.',
-                    'taskId': task['id'],
-                    'createdAt': FieldValue.serverTimestamp(),
-                    'read': false,
-                  });
+                        'lead_id': memberEmpId,
+                        'title': 'Week $weekNum Assigned',
+                        'body':
+                            'Week $weekNum of "${task['title']}" has been assigned to you.',
+                        'taskId': task['id'],
+                        'createdAt': FieldValue.serverTimestamp(),
+                        'read': false,
+                      });
                 }
               }
             }

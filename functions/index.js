@@ -11,7 +11,7 @@
 
 const { setGlobalOptions } = require("firebase-functions");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
-const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
@@ -20,7 +20,13 @@ admin.initializeApp();
 const db = admin.firestore();
 const messaging = admin.messaging();
 
-setGlobalOptions({ maxInstances: 1 });
+setGlobalOptions({
+
+  maxInstances: 1,
+  memory: "128MiB", // Lower memory (default is usually higher)
+  cpu: 0.08         // Use a fraction of a CPU instead of a full one
+
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RUN 1 — 12:01 PM  Mon–Fri
@@ -36,6 +42,104 @@ exports.markAbsentAtCutoff = onSchedule(
   async (_event) => {
     logger.info("[markAbsentAtCutoff] Starting noon absent run.");
     await _runMarkAbsent({ skipFirstHalfLeave: true });
+  }
+);
+
+
+
+// ─── Helper: get FCM token by emp_id ────────────────────────────────────────
+async function getTokenByEmpId(empId) {
+  const snap = await db.collection('users')
+    .where('emp_id', '==', empId)
+    .limit(1)
+    .get();
+  if (snap.empty) return null;
+  return snap.docs[0].data().fcmToken || null;
+}
+
+// ─── Helper: get FCM token by Firebase Auth UID ──────────────────────────────
+async function getTokenByUid(uid) {
+  const doc = await db.collection('users').doc(uid).get();
+  if (!doc.exists) return null;
+  return doc.data().fcmToken || null;
+}
+
+// ─── Helper: send FCM message ────────────────────────────────────────────────
+async function sendFcm(token, title, body, data = {}) {
+  if (!token) return;
+  try {
+    await admin.messaging().send({
+      token,
+      notification: { title, body },
+      data,                          // all values must be strings
+      android: {
+        priority: 'high',
+        notification: { sound: 'default', channelId: 'hrms_default' },
+      },
+      apns: {
+        payload: { aps: { sound: 'default', badge: 1 } },
+      },
+    });
+    console.log(`✅ FCM sent to token: ${token.slice(0, 20)}...`);
+  } catch (err) {
+    console.error(`❌ FCM error for token ${token.slice(0, 20)}:`, err.message);
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// TRIGGER 1: New leave request → notify each lead (or HR)
+// ────────────────────────────────────────────────────────────────────────────
+// --- Leave Request Created (Member -> Lead) ---
+exports.onLeaveRequestCreated = onDocumentCreated(
+  "request_for_leave/{requestId}",
+  async (event) => {
+    const data = event.data.data();
+    const requestId = event.params.requestId;
+    const recipients = data.leadsNotified || [];
+    const name = data.name || 'An employee';
+    const days = data.totalDays || 1;
+
+    for (const empId of recipients) {
+      // Add to the notification queue - Trigger 4 handles the FCM
+      await db.collection("task_notifications").add({
+        lead_id: empId,
+        title: '📋 New Leave Request',
+        body: `${name} has requested ${days} day${days > 1 ? 's' : ''} of leave`,
+        type: 'leave_request',
+        taskId: requestId, // Use taskId field for the reference
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+  }
+);
+
+// --- Leave Request Updated (Lead -> Member) ---
+exports.onLeaveRequestUpdated = onDocumentUpdated( // Or use onDocumentUpdated
+  "request_for_leave/{requestId}",
+  async (event) => {
+    const after = event.data.after.data();
+    const before = event.data.before.data();
+
+    if (before.status === after.status) return;
+    if (!['approved', 'declined'].includes(after.status)) return;
+
+    // Notify the member (after.uid)
+    // We lookup the emp_id because your onTaskNotificationCreated uses lead_id (empId)
+    const userSnap = await db.collection("users").doc(after.uid).get();
+    const memberEmpId = userSnap.data()?.emp_id;
+
+    if (memberEmpId) {
+      await db.collection("task_notifications").add({
+        lead_id: memberEmpId,
+        title: after.status === 'approved' ? '✅ Leave Approved' : '❌ Leave Declined',
+        body: after.status === 'approved'
+          ? 'Your leave request is approved.'
+          : `Declined: ${after.rejectionReason || 'No reason provided.'}`,
+        type: 'leave_response',
+        taskId: event.params.requestId,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
   }
 );
 

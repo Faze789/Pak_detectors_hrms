@@ -354,31 +354,31 @@ class AttendanceModel {
   /// Defensive Timestamp/String/DateTime parser. Never throws.
   /// Returns `fallback` (default = DateTime.now()) on any failure.
   static DateTime _parseDate(dynamic v, {DateTime? fallback}) {
-    final fb = fallback ?? DateTime.now();
-    if (v == null) return fb;
-    if (v is DateTime) return v;
-    if (v is Timestamp) {
-      try {
-        return v.toDate();
-      } catch (_) {
-        return fb;
-      }
-    }
-    if (v is String) {
-      try {
-        return DateTime.parse(v);
-      } catch (_) {
-        return fb;
-      }
-    }
-    if (v is num) {
-      try {
-        return DateTime.fromMillisecondsSinceEpoch(v.toInt());
-      } catch (_) {
-        return fb;
-      }
-    }
-    return fb;
+    // final fb = fallback ?? DateTime.now();
+    // if (v == null) return fb;
+    // if (v is DateTime) return v;
+    // if (v is Timestamp) {
+    //   try {
+    //     return v.toDate();
+    //   } catch (_) {
+    //     return fb;
+    //   }
+    // }
+    // if (v is String) {
+    //   try {
+    //     return DateTime.parse(v);
+    //   } catch (_) {
+    //     return fb;
+    //   }
+    // }
+    // if (v is num) {
+    //   try {
+    //     return DateTime.fromMillisecondsSinceEpoch(v.toInt());
+    //   } catch (_) {
+    //     return fb;
+    //   }
+    // }
+    return DateTime.now();
   }
 
   static DateTime? _parseDateNullable(dynamic v) {
@@ -547,8 +547,9 @@ class MonthlyArchive {
       final v = entry.value;
       if (v is! Map) continue;
       try {
-        parsed[entry.key] =
-            AttendanceModel.fromMap(Map<String, dynamic>.from(v));
+        parsed[entry.key] = AttendanceModel.fromMap(
+          Map<String, dynamic>.from(v),
+        );
       } catch (_) {
         // Skip corrupted day records — better than crashing the whole month.
       }

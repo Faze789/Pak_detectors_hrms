@@ -201,8 +201,9 @@ class TaskService {
     required String department,
     required String title,
     required String description,
+    required bool unscheduled_task,
     required String duration,
-    required String taskType,
+    // required String taskType,
     List<Map<String, dynamic>>? attachments,
     String? secondaryDescription,
     List<Map<String, dynamic>>? secondaryAttachments,
@@ -244,9 +245,10 @@ class TaskService {
       'department': department,
       'title': title,
       'description': description,
+      'unscheduled_task': unscheduled_task,
       'duration': duration,
       'status': 'pending',
-      'taskType': taskType,
+      // 'taskType': taskType,
       'createdAt': FieldValue.serverTimestamp(),
       'deadline': Timestamp.fromDate(deadline),
       'version': 1,
@@ -259,7 +261,8 @@ class TaskService {
     }
 
     // Optional secondary task — separate description + own attachments.
-    if (secondaryDescription != null && secondaryDescription.trim().isNotEmpty) {
+    if (secondaryDescription != null &&
+        secondaryDescription.trim().isNotEmpty) {
       taskData['secondaryDescription'] = secondaryDescription.trim();
     }
     if (secondaryAttachments != null && secondaryAttachments.isNotEmpty) {
@@ -743,11 +746,7 @@ class TaskService {
       'version': 1,
       'totalWeeks': 1,
       'weeklyDeadlines': [
-        {
-          'week': 1,
-          'deadline': Timestamp.fromDate(deadline),
-          'assigned': true,
-        },
+        {'week': 1, 'deadline': Timestamp.fromDate(deadline), 'assigned': true},
       ],
       'members': {
         '1': {'name': memberName, 'emp_id': memberEmpId},

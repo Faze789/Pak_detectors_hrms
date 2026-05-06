@@ -13,10 +13,10 @@ class OfficeSettingsService {
   final FirebaseFirestore _db;
 
   OfficeSettingsService({FirebaseFirestore? db})
-      : _db = db ?? FirebaseFirestore.instance;
+    : _db = db ?? FirebaseFirestore.instance;
 
   static const String _collection = 'office_settings';
-  static const String _docId      = 'timings';
+  static const String _docId = 'timings';
 
   DocumentReference<Map<String, dynamic>> get _ref =>
       _db.collection(_collection).doc(_docId);
@@ -74,23 +74,27 @@ class OfficeSettingsService {
     assert(hour >= 0 && hour <= 23, 'Hour must be 0–23');
     await _ref.set({
       'checkInCutoff': hour,
-      'updatedAt':     FieldValue.serverTimestamp(),
-      'updatedBy':     hrUid,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedBy': hrUid,
     }, SetOptions(merge: true));
   }
+
   Future<void> updateHalfDaySettings({
     required int halfDayMark,
     required int halfDayCutoff,
     required String hrUid,
   }) async {
-    assert(halfDayMark   >= 0 && halfDayMark   <= 23);
+    assert(halfDayMark >= 0 && halfDayMark <= 23);
     assert(halfDayCutoff >= 0 && halfDayCutoff <= 23);
-    assert(halfDayCutoff > halfDayMark, 'Cutoff must be after the half-day mark');
+    assert(
+      halfDayCutoff > halfDayMark,
+      'Cutoff must be after the half-day mark',
+    );
     await _ref.set({
-      'halfDayMark':   halfDayMark,
+      'halfDayMark': halfDayMark,
       'halfDayCutoff': halfDayCutoff,
-      'updatedAt':     FieldValue.serverTimestamp(),
-      'updatedBy':     hrUid,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedBy': hrUid,
     }, SetOptions(merge: true));
   }
 }

@@ -314,6 +314,7 @@ class AttendanceService {
     'Islamabad': {'lat': 33.593685, 'lng': 73.161049},
     'Karachi': {'lat': 25.042857, 'lng': 67.337571},
     'UAE': {'lat': 24.341222, 'lng': 54.532972},
+    'Hanif Medical Complex': {'lat': 33.6088744, 'lng': 72.8658331},
   };
 
   /// 200 m — allows check-in from inside the office building or its
@@ -325,6 +326,8 @@ class AttendanceService {
   /// (mock GPS, accuracy, speed) are still applied.
   Future<Position> getValidatedPositionFromCities() async {
     final pos = await getMedianPosition();
+
+    debugPrint('📍 MY EXACT LAT/LNG: ${pos.latitude}, ${pos.longitude}');
 
     if (pos.isMocked) {
       throw const GeofenceException(

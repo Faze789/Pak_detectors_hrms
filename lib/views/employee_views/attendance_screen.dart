@@ -1,8 +1,10 @@
 // lib/screens/attendance/attendance_screen.dart
 
 import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:hrms_app/viewmodels/leave_approvals_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
@@ -71,10 +73,88 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     super.dispose();
   }
 
+  /// Opens Calendar for Leave Request (1 to 4 days)
+  Future<void> _onRequestLeaveTap(
+    BuildContext context,
+    AttendanceViewModel vm,
+  ) async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365)),
+      helpText: 'Select Leave Dates (Max 4 days)',
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF2563EB),
+              onPrimary: Colors.white,
+              onSurface: Color(0xFF0F172A),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked == null) return;
+
+    final int days = picked.end.difference(picked.start).inDays + 1;
+
+    if (!mounted) return;
+
+    if (days > 4) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'You can only request up to 4 days of leave at a time.',
+          ),
+          backgroundColor: Color(0xFFDC2626),
+        ),
+      );
+      return;
+    }
+
+    // Show loading indicator during submission
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) =>
+          const Center(child: CircularProgressIndicator(color: Colors.white)),
+    );
+
+    try {
+      final auth = context.read<AuthViewModel>();
+      final uid = auth.currentUser?.uid;
+
+      if (uid != null) {
+        // Calls the new method in AttendanceViewModel
+        await vm.submitLeaveRequest(uid, picked.start, picked.end, days);
+      }
+
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Leave request for $days day(s) sent successfully.'),
+          backgroundColor: const Color(0xFF10B981),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to send request: $e'),
+          backgroundColor: const Color(0xFFDC2626),
+        ),
+      );
+    }
+  }
+
   /// Called when the user taps "Mark My Attendance".
-  /// Ensures location services + permission are granted before revealing
-  /// the check-in card. If denied, shows a dialog and offers to open
-  /// settings.
   Future<void> _onMarkAttendanceTap() async {
     final granted = await _ensureLocationReady();
     if (!mounted) return;
@@ -82,8 +162,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     setState(() => _attendanceRevealed = true);
   }
 
-  /// Returns true if GPS is on AND permission is granted (whileInUse/always).
-  /// Otherwise shows the appropriate dialog and returns false.
+  /// Returns true if GPS is on AND permission is granted
   Future<bool> _ensureLocationReady() async {
     // 1. GPS hardware on?
     final servicesOn = await Geolocator.isLocationServiceEnabled();
@@ -91,7 +170,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       if (!mounted) return false;
       await _showLocationDialog(
         title: 'Turn On Location',
-        body: 'GPS is off on this device. Attendance check-in needs your '
+        body:
+            'GPS is off on this device. Attendance check-in needs your '
             'location to verify you\'re at the office. Open settings to '
             'turn it on.',
         actionLabel: 'Open Location Settings',
@@ -109,7 +189,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       if (!mounted) return false;
       await _showLocationDialog(
         title: 'Location Permission Blocked',
-        body: 'You\'ve previously denied location for this app. Open the '
+        body:
+            'You\'ve previously denied location for this app. Open the '
             'app settings to enable it manually.',
         actionLabel: 'Open App Settings',
         onAction: Geolocator.openAppSettings,
@@ -149,10 +230,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           title,
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
         ),
-        content: Text(
-          body,
-          style: const TextStyle(fontSize: 13, height: 1.45),
-        ),
+        content: Text(body, style: const TextStyle(fontSize: 13, height: 1.45)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -237,14 +315,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             Color(0xFF94A3B8),
           );
         }
-        if (vm.onBreak) {
-          return const _StatusCfg(
-            'On Break',
-            Color(0xFFB45309),
-            Color(0xFFFFFBEB),
-            Color(0xFFF59E0B),
-          );
-        }
         return const _StatusCfg(
           'Active',
           Color(0xFF065F46),
@@ -255,25 +325,16 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   }
 
   // ── Main card dispatcher ──────────────────────────────────────────────────
-  //
-  // FIX: null todayAttendance means no record yet — show check-in prompt.
-  // _AbsentCard is ONLY shown when the record explicitly has absent status.
-  // Previously dailyStatus returned absent when todayAttendance was null,
-  // causing the absent card to show all morning before noon.
-  // ─────────────────────────────────────────────────────────────────────────
   Widget _buildMainCard(AttendanceViewModel vm, String uid) {
     if (vm.isWeekend) return const _WeekendCard();
     if (vm.holidayName != null) return _HolidayCard(name: vm.holidayName!);
 
-    // No record yet — show check-in prompt regardless of time
     if (vm.todayAttendance == null) {
       return _MainCard(
         vm: vm,
         cfg: _statusCfg(vm),
         onCheckIn: () => vm.checkIn(uid),
         onCheckOut: () => vm.checkOut(uid),
-        onStartBreak: () => vm.startBreak(uid),
-        onEndBreak: () => vm.endBreak(uid),
       );
     }
 
@@ -291,8 +352,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             cfg: _statusCfg(vm),
             onCheckIn: () => vm.checkIn(uid),
             onCheckOut: () => vm.checkOut(uid),
-            onStartBreak: () => vm.startBreak(uid),
-            onEndBreak: () => vm.endBreak(uid),
           );
         }
         return _HalfDayLeaveCard(
@@ -308,8 +367,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             cfg: _statusCfg(vm),
             onCheckIn: () => vm.checkIn(uid),
             onCheckOut: () => vm.checkOut(uid),
-            onStartBreak: () => vm.startBreak(uid),
-            onEndBreak: () => vm.endBreak(uid),
           );
         }
         return _HalfDayLeaveCard(
@@ -324,8 +381,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           cfg: _statusCfg(vm),
           onCheckIn: () => vm.checkIn(uid),
           onCheckOut: () => vm.checkOut(uid),
-          onStartBreak: () => vm.startBreak(uid),
-          onEndBreak: () => vm.endBreak(uid),
         );
     }
   }
@@ -351,7 +406,156 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               ? const Center(child: CircularProgressIndicator())
               : CustomScrollView(
                   slivers: [
-                    _StickyHeader(now: _now),
+                    SliverToBoxAdapter(
+                      child: SafeArea(
+                        bottom: false,
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(hPad, 16, hPad, 8),
+                          child: Row(
+                            children: [
+                              // 1. Request to Leave Button (Always visible)
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: () =>
+                                      _onRequestLeaveTap(context, vm),
+                                  icon: const Icon(
+                                    Icons.edit_calendar_rounded,
+                                    color: Colors.white,
+                                    size: 18,
+                                  ),
+                                  label: const Text(
+                                    'Request Leave',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF2563EB),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 14,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    elevation: 2,
+                                  ),
+                                ),
+                              ),
+                              // Spacer between the two buttons
+                              // In your button row, after the existing "Request Leave" button:
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: () =>
+                                      _showMyLeaveRequests(context, uid),
+                                  icon: const Icon(
+                                    Icons.history_rounded,
+                                    color: Colors.white,
+                                    size: 18,
+                                  ),
+                                  label: const Text(
+                                    'My Requests',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF0891B2),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 14,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    elevation: 2,
+                                  ),
+                                ),
+                              ),
+                              // 2. Leave Approvals Button (Conditionally visible)
+                              if (vm.isCurrentUserLead) ...[
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    onPressed: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              const LeaveApprovalsScreen(),
+                                        ),
+                                      );
+                                    },
+                                    icon: const Icon(
+                                      Icons.fact_check_outlined,
+                                      color: Colors.white,
+                                      size: 18,
+                                    ),
+                                    label: const Text(
+                                      'Approvals',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(
+                                        0xFF0F172A,
+                                      ), // Dark slate color to differentiate it
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 14,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
+                                      elevation: 2,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    // New: Request to Leave Button placed above Time Clock
+                    // SliverToBoxAdapter(
+                    //   child: SafeArea(
+                    //     bottom: false,
+                    //     child: Padding(
+                    //       padding: EdgeInsets.fromLTRB(hPad, 16, hPad, 8),
+                    //       child: ElevatedButton.icon(
+                    //         onPressed: () => _onRequestLeaveTap(context, vm),
+                    //         icon: const Icon(
+                    //           Icons.edit_calendar_rounded,
+                    //           color: Colors.white,
+                    //           size: 20,
+                    //         ),
+                    //         label: const Text(
+                    //           'Request to Leave',
+                    //           style: TextStyle(
+                    //             fontWeight: FontWeight.bold,
+                    //             fontSize: 15,
+                    //           ),
+                    //         ),
+                    //         style: ElevatedButton.styleFrom(
+                    //           backgroundColor: const Color(0xFF2563EB),
+                    //           foregroundColor: Colors.white,
+                    //           padding: const EdgeInsets.symmetric(vertical: 14),
+                    //           shape: RoundedRectangleBorder(
+                    //             borderRadius: BorderRadius.circular(14),
+                    //           ),
+                    //           elevation: 2,
+                    //         ),
+                    //       ),
+                    //     ),
+                    //   ),
+                    // ),
+                    // _StickyHeader(now: _now),
                     SliverPadding(
                       padding: EdgeInsets.symmetric(
                         horizontal: hPad,
@@ -367,12 +571,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                             ),
                             const SizedBox(height: 12),
                           ],
-                          // "Mark My Attendance" entry — collapsed until tapped.
-                          // Once tapped (or if user has already checked in
-                          // today), shows the same card as the dashboard:
-                          // date, check-in time, check-out time, action btn.
-                          if (_attendanceRevealed ||
-                              vm.todayAttendance != null)
+                          if (_attendanceRevealed || vm.todayAttendance != null)
                             _buildMainCard(vm, uid)
                           else
                             _MarkAttendanceCta(
@@ -388,6 +587,278 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 ),
         );
       },
+    );
+  }
+
+  Future<void> _showMyLeaveRequests(BuildContext context, String uid) async {
+    final vm = context.read<AttendanceViewModel>();
+    await vm.fetchMyLeaveRequests(uid);
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _MyLeaveRequestsSheet(vm: vm),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// My Leave Requests Sheet
+// ══════════════════════════════════════════════════════════════════════════════
+class _MyLeaveRequestsSheet extends StatelessWidget {
+  final AttendanceViewModel vm;
+  const _MyLeaveRequestsSheet({required this.vm});
+
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'approved':
+        return const Color(0xFF10B981);
+      case 'declined':
+        return const Color(0xFFEF4444);
+      default:
+        return const Color(0xFFF59E0B);
+    }
+  }
+
+  Color _statusBg(String status) {
+    switch (status) {
+      case 'approved':
+        return const Color(0xFFD1FAE5);
+      case 'declined':
+        return const Color(0xFFFEE2E2);
+      default:
+        return const Color(0xFFFEF3C7);
+    }
+  }
+
+  IconData _statusIcon(String status) {
+    switch (status) {
+      case 'approved':
+        return Icons.check_circle_rounded;
+      case 'declined':
+        return Icons.cancel_rounded;
+      default:
+        return Icons.schedule_rounded;
+    }
+  }
+
+  String _statusLabel(String status) {
+    switch (status) {
+      case 'approved':
+        return 'Approved';
+      case 'declined':
+        return 'Declined';
+      default:
+        return 'Pending';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final requests = vm.myLeaveRequests;
+
+    return Container(
+      margin: const EdgeInsets.only(top: 80),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 12),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE2E8F0),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFECFEFF),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.history_rounded,
+                    color: Color(0xFF0891B2),
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Text(
+                  'My Leave Requests',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Divider(height: 1, color: Color(0xFFE2E8F0)),
+          Expanded(
+            child: requests.isEmpty
+                ? const Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.inbox_rounded,
+                          size: 48,
+                          color: Color(0xFFCBD5E1),
+                        ),
+                        SizedBox(height: 12),
+                        Text(
+                          'No leave requests yet',
+                          style: TextStyle(
+                            color: Color(0xFF94A3B8),
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: requests.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    itemBuilder: (_, i) {
+                      final req = requests[i];
+                      final status = (req['status'] ?? 'pending') as String;
+                      final startTs = req['startDate'] as Timestamp?;
+                      final endTs = req['endDate'] as Timestamp?;
+                      final days = req['totalDays'] ?? 1;
+                      final note = (req['note'] ?? '').toString();
+                      final reason = (req['rejectionReason'] ?? '').toString();
+
+                      final dateStr = startTs != null && endTs != null
+                          ? days == 1
+                                ? DateFormat(
+                                    'EEE, MMM d yyyy',
+                                  ).format(startTs.toDate())
+                                : '${DateFormat('MMM d').format(startTs.toDate())}'
+                                      ' – '
+                                      '${DateFormat('MMM d, yyyy').format(endTs.toDate())}'
+                          : '—';
+
+                      return Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.date_range_rounded,
+                                  size: 15,
+                                  color: Color(0xFF64748B),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    dateStr,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _statusBg(status),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        _statusIcon(status),
+                                        size: 12,
+                                        color: _statusColor(status),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        _statusLabel(status),
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: _statusColor(status),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              '$days day${days > 1 ? 's' : ''} requested',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                            if (note.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                'Note: $note',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF94A3B8),
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ],
+                            if (status == 'declined' && reason.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFEF2F2),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: const Color(0xFFFECACA),
+                                  ),
+                                ),
+                                child: Text(
+                                  'Reason: $reason',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFFDC2626),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -410,65 +881,63 @@ class _StickyHeader extends StatelessWidget {
       backgroundColor: Colors.white,
       elevation: 1,
       toolbarHeight: isMobile ? 64 : 72,
-      flexibleSpace: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: isMobile ? 12 : 20,
-            vertical: isMobile ? 8 : 10,
-          ),
-          child: Row(
-            children: [
-              const Icon(
-                Icons.access_time_rounded,
-                color: Color(0xFF2563EB),
-                size: 24,
-              ),
-              const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
+      flexibleSpace: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: isMobile ? 12 : 20,
+          vertical: isMobile ? 8 : 10,
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.access_time_rounded,
+              color: Color(0xFF2563EB),
+              size: 24,
+            ),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text(
+                  'Time Clock',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+                if (!isMobile)
                   const Text(
-                    'Time Clock',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF0F172A),
-                    ),
+                    'Track your work hours',
+                    style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
                   ),
-                  if (!isMobile)
-                    const Text(
-                      'Track your work hours and breaks',
-                      style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                    ),
-                ],
-              ),
-              const Spacer(),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (!isMobile)
-                    Text(
-                      _fmtDate(now),
-                      style: const TextStyle(
-                        fontSize: 10,
-                        color: Color(0xFF64748B),
-                      ),
-                    ),
+              ],
+            ),
+            const Spacer(),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (!isMobile)
                   Text(
-                    _fmtClock(now),
-                    style: TextStyle(
-                      fontSize: isMobile ? 15 : 18,
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFF2563EB),
-                      fontFeatures: const [FontFeature.tabularFigures()],
+                    _fmtDate(now),
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: Color(0xFF64748B),
                     ),
                   ),
-                ],
-              ),
-            ],
-          ),
+                Text(
+                  _fmtClock(now),
+                  style: TextStyle(
+                    fontSize: isMobile ? 15 : 18,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF2563EB),
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -847,20 +1316,18 @@ class _LeaveRow extends StatelessWidget {
 class _MainCard extends StatelessWidget {
   final AttendanceViewModel vm;
   final _StatusCfg cfg;
-  final VoidCallback onCheckIn, onCheckOut, onStartBreak, onEndBreak;
+  final VoidCallback onCheckIn, onCheckOut;
 
   const _MainCard({
     required this.vm,
     required this.cfg,
     required this.onCheckIn,
     required this.onCheckOut,
-    required this.onStartBreak,
-    required this.onEndBreak,
   });
 
   Color get _barColor {
     if (!vm.checkedIn) return const Color(0xFFCBD5E1);
-    return vm.onBreak ? const Color(0xFFF59E0B) : const Color(0xFF10B981);
+    return const Color(0xFF10B981); // Always green when checked in now
   }
 
   String _locationLabel() {
@@ -1000,109 +1467,81 @@ class _MainCard extends StatelessWidget {
   Widget _buildCheckedIn(bool isMobile) {
     return Column(
       children: [
-        _TimerBox(
-          gradient: const LinearGradient(
-            colors: [Color(0xFFF8FAFC), Color(0xFFEFF6FF)],
+        // Static "Checked In" Box
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFECFDF5),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFA7F3D0), width: 2),
           ),
-          border: const Color(0xFFBFDBFE),
-          header: vm.todayAttendance?.checkInTime != null
-              ? 'Checked in at ${_fmtShortTime(vm.todayAttendance!.checkInTime!)}'
-              : 'Checked in',
-          headerIcon: Icons.check_circle_outline_rounded,
-          headerIconColor: const Color(0xFF10B981),
-          timerText: _hms(vm.workSeconds),
-          timerColor: const Color(0xFF0F172A),
-          timerSize: isMobile ? 42 : 52,
-          sub: 'Total Work Time',
-        ),
-        const SizedBox(height: 14),
-        if (vm.onBreak) ...[
-          _TimerBox(
-            gradient: const LinearGradient(
-              colors: [Color(0xFFFFFBEB), Color(0xFFFFF7ED)],
-            ),
-            border: const Color(0xFFFCD34D),
-            header: 'On break',
-            headerIcon: Icons.pause_rounded,
-            headerIconColor: const Color(0xFFB45309),
-            timerText: _hms(vm.breakSeconds),
-            timerColor: const Color(0xFF78350F),
-            timerSize: isMobile ? 28 : 36,
-            sub: 'Break Duration',
-          ),
-          const SizedBox(height: 14),
-        ],
-        if (vm.breaks.isNotEmpty) ...[
-          _BreakLog(breaks: vm.breaks),
-          const SizedBox(height: 14),
-        ],
-        isMobile
-            ? Column(
-                children: [
-                  SizedBox(
-                    width: double.infinity,
-                    child: vm.onBreak
-                        ? _ActionButton(
-                            label: 'End Break',
-                            icon: Icons.play_arrow_rounded,
-                            gradient: const [
-                              Color(0xFF2563EB),
-                              Color(0xFF1D4ED8),
-                            ],
-                            onTap: onEndBreak,
-                          )
-                        : _OutlinedActionButton(
-                            label: 'Start Break',
-                            icon: Icons.pause_rounded,
-                            color: const Color(0xFFB45309),
-                            borderColor: const Color(0xFFFCD34D),
-                            onTap: onStartBreak,
-                          ),
-                  ),
-                  const SizedBox(height: 10),
-                  SizedBox(
-                    width: double.infinity,
-                    child: _ActionButton(
-                      label: 'Check Out',
-                      icon: Icons.logout_rounded,
-                      gradient: const [Color(0xFFDC2626), Color(0xFFB91C1C)],
-                      onTap: onCheckOut,
-                    ),
-                  ),
-                ],
-              )
-            : Row(
-                children: [
-                  Expanded(
-                    child: vm.onBreak
-                        ? _ActionButton(
-                            label: 'End Break',
-                            icon: Icons.play_arrow_rounded,
-                            gradient: const [
-                              Color(0xFF2563EB),
-                              Color(0xFF1D4ED8),
-                            ],
-                            onTap: onEndBreak,
-                          )
-                        : _OutlinedActionButton(
-                            label: 'Start Break',
-                            icon: Icons.pause_rounded,
-                            color: const Color(0xFFB45309),
-                            borderColor: const Color(0xFFFCD34D),
-                            onTap: onStartBreak,
-                          ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _ActionButton(
-                      label: 'Check Out',
-                      icon: Icons.logout_rounded,
-                      gradient: const [Color(0xFFDC2626), Color(0xFFB91C1C)],
-                      onTap: onCheckOut,
-                    ),
-                  ),
-                ],
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.check_circle_rounded,
+                size: 56,
+                color: Color(0xFF10B981),
               ),
+              const SizedBox(height: 12),
+              const Text(
+                'Checked In',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF065F46),
+                ),
+              ),
+              const SizedBox(height: 6),
+              if (vm.todayAttendance?.checkInTime != null)
+                Text(
+                  'Time: ${_fmtShortTime(vm.todayAttendance!.checkInTime!)}',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF047857),
+                  ),
+                ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: vm.isLate
+                      ? const Color(0xFFFEF3C7)
+                      : const Color(0xFFD1FAE5),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  vm.isLate ? 'Status: Late' : 'Status: On Time',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: vm.isLate
+                        ? const Color(0xFFB45309)
+                        : const Color(0xFF059669),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // Action Button: Check Out Only
+        SizedBox(
+          width: double.infinity,
+          child: _ActionButton(
+            label: 'Check Out',
+            icon: Icons.logout_rounded,
+            gradient: const [Color(0xFFDC2626), Color(0xFFB91C1C)],
+            onTap: onCheckOut,
+          ),
+        ),
+
         const SizedBox(height: 18),
         Wrap(
           alignment: WrapAlignment.center,
@@ -1137,22 +1576,18 @@ class _MainCard extends StatelessWidget {
                 Container(
                   width: 8,
                   height: 8,
-                  decoration: BoxDecoration(
-                    color: vm.onBreak
-                        ? const Color(0xFFF59E0B)
-                        : const Color(0xFF10B981),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF10B981),
                     shape: BoxShape.circle,
                   ),
                 ),
                 const SizedBox(width: 5),
-                Text(
-                  vm.onBreak ? 'On Break' : 'Working',
+                const Text(
+                  'Working',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: vm.onBreak
-                        ? const Color(0xFFB45309)
-                        : const Color(0xFF10B981),
+                    color: Color(0xFF10B981),
                   ),
                 ),
               ],
@@ -1162,775 +1597,6 @@ class _MainCard extends StatelessWidget {
       ],
     );
   }
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Stats Grid
-// ══════════════════════════════════════════════════════════════════════════════
-class _StatsGrid extends StatelessWidget {
-  final AttendanceViewModel vm;
-  const _StatsGrid({required this.vm});
-
-  String _statusValue() {
-    if (vm.isWeekend) return 'Weekend';
-    if (vm.holidayName != null) return 'Holiday';
-    if (vm.todayAttendance == null) return 'Offline';
-    switch (vm.dailyStatus) {
-      case AttendanceStatus.onLeave:
-        return 'On Leave';
-      case AttendanceStatus.firstHalfLeave:
-        return '½ AM Leave';
-      case AttendanceStatus.secondHalfLeave:
-        return '½ PM Leave';
-      case AttendanceStatus.absent:
-        return 'Absent';
-      case AttendanceStatus.late:
-        return vm.checkedIn ? 'Late' : 'Late (out)';
-      default:
-        return vm.checkedIn ? (vm.onBreak ? 'On Break' : 'Active') : 'Offline';
-    }
-  }
-
-  String _statusSub() {
-    if (vm.isWeekend) return 'Rest day';
-    if (vm.holidayName != null) return 'Public holiday';
-    if (vm.todayAttendance == null) return 'Not clocked in yet';
-    switch (vm.dailyStatus) {
-      case AttendanceStatus.onLeave:
-        return 'HR-approved leave';
-      case AttendanceStatus.firstHalfLeave:
-        return 'Morning leave approved';
-      case AttendanceStatus.secondHalfLeave:
-        return 'Afternoon leave approved';
-      case AttendanceStatus.absent:
-        return 'No check-in today';
-      case AttendanceStatus.late:
-        return 'Arrived after start time';
-      default:
-        return vm.checkedIn ? 'Currently working' : 'Not clocked in';
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final sw = MediaQuery.of(context).size.width;
-    final isWide = sw >= _BP.tablet;
-
-    final productivityLabel = vm.productivity >= 90
-        ? 'Excellent'
-        : vm.productivity >= 70
-        ? 'Good'
-        : 'Fair';
-
-    final cards = [
-      _StatCard(
-        label: 'Work Time',
-        value: _shortDur(vm.workSeconds),
-        sub: '${(vm.workSeconds % 60).toString().padLeft(2, '0')}s',
-        icon: Icons.timer_rounded,
-        iconColor: const Color(0xFF2563EB),
-        iconBg: const Color(0xFFDBEAFE),
-        accentColor: const Color(0xFF2563EB),
-      ),
-      _StatCard(
-        label: 'Break Time',
-        value: _shortDur(vm.breakSeconds),
-        sub: '${(vm.breakSeconds % 60).toString().padLeft(2, '0')}s',
-        icon: Icons.pause_circle_outline_rounded,
-        iconColor: const Color(0xFFD97706),
-        iconBg: const Color(0xFFFEF3C7),
-        accentColor: const Color(0xFFF59E0B),
-      ),
-      _StatCard(
-        label: 'Productivity',
-        value: '${vm.productivity}%',
-        sub: productivityLabel,
-        subColor: const Color(0xFF10B981),
-        icon: Icons.bar_chart_rounded,
-        iconColor: const Color(0xFF059669),
-        iconBg: const Color(0xFFD1FAE5),
-        accentColor: const Color(0xFF10B981),
-      ),
-      _StatCard(
-        label: 'Status',
-        value: _statusValue(),
-        sub: _statusSub(),
-        icon: Icons.bolt_rounded,
-        iconColor: const Color(0xFF7C3AED),
-        iconBg: const Color(0xFFEDE9FE),
-        accentColor: const Color(0xFF7C3AED),
-      ),
-    ];
-
-    if (isWide) {
-      return IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (int i = 0; i < cards.length; i++) ...[
-              if (i > 0) const SizedBox(width: 12),
-              Expanded(child: cards[i]),
-            ],
-          ],
-        ),
-      );
-    }
-    return Column(
-      children: [
-        IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: cards[0]),
-              const SizedBox(width: 12),
-              Expanded(child: cards[1]),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: cards[2]),
-              const SizedBox(width: 12),
-              Expanded(child: cards[3]),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  final String label, value, sub;
-  final Color? subColor;
-  final IconData icon;
-  final Color iconColor, iconBg, accentColor;
-
-  const _StatCard({
-    required this.label,
-    required this.value,
-    required this.sub,
-    this.subColor,
-    required this.icon,
-    required this.iconColor,
-    required this.iconBg,
-    required this.accentColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border(left: BorderSide(color: accentColor, width: 4)),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF64748B),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      value,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF0F172A),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        if (subColor != null) ...[
-                          Icon(
-                            Icons.trending_up_rounded,
-                            size: 12,
-                            color: subColor,
-                          ),
-                          const SizedBox(width: 2),
-                        ],
-                        Flexible(
-                          child: Text(
-                            sub,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: subColor ?? const Color(0xFF94A3B8),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: iconBg,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, color: iconColor, size: 20),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Activity Log
-// ══════════════════════════════════════════════════════════════════════════════
-class _ActivityLog extends StatelessWidget {
-  final AttendanceViewModel vm;
-  const _ActivityLog({required this.vm});
-
-  List<_LogEntry> _buildEntries() {
-    final record = vm.todayAttendance;
-    final entries = <_LogEntry>[];
-    if (record == null) return entries;
-    if (record.checkInTime != null) {
-      entries.add(
-        _LogEntry(
-          type: 'check-in',
-          time: record.checkInTime!,
-          location: record.checkInAddress ?? 'Office - Main Building',
-        ),
-      );
-    }
-    for (final b in record.breaks) {
-      entries.add(_LogEntry(type: 'break-start', time: b.breakStart));
-      if (b.breakEnd != null) {
-        entries.add(_LogEntry(type: 'break-end', time: b.breakEnd!));
-      }
-    }
-    if (record.checkOutTime != null) {
-      entries.add(
-        _LogEntry(
-          type: 'check-out',
-          time: record.checkOutTime!,
-          location: record.checkOutAddress ?? 'Office - Main Building',
-        ),
-      );
-    }
-    entries.sort((a, b) => b.time.compareTo(a.time));
-    return entries;
-  }
-
-  IconData _emptyIcon() {
-    if (vm.isWeekend) return Icons.weekend_rounded;
-    if (vm.holidayName != null) return Icons.celebration_rounded;
-    if (vm.dailyStatus == AttendanceStatus.absent) {
-      return Icons.person_off_rounded;
-    }
-    if (vm.dailyStatus == AttendanceStatus.onLeave) {
-      return Icons.beach_access_rounded;
-    }
-    if (vm.dailyStatus == AttendanceStatus.firstHalfLeave) {
-      return Icons.wb_sunny_outlined;
-    }
-    if (vm.dailyStatus == AttendanceStatus.secondHalfLeave) {
-      return Icons.nights_stay_outlined;
-    }
-    return Icons.timeline_rounded;
-  }
-
-  String _emptyTitle() {
-    if (vm.isWeekend) return 'Weekend — rest day';
-    if (vm.holidayName != null) return vm.holidayName!;
-    if (vm.dailyStatus == AttendanceStatus.absent) return 'Marked absent today';
-    if (vm.dailyStatus == AttendanceStatus.onLeave) return 'On approved leave';
-    if (vm.dailyStatus == AttendanceStatus.firstHalfLeave) {
-      return 'First half leave approved';
-    }
-    if (vm.dailyStatus == AttendanceStatus.secondHalfLeave) {
-      return 'Second half leave approved';
-    }
-    return 'No activity yet';
-  }
-
-  String _emptySub() {
-    if (vm.isWeekend) return 'No tracking on weekends';
-    if (vm.holidayName != null) return 'No tracking on public holidays';
-    if (vm.dailyStatus == AttendanceStatus.absent) {
-      return 'Contact HR if this is a mistake';
-    }
-    if (vm.dailyStatus == AttendanceStatus.onLeave) {
-      return 'No time tracking during leave';
-    }
-    if (vm.dailyStatus == AttendanceStatus.firstHalfLeave) {
-      return 'Check in after 1 PM to start tracking';
-    }
-    if (vm.dailyStatus == AttendanceStatus.secondHalfLeave) {
-      return 'Check out at 1 PM when ready';
-    }
-    return 'Check in to start tracking your time';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final entries = _buildEntries();
-    return _CardShell(
-      icon: Icons.timeline_rounded,
-      title: "Today's Activity Log",
-      child: entries.isEmpty
-          ? _EmptyState(
-              icon: _emptyIcon(),
-              title: _emptyTitle(),
-              sub: _emptySub(),
-            )
-          : Column(children: entries.map((e) => _LogRow(entry: e)).toList()),
-    );
-  }
-}
-
-class _LogEntry {
-  final String type;
-  final DateTime time;
-  final String? location;
-  const _LogEntry({required this.type, required this.time, this.location});
-}
-
-class _LogRow extends StatelessWidget {
-  final _LogEntry entry;
-  const _LogRow({required this.entry});
-
-  Color get _iconBg =>
-      const {
-        'check-in': Color(0xFFD1FAE5),
-        'check-out': Color(0xFFFEE2E2),
-        'break-start': Color(0xFFFEF3C7),
-      }[entry.type] ??
-      const Color(0xFFDBEAFE);
-
-  IconData get _icon =>
-      const {
-        'check-in': Icons.login_rounded,
-        'check-out': Icons.logout_rounded,
-        'break-start': Icons.pause_rounded,
-      }[entry.type] ??
-      Icons.play_arrow_rounded;
-
-  Color get _iconColor =>
-      const {
-        'check-in': Color(0xFF059669),
-        'check-out': Color(0xFFDC2626),
-        'break-start': Color(0xFFD97706),
-      }[entry.type] ??
-      const Color(0xFF2563EB);
-
-  String get _label =>
-      const {
-        'check-in': 'Checked In',
-        'check-out': 'Checked Out',
-        'break-start': 'Break Started',
-      }[entry.type] ??
-      'Break Ended';
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: _iconBg,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(_icon, color: _iconColor, size: 18),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _label,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                    color: Color(0xFF0F172A),
-                  ),
-                ),
-                if (entry.location != null)
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.location_on_outlined,
-                        size: 12,
-                        color: Color(0xFF94A3B8),
-                      ),
-                      const SizedBox(width: 3),
-                      Flexible(
-                        child: Text(
-                          entry.location!,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: Color(0xFF94A3B8),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                _fmtMonoTime(entry.time),
-                style: const TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF1E293B),
-                ),
-              ),
-              Text(
-                _fmtShortDate(entry.time),
-                style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Reusable small widgets
-// ══════════════════════════════════════════════════════════════════════════════
-
-class _IconLabel extends StatelessWidget {
-  final IconData icon;
-  final String text;
-  const _IconLabel(this.icon, this.text);
-  @override
-  Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Icon(icon, size: 14, color: const Color(0xFF94A3B8)),
-      const SizedBox(width: 4),
-      Text(
-        text,
-        style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
-      ),
-    ],
-  );
-}
-
-class _CardShell extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final Widget child;
-  const _CardShell({
-    required this.icon,
-    required this.title,
-    required this.child,
-  });
-  @override
-  Widget build(BuildContext context) => Card(
-    elevation: 1,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          decoration: const BoxDecoration(
-            color: Color(0xFFF8FAFC),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-            border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, color: const Color(0xFF2563EB), size: 20),
-              const SizedBox(width: 8),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF0F172A),
-                ),
-              ),
-            ],
-          ),
-        ),
-        Padding(padding: const EdgeInsets.all(16), child: child),
-      ],
-    ),
-  );
-}
-
-class _PulsingBadge extends StatefulWidget {
-  final _StatusCfg cfg;
-  const _PulsingBadge({required this.cfg});
-  @override
-  State<_PulsingBadge> createState() => _PulsingBadgeState();
-}
-
-class _PulsingBadgeState extends State<_PulsingBadge>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double> _anim;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    )..repeat(reverse: true);
-    _anim = Tween<double>(
-      begin: 0.3,
-      end: 1.0,
-    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-    decoration: BoxDecoration(
-      color: widget.cfg.bg,
-      borderRadius: BorderRadius.circular(24),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        FadeTransition(
-          opacity: _anim,
-          child: Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: widget.cfg.dot,
-              shape: BoxShape.circle,
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          widget.cfg.label,
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            fontSize: 13,
-            color: widget.cfg.fg,
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-class _TimerBox extends StatelessWidget {
-  final LinearGradient gradient;
-  final Color border, headerIconColor, timerColor;
-  final String header, timerText, sub;
-  final IconData headerIcon;
-  final double timerSize;
-
-  const _TimerBox({
-    required this.gradient,
-    required this.border,
-    required this.header,
-    required this.headerIcon,
-    required this.headerIconColor,
-    required this.timerText,
-    required this.timerColor,
-    required this.timerSize,
-    required this.sub,
-  });
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: double.infinity,
-    padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-    decoration: BoxDecoration(
-      gradient: gradient,
-      borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: border, width: 2),
-    ),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(headerIcon, size: 15, color: headerIconColor),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                header,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 12, color: headerIconColor),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Text(
-          timerText,
-          style: TextStyle(
-            fontSize: timerSize,
-            fontWeight: FontWeight.bold,
-            color: timerColor,
-            fontFeatures: const [FontFeature.tabularFigures()],
-            letterSpacing: -1,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          sub,
-          style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
-        ),
-      ],
-    ),
-  );
-}
-
-class _BreakLog extends StatelessWidget {
-  final List<BreakEntry> breaks;
-  const _BreakLog({required this.breaks});
-
-  String _dur(Duration d) {
-    final h = d.inHours;
-    final m = d.inMinutes % 60;
-    return h > 0 ? '${h}h ${m}m' : '${m}m';
-  }
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: double.infinity,
-    padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      color: const Color(0xFFFFFBEB),
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: const Color(0xFFFDE68A)),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Break Log',
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF92400E),
-          ),
-        ),
-        const SizedBox(height: 10),
-        ...breaks.asMap().entries.map((e) {
-          final i = e.key + 1;
-          final b = e.value;
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Row(
-              children: [
-                Container(
-                  width: 20,
-                  height: 20,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF59E0B).withOpacity(0.2),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Text(
-                    '$i',
-                    style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFFF59E0B),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  _fmtShortTime(b.breakStart),
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF475569),
-                  ),
-                ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 6),
-                  child: Icon(
-                    Icons.arrow_forward_rounded,
-                    size: 12,
-                    color: Colors.black38,
-                  ),
-                ),
-                Text(
-                  b.breakEnd != null ? _fmtShortTime(b.breakEnd!) : 'Ongoing',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: b.breakEnd != null
-                        ? const Color(0xFF475569)
-                        : const Color(0xFFF59E0B),
-                    fontWeight: b.breakEnd == null
-                        ? FontWeight.w600
-                        : FontWeight.normal,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  _dur(b.duration),
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF94A3B8),
-                  ),
-                ),
-              ],
-            ),
-          );
-        }),
-      ],
-    ),
-  );
 }
 
 class _ActionButton extends StatelessWidget {
@@ -1970,47 +1636,6 @@ class _ActionButton extends StatelessWidget {
             label,
             style: const TextStyle(
               color: Colors.white,
-              fontWeight: FontWeight.w700,
-              fontSize: 14,
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
-class _OutlinedActionButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final Color color, borderColor;
-  final VoidCallback onTap;
-  const _OutlinedActionButton({
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.borderColor,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
-    child: Container(
-      height: 50,
-      decoration: BoxDecoration(
-        border: Border.all(color: borderColor, width: 2),
-        borderRadius: BorderRadius.circular(13),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: color, size: 18),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
               fontWeight: FontWeight.w700,
               fontSize: 14,
             ),
@@ -2101,11 +1726,92 @@ class _ErrorBanner extends StatelessWidget {
   );
 }
 
+class _IconLabel extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  const _IconLabel(this.icon, this.text);
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(icon, size: 14, color: const Color(0xFF94A3B8)),
+      const SizedBox(width: 4),
+      Text(
+        text,
+        style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+      ),
+    ],
+  );
+}
+
+class _PulsingBadge extends StatefulWidget {
+  final _StatusCfg cfg;
+  const _PulsingBadge({required this.cfg});
+  @override
+  State<_PulsingBadge> createState() => _PulsingBadgeState();
+}
+
+class _PulsingBadgeState extends State<_PulsingBadge>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+    _anim = Tween<double>(
+      begin: 0.3,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    decoration: BoxDecoration(
+      color: widget.cfg.bg,
+      borderRadius: BorderRadius.circular(24),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        FadeTransition(
+          opacity: _anim,
+          child: Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: widget.cfg.dot,
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          widget.cfg.label,
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 13,
+            color: widget.cfg.fg,
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
-// "Mark My Attendance" CTA — full-width button shown when the user hasn't
-// yet revealed today's attendance card. Tapping it sets _attendanceRevealed
-// = true and the parent rebuilds with the actual check-in card.
+// "Mark My Attendance" CTA
 // ─────────────────────────────────────────────────────────────────────────────
 class _MarkAttendanceCta extends StatelessWidget {
   final VoidCallback onTap;
@@ -2201,17 +1907,13 @@ class _MarkAttendanceCta extends StatelessWidget {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Monthly attendance history section.
-// Shows a horizontal pill-strip of the last 12 months. Tapping a month
-// fetches that month's archive and displays present / absent / leave / late
-// counts in a stats panel below.
 // ─────────────────────────────────────────────────────────────────────────────
 class _MonthlyHistorySection extends StatefulWidget {
   final String uid;
   const _MonthlyHistorySection({required this.uid});
 
   @override
-  State<_MonthlyHistorySection> createState() =>
-      _MonthlyHistorySectionState();
+  State<_MonthlyHistorySection> createState() => _MonthlyHistorySectionState();
 }
 
 class _MonthlyHistorySectionState extends State<_MonthlyHistorySection> {
@@ -2220,8 +1922,18 @@ class _MonthlyHistorySectionState extends State<_MonthlyHistorySection> {
   MonthlyArchive? _archive;
 
   static const _monthLabels = [
-    'Jan','Feb','Mar','Apr','May','Jun',
-    'Jul','Aug','Sep','Oct','Nov','Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
 
   @override
@@ -2255,7 +1967,6 @@ class _MonthlyHistorySectionState extends State<_MonthlyHistorySection> {
     }
   }
 
-  /// Last 12 months including current, newest first.
   List<DateTime> get _months {
     final now = DateTime.now();
     return List.generate(12, (i) {
@@ -2293,7 +2004,6 @@ class _MonthlyHistorySectionState extends State<_MonthlyHistorySection> {
             style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
           ),
           const SizedBox(height: 14),
-          // Month pill strip
           SizedBox(
             height: 64,
             child: ListView.separated(
@@ -2302,7 +2012,8 @@ class _MonthlyHistorySectionState extends State<_MonthlyHistorySection> {
               separatorBuilder: (_, __) => const SizedBox(width: 8),
               itemBuilder: (_, i) {
                 final m = _months[i];
-                final selected = m.year == _selectedMonth.year &&
+                final selected =
+                    m.year == _selectedMonth.year &&
                     m.month == _selectedMonth.month;
                 return GestureDetector(
                   onTap: () => _load(m),
@@ -2353,7 +2064,6 @@ class _MonthlyHistorySectionState extends State<_MonthlyHistorySection> {
             ),
           ),
           const SizedBox(height: 16),
-          // Stats panel for the selected month
           if (_loading)
             const Padding(
               padding: EdgeInsets.all(20),
@@ -2379,7 +2089,8 @@ class _MonthlyStatsPanel extends StatelessWidget {
     final absent = archive?.absentDays ?? 0;
     final leave = archive?.leaveDays ?? 0;
     final total = archive?.totalDays ?? 0;
-    final late = archive?.days.values
+    final late =
+        archive?.days.values
             .where((d) => d.status == AttendanceStatus.late)
             .length ??
         0;
@@ -2414,10 +2125,7 @@ class _MonthlyStatsPanel extends StatelessWidget {
               const Spacer(),
               Text(
                 '$total records',
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: Color(0xFF64748B),
-                ),
+                style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
               ),
             ],
           ),

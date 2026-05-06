@@ -1,6 +1,7 @@
 // lib/viewmodels/attendance_viewmodel.dart
 
 import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/attendance_model.dart';
@@ -11,6 +12,9 @@ import '../services/attendance_service.dart';
 enum ViewState { idle, loading, error }
 
 class AttendanceViewModel extends ChangeNotifier {
+  bool isLoading = false;
+  List<Map<String, dynamic>> _pendingLeaveRequests = [];
+  List<Map<String, dynamic>> get pendingLeaveRequests => _pendingLeaveRequests;
   final AttendanceService _service;
 
   // Exposed so HR dashboard can access streamTodayLiveAttendance()
@@ -94,12 +98,261 @@ class AttendanceViewModel extends ChangeNotifier {
         (checkIn.hour == _officeSettings.workStartHour && checkIn.minute > 0);
   }
 
+  // Employee's own submitted requests
+  List<Map<String, dynamic>> _myLeaveRequests = [];
+  List<Map<String, dynamic>> get myLeaveRequests => _myLeaveRequests;
+
+  Future<void> fetchMyLeaveRequests(String uid) async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('request_for_leave')
+          .where('uid', isEqualTo: uid)
+          .get();
+
+      _myLeaveRequests = snap.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        return data;
+      }).toList();
+
+      // Newest first, client-side sort (no index needed)
+      _myLeaveRequests.sort((a, b) {
+        final aTs = a['createdAt'] as Timestamp?;
+        final bTs = b['createdAt'] as Timestamp?;
+        if (aTs == null && bTs == null) return 0;
+        if (aTs == null) return 1;
+        if (bTs == null) return -1;
+        return bTs.compareTo(aTs);
+      });
+
+      notifyListeners();
+    } catch (e) {
+      debugPrint('🔴 fetchMyLeaveRequests error: $e');
+    }
+  }
+
+  bool isCurrentUserLead = false;
+
+  // ── Add this method anywhere in the class ──────────────────────────────────
+  Future<void> _checkLeadStatus(String userId) async {
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+      if (!userDoc.exists) return;
+
+      final empId = (userDoc.data()!['emp_id'] ?? userId).toString();
+      final role = (userDoc.data()!['role'] ?? '').toString().toLowerCase();
+
+      // 1. If their main role is HR, Admin, or Lead, they have access
+      if (role == 'hr' || role == 'admin' || role.contains('lead')) {
+        isCurrentUserLead = true;
+        notifyListeners();
+        return;
+      }
+
+      // 2. Otherwise, check if they are mapped as the lead_id in ANY active task
+      final tasksSnap = await FirebaseFirestore.instance
+          .collection('tasks')
+          .where('lead_id', isEqualTo: empId)
+          .where('status', isNotEqualTo: 'completed')
+          .limit(1)
+          .get();
+
+      isCurrentUserLead = tasksSnap.docs.isNotEmpty;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error checking lead status: $e');
+    }
+  }
+
+  Future<void> fetchLeaveRequestsForLead(String leadEmpId) async {
+    // Replace isLoading = true; with your existing state setter
+    state = ViewState.loading;
+    notifyListeners();
+
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('request_for_leave')
+          .where('leadsNotified', arrayContains: leadEmpId)
+          .get();
+
+      _pendingLeaveRequests = snap.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        return data;
+      }).toList();
+    } catch (e) {
+      debugPrint('Error fetching leave requests: $e');
+      errorMessage = 'Failed to load leave requests.';
+    } finally {
+      // Replace isLoading = false; with your idle state
+      state = ViewState.idle;
+      notifyListeners();
+    }
+  }
+
+  /// Approve or Decline a leave request
+  Future<bool> reviewLeaveRequest({
+    required String requestId,
+    required String employeeUid,
+    required String employeeName,
+    required String leadEmpId,
+    required String newStatus, // 'approved' or 'declined'
+    String? rejectionReason,
+  }) async {
+    try {
+      final updateData = <String, dynamic>{
+        'status': newStatus,
+        'reviewedBy': leadEmpId,
+        'reviewedAt': FieldValue.serverTimestamp(),
+      };
+
+      if (newStatus == 'declined' && rejectionReason != null) {
+        updateData['rejectionReason'] = rejectionReason;
+      }
+
+      // 1. Update the request document
+      await FirebaseFirestore.instance
+          .collection('request_for_leave')
+          .doc(requestId)
+          .update(updateData);
+
+      // 2. Notify the employee about the decision
+      await FirebaseFirestore.instance.collection('task_notifications').add({
+        // We use the employee's UID or EMP_ID depending on how your notifications route to users
+        // Assuming employeeUid maps to their auth UID for personal notifications
+        'lead_id': employeeUid,
+        'title': newStatus == 'approved' ? 'Leave Approved' : 'Leave Declined',
+        'body': newStatus == 'approved'
+            ? 'Your leave request has been approved by your lead.'
+            : 'Your leave request was declined: $rejectionReason',
+        'type': 'leave_response',
+        'referenceId': requestId,
+        'createdAt': FieldValue.serverTimestamp(),
+        'read': false,
+      });
+
+      // 3. Remove it from the local list to update UI immediately
+      _pendingLeaveRequests.removeWhere((req) => req['id'] == requestId);
+      notifyListeners();
+
+      return true;
+    } catch (e) {
+      debugPrint('Error reviewing leave request: $e');
+      return false;
+    }
+  }
+
   // ── statusBeforeBreak: the status that should be restored after a break.
   // Used by endBreak() so the service writes the right value back.
   AttendanceStatus get _statusBeforeBreak {
     if (isFirstHalfLeave) return AttendanceStatus.firstHalfLeave;
     if (wasLate) return AttendanceStatus.late;
     return AttendanceStatus.checkedIn;
+  }
+
+  Future<bool> submitLeaveRequest(
+    String uid,
+    DateTime start,
+    DateTime end,
+    int days,
+  ) async {
+    try {
+      final Set<String> leadIdsToNotify = {};
+      String actualEmpId = uid;
+      String userName = 'Employee';
+
+      // 1. Get Employee Details (Name, EMP_ID, Primary Lead if any)
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
+      if (userDoc.exists) {
+        final userData = userDoc.data()!;
+        actualEmpId = (userData['emp_id'] ?? uid).toString();
+        userName = (userData['name'] ?? 'Employee').toString();
+        final primaryLead = (userData['lead_id'] ?? '').toString();
+        if (primaryLead.isNotEmpty) leadIdsToNotify.add(primaryLead);
+      }
+
+      // 2. Query ALL Active Tasks to check for multi-leads.
+      // If the employee is mapped under any task's `members`, grab that `lead_id`
+      final tasksSnap = await FirebaseFirestore.instance
+          .collection('tasks')
+          .where('status', isNotEqualTo: 'completed')
+          .get();
+
+      for (var doc in tasksSnap.docs) {
+        final data = doc.data();
+        final members = data['members'] as Map<String, dynamic>? ?? {};
+
+        // Loop through the task's numbered members map
+        bool isMember = members.values.any((m) {
+          if (m is Map<String, dynamic>) {
+            return (m['emp_id'] ?? '').toString() == actualEmpId;
+          }
+          return false;
+        });
+
+        if (isMember) {
+          final taskLeadId = (data['lead_id'] ?? '').toString();
+          if (taskLeadId.isNotEmpty) {
+            leadIdsToNotify.add(taskLeadId);
+          }
+        }
+      }
+
+      final List<String> notificationTargets = leadIdsToNotify.toList();
+
+      // 3. Fallback: If working under no leads, send directly to HR
+      if (notificationTargets.isEmpty) {
+        final hrUsersSnap = await FirebaseFirestore.instance
+            .collection('users')
+            .where('role', isEqualTo: 'hr')
+            .get();
+
+        for (var doc in hrUsersSnap.docs) {
+          final hrEmpId = (doc.data()['emp_id'] ?? doc.id).toString();
+          notificationTargets.add(hrEmpId);
+        }
+      }
+
+      // 4. Create the request in the new collection
+      final leaveRef = await FirebaseFirestore.instance
+          .collection('request_for_leave')
+          .add({
+            'uid': uid,
+            'emp_id': actualEmpId,
+            'name': userName,
+            'startDate': Timestamp.fromDate(start),
+            'endDate': Timestamp.fromDate(end),
+            'totalDays': days,
+            'status': 'pending',
+            'leadsNotified': notificationTargets,
+            'sentToHR': leadIdsToNotify.isEmpty,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+
+      // 5. Send Notification(s) using your existing task_notifications structure
+      for (var targetId in notificationTargets) {
+        await FirebaseFirestore.instance.collection('task_notifications').add({
+          'lead_id':
+              targetId, // Treat 'lead_id' as the generic notification recipient ID
+          'title': 'New Leave Request',
+          'body': '$userName has requested $days day(s) of leave.',
+          'type': 'leave_request',
+          'referenceId': leaveRef.id,
+          'createdAt': FieldValue.serverTimestamp(),
+          'read': false,
+        });
+      }
+
+      return true;
+    } catch (e) {
+      throw Exception('Error submitting leave: $e');
+    }
   }
 
   List<BreakEntry> get breaks => todayAttendance?.breaks ?? [];
@@ -155,6 +408,8 @@ class AttendanceViewModel extends ChangeNotifier {
 
   Future<void> loadToday(String userId) async {
     _setLoading();
+
+    _checkLeadStatus(userId);
     try {
       final today = DateTimeUtils.startOfDay(DateTime.now());
 
@@ -284,7 +539,7 @@ class AttendanceViewModel extends ChangeNotifier {
     if (checkedIn) return;
     _setLoading();
     try {
-      final pos = await _service.getValidatedPositionForEmployee(userId);
+      final pos = await _service.getValidatedPositionFromCities();
       todayAttendance = await _service.checkIn(
         userId,
         lat: pos.latitude,
@@ -313,7 +568,7 @@ class AttendanceViewModel extends ChangeNotifier {
     if (!checkedIn || todayAttendance == null) return;
     _setLoading();
     try {
-      final pos = await _service.getValidatedPositionForEmployee(userId);
+      final pos = await _service.getValidatedPositionFromCities();
       todayAttendance = await _service.checkOut(
         userId,
         current: todayAttendance!,

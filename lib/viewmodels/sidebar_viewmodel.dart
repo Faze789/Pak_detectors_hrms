@@ -171,43 +171,43 @@ class SidebarProvider {
             icon: Icons.person_outline,
           ),
 
-          // const SidebarItem(
-          //   id: 'my-meetings',
-          //   label: 'My Meetings',
-          //   icon: Icons.event_outlined,
-          // ),
-          // const SidebarItem(
-          //   id: 'my-performance',
-          //   label: 'My Performance',
-          //   icon: Icons.bar_chart,
-          // ),
-          // const SidebarItem(
-          //   id: 'attendance-clock',
-          //   label: 'My Attendance',
-          //   icon: Icons.schedule_outlined,
-          // ),
-          // const SidebarItem(
-          //   id: 'my-payslips',
-          //   label: 'My Payslips',
-          //   icon: Icons.credit_card_outlined,
-          // ),
+          const SidebarItem(
+            id: 'my-meetings',
+            label: 'My Meetings',
+            icon: Icons.event_outlined,
+          ),
+          const SidebarItem(
+            id: 'my-performance',
+            label: 'My Performance',
+            icon: Icons.bar_chart,
+          ),
+          const SidebarItem(
+            id: 'attendance-clock',
+            label: 'My Attendance',
+            icon: Icons.schedule_outlined,
+          ),
+          const SidebarItem(
+            id: 'my-payslips',
+            label: 'My Payslips',
+            icon: Icons.credit_card_outlined,
+          ),
         ],
       ),
-      // const SidebarSection(
-      //   title: 'System',
-      //   items: [
-      //     SidebarItem(
-      //       id: 'settings',
-      //       label: 'Settings',
-      //       icon: Icons.settings_outlined,
-      //     ),
-      //     SidebarItem(
-      //       id: 'help',
-      //       label: 'Help Center',
-      //       icon: Icons.help_outline,
-      //     ),
-      //   ],
-      // ),
+      const SidebarSection(
+        title: 'System',
+        items: [
+          SidebarItem(
+            id: 'settings',
+            label: 'Settings',
+            icon: Icons.settings_outlined,
+          ),
+          SidebarItem(
+            id: 'help',
+            label: 'Help Center',
+            icon: Icons.help_outline,
+          ),
+        ],
+      ),
     ];
   }
 

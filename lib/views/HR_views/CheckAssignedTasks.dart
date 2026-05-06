@@ -24,113 +24,152 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        title: const Text(
-          'Assigned Tasks',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
-            color: Colors.white,
-          ),
-        ),
-        centerTitle: true,
-        elevation: 0,
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFF2563EB), Color(0xFF3B82F6)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF8FAFC),
+        appBar: AppBar(
+          title: const Text(
+            'Assigned Tasks',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
+              color: Colors.white,
             ),
           ),
+          centerTitle: true,
+          elevation: 0,
+          flexibleSpace: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF2563EB), Color(0xFF3B82F6)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+          ),
+          iconTheme: const IconThemeData(color: Colors.white),
+          bottom: const TabBar(
+            indicatorColor: Colors.white,
+            indicatorWeight: 3,
+            labelStyle: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
+            unselectedLabelStyle: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: Colors.white70,
+            ),
+            tabs: [
+              Tab(text: 'Priority Tasks'),
+              Tab(text: 'Unscheduled Tasks'),
+            ],
+          ),
         ),
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
-      body: Consumer<TaskViewModel>(
-        builder: (context, taskVm, _) {
-          if (taskVm.isLoading) {
-            return const Center(
-              child: CircularProgressIndicator(color: Color(0xFF2563EB)),
-            );
-          }
+        body: Consumer<TaskViewModel>(
+          builder: (context, taskVm, _) {
+            if (taskVm.isLoading) {
+              return const Center(
+                child: CircularProgressIndicator(color: Color(0xFF2563EB)),
+              );
+            }
 
-          if (taskVm.errorMessage != null) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.error_outline, size: 48, color: Colors.red),
-                  const SizedBox(height: 12),
-                  Text(
-                    taskVm.errorMessage!,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF64748B),
+            if (taskVm.errorMessage != null) {
+              return Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      size: 48,
+                      color: Colors.red,
                     ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            );
-          }
-
-          if (taskVm.tasks.isEmpty) {
-            return const Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.assignment_outlined,
-                    size: 56,
-                    color: Color(0xFFCBD5E1),
-                  ),
-                  SizedBox(height: 12),
-                  Text(
-                    'No tasks assigned yet',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF94A3B8),
+                    const SizedBox(height: 12),
+                    Text(
+                      taskVm.errorMessage!,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF64748B),
+                      ),
+                      textAlign: TextAlign.center,
                     ),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return LayoutBuilder(
-            builder: (context, constraints) {
-              final width = constraints.maxWidth;
-              final crossAxisCount = width >= 1200
-                  ? 4
-                  : width >= 768
-                      ? 3
-                      : 2;
-              final aspectRatio = width >= 768 ? 0.78 : 0.72;
-
-              return Padding(
-                padding: EdgeInsets.all(width >= 768 ? 24 : 16),
-                child: GridView.builder(
-                  physics: const BouncingScrollPhysics(),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: crossAxisCount,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    childAspectRatio: aspectRatio,
-                  ),
-                  itemCount: taskVm.tasks.length,
-                  itemBuilder: (context, index) {
-                    final task = taskVm.tasks[index];
-                    return _buildTaskCard(context, task);
-                  },
+                  ],
                 ),
               );
-            },
-          );
-        },
+            }
+
+            // Separate tasks into Priority and Unscheduled
+            final priorityTasks = taskVm.tasks
+                .where((t) => t['unscheduled_task'] != true)
+                .toList();
+            final unscheduledTasks = taskVm.tasks
+                .where((t) => t['unscheduled_task'] == true)
+                .toList();
+
+            return TabBarView(
+              children: [
+                _buildTaskGrid(priorityTasks),
+                _buildTaskGrid(unscheduledTasks),
+              ],
+            );
+          },
+        ),
       ),
+    );
+  }
+
+  /// Builds a grid view for a specific list of tasks
+  Widget _buildTaskGrid(List<Map<String, dynamic>> taskList) {
+    if (taskList.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.assignment_outlined, size: 56, color: Color(0xFFCBD5E1)),
+            SizedBox(height: 12),
+            Text(
+              'No tasks assigned in this category',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF94A3B8),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final crossAxisCount = width >= 1200
+            ? 4
+            : width >= 768
+            ? 3
+            : 2;
+        final aspectRatio = width >= 768 ? 0.78 : 0.72;
+
+        return Padding(
+          padding: EdgeInsets.all(width >= 768 ? 24 : 16),
+          child: GridView.builder(
+            physics: const BouncingScrollPhysics(),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: crossAxisCount,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: aspectRatio,
+            ),
+            itemCount: taskList.length,
+            itemBuilder: (context, index) {
+              final task = taskList[index];
+              return _buildTaskCard(context, task);
+            },
+          ),
+        );
+      },
     );
   }
 
@@ -185,8 +224,8 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                       color: isCompleted
                           ? const Color(0xFFD1FAE5)
                           : isSubmitted
-                              ? const Color(0xFFEDE9FE)
-                              : const Color(0xFFFEF3C7),
+                          ? const Color(0xFFEDE9FE)
+                          : const Color(0xFFFEF3C7),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -197,8 +236,8 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                         color: isCompleted
                             ? const Color(0xFF065F46)
                             : isSubmitted
-                                ? const Color(0xFF6D28D9)
-                                : const Color(0xFF92400E),
+                            ? const Color(0xFF6D28D9)
+                            : const Color(0xFF92400E),
                       ),
                     ),
                   ),
@@ -339,22 +378,29 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
   void _showTaskDetails(BuildContext context, Map<String, dynamic> task) {
     final members = task['members'] as Map<String, dynamic>? ?? {};
 
+    // Extract goals fields with fallbacks for naming variations
+    final primaryGoal = task['description'] ?? task['description'];
+    final primaryPdf = task['primaryGoalsPdf'] ?? task['primaryGoalPdf'];
+    final normalGoal =
+        task['secondaryDescription'] ?? task['secondaryDescription'];
+    final normalPdf = task['normalGoalsPdf'] ?? task['normalGoalPdf'];
+
     final parentContext = context;
     final sheetWidth = MediaQuery.of(context).size.width;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       constraints: sheetWidth >= 768
-          ? BoxConstraints(maxWidth: 640, minWidth: 400)
+          ? const BoxConstraints(maxWidth: 640, minWidth: 400)
           : null,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (_) {
         return DraggableScrollableSheet(
-          initialChildSize: 0.6,
+          initialChildSize: 0.65,
           minChildSize: 0.3,
-          maxChildSize: 0.85,
+          maxChildSize: 0.9,
           expand: false,
           builder: (_, scrollController) {
             return SingleChildScrollView(
@@ -468,7 +514,67 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                       color: Color(0xFF64748B),
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
+
+                  // ── GOALS SECTION ──
+                  if ((primaryGoal != null &&
+                          primaryGoal.toString().isNotEmpty) ||
+                      (normalGoal != null &&
+                          normalGoal.toString().isNotEmpty)) ...[
+                    const Row(
+                      children: [
+                        Icon(
+                          Icons.track_changes_rounded,
+                          color: Color(0xFF334155),
+                          size: 18,
+                        ),
+                        SizedBox(width: 8),
+                        Text(
+                          'Assigned Goals',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Primary Goal Card
+                    if (primaryGoal != null &&
+                        primaryGoal.toString().isNotEmpty)
+                      _buildGoalCard(
+                        context: context,
+                        title: 'Primary Goal',
+                        description: primaryGoal.toString(),
+                        pdfUrl: primaryPdf?.toString(),
+                        icon: Icons.star_rounded,
+                        color: const Color(0xFF4F46E5), // Indigo
+                        bgColor: const Color(0xFFEEF2FF),
+                        borderColor: const Color(0xFFC7D2FE),
+                      ),
+
+                    if (normalGoal != null &&
+                        normalGoal.toString().isNotEmpty) ...[
+                      if (primaryGoal != null &&
+                          primaryGoal.toString().isNotEmpty)
+                        const SizedBox(height: 12),
+
+                      // Normal Goal Card
+                      _buildGoalCard(
+                        context: context,
+                        title: 'Normal Goal',
+                        description: normalGoal.toString(),
+                        pdfUrl: normalPdf?.toString(),
+                        icon: Icons.flag_outlined,
+                        color: const Color(0xFF0D9488), // Teal
+                        bgColor: const Color(0xFFF0FDFA),
+                        borderColor: const Color(0xFFCCFBF1),
+                      ),
+                    ],
+                    const SizedBox(height: 24),
+                  ],
 
                   // Members
                   Text(
@@ -699,17 +805,25 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                         Expanded(
                           child: ElevatedButton.icon(
                             onPressed: () async {
-                              final taskVm =
-                                  parentContext.read<TaskViewModel>();
+                              final taskVm = parentContext
+                                  .read<TaskViewModel>();
                               Navigator.of(parentContext).pop();
-                              final success = await taskVm
-                                  .acceptSubmission(task['id']);
+                              final success = await taskVm.acceptSubmission(
+                                task['id'],
+                              );
                               if (success) {
                                 taskVm.loadAllTasks();
                               }
                             },
-                            icon: const Icon(Icons.check_circle, size: 16, color: Colors.white),
-                            label: const Text('Accept', style: TextStyle(color: Colors.white)),
+                            icon: const Icon(
+                              Icons.check_circle,
+                              size: 16,
+                              color: Colors.white,
+                            ),
+                            label: const Text(
+                              'Accept',
+                              style: TextStyle(color: Colors.white),
+                            ),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF16A34A),
                               padding: const EdgeInsets.symmetric(vertical: 12),
@@ -726,8 +840,15 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                               Navigator.of(parentContext).pop();
                               _showRejectDialog(parentContext, task);
                             },
-                            icon: const Icon(Icons.cancel_outlined, size: 16, color: Colors.white),
-                            label: const Text('Reject', style: TextStyle(color: Colors.white)),
+                            icon: const Icon(
+                              Icons.cancel_outlined,
+                              size: 16,
+                              color: Colors.white,
+                            ),
+                            label: const Text(
+                              'Reject',
+                              style: TextStyle(color: Colors.white),
+                            ),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFFDC2626),
                               padding: const EdgeInsets.symmetric(vertical: 12),
@@ -748,7 +869,11 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                           Navigator.of(parentContext).pop();
                           _showComparisonView(parentContext, task);
                         },
-                        icon: const Icon(Icons.compare_arrows, size: 18, color: Colors.white),
+                        icon: const Icon(
+                          Icons.compare_arrows,
+                          size: 18,
+                          color: Colors.white,
+                        ),
                         label: const Text(
                           'View Comparison: Requirements vs Delivery',
                           style: TextStyle(color: Colors.white, fontSize: 13),
@@ -850,7 +975,7 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
       context: context,
       isScrollControlled: true,
       constraints: compWidth >= 768
-          ? BoxConstraints(maxWidth: 700, minWidth: 400)
+          ? const BoxConstraints(maxWidth: 700, minWidth: 400)
           : null,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -884,8 +1009,10 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                   // Title
                   Row(
                     children: [
-                      const Icon(Icons.compare_arrows,
-                          color: Color(0xFF7C3AED)),
+                      const Icon(
+                        Icons.compare_arrows,
+                        color: Color(0xFF7C3AED),
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -915,8 +1042,11 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                       children: [
                         const Row(
                           children: [
-                            Icon(Icons.assignment_outlined,
-                                size: 18, color: Color(0xFF2563EB)),
+                            Icon(
+                              Icons.assignment_outlined,
+                              size: 18,
+                              color: Color(0xFF2563EB),
+                            ),
                             SizedBox(width: 6),
                             Text(
                               'Original Requirements (HR)',
@@ -946,13 +1076,19 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                         Wrap(
                           spacing: 8,
                           children: [
-                            _infoChip(Icons.schedule_outlined,
-                                task['duration'] ?? ''),
-                            _infoChip(Icons.business_outlined,
-                                task['department'] ?? ''),
+                            _infoChip(
+                              Icons.schedule_outlined,
+                              task['duration'] ?? '',
+                            ),
+                            _infoChip(
+                              Icons.business_outlined,
+                              task['department'] ?? '',
+                            ),
                             if (task['taskType'] != null)
-                              _infoChip(Icons.category_outlined,
-                                  (task['taskType'] as String).toUpperCase()),
+                              _infoChip(
+                                Icons.category_outlined,
+                                (task['taskType'] as String).toUpperCase(),
+                              ),
                           ],
                         ),
                         // HR attachments
@@ -975,8 +1111,10 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                               child: InkWell(
                                 onTap: () async {
                                   try {
-                                    await launchUrl(Uri.parse(a['url']),
-                                        mode: LaunchMode.externalApplication);
+                                    await launchUrl(
+                                      Uri.parse(a['url']),
+                                      mode: LaunchMode.externalApplication,
+                                    );
                                   } catch (_) {}
                                 },
                                 child: Row(
@@ -998,14 +1136,16 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                                           fontSize: 12,
                                           color: Color(0xFF2563EB),
                                           fontWeight: FontWeight.w500,
-                                          decoration:
-                                              TextDecoration.underline,
+                                          decoration: TextDecoration.underline,
                                         ),
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
-                                    const Icon(Icons.open_in_new,
-                                        size: 12, color: Color(0xFF94A3B8)),
+                                    const Icon(
+                                      Icons.open_in_new,
+                                      size: 12,
+                                      color: Color(0xFF94A3B8),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -1021,8 +1161,11 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                   const Center(
                     child: Column(
                       children: [
-                        Icon(Icons.arrow_downward,
-                            color: Color(0xFF94A3B8), size: 24),
+                        Icon(
+                          Icons.arrow_downward,
+                          color: Color(0xFF94A3B8),
+                          size: 24,
+                        ),
                         Text(
                           'DELIVERED',
                           style: TextStyle(
@@ -1051,8 +1194,11 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                       children: [
                         const Row(
                           children: [
-                            Icon(Icons.check_circle_outline,
-                                size: 18, color: Color(0xFF16A34A)),
+                            Icon(
+                              Icons.check_circle_outline,
+                              size: 18,
+                              color: Color(0xFF16A34A),
+                            ),
                             SizedBox(width: 6),
                             Text(
                               'Final Delivery (Lead)',
@@ -1117,23 +1263,26 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                           ),
                         ],
                         if (task['submissionPdfUrl'] != null &&
-                            task['submissionPdfUrl']
-                                .toString()
-                                .isNotEmpty) ...[
+                            task['submissionPdfUrl'].toString().isNotEmpty) ...[
                           const SizedBox(height: 8),
                           InkWell(
                             onTap: () async {
                               try {
                                 await launchUrl(
-                                  Uri.parse(task['submissionPdfUrl'].toString()),
+                                  Uri.parse(
+                                    task['submissionPdfUrl'].toString(),
+                                  ),
                                   mode: LaunchMode.externalApplication,
                                 );
                               } catch (_) {}
                             },
                             child: Row(
                               children: const [
-                                Icon(Icons.picture_as_pdf,
-                                    size: 16, color: Color(0xFFDC2626)),
+                                Icon(
+                                  Icons.picture_as_pdf,
+                                  size: 16,
+                                  color: Color(0xFFDC2626),
+                                ),
                                 SizedBox(width: 4),
                                 Expanded(
                                   child: Text(
@@ -1146,8 +1295,11 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                                     ),
                                   ),
                                 ),
-                                Icon(Icons.open_in_new,
-                                    size: 12, color: Color(0xFF94A3B8)),
+                                Icon(
+                                  Icons.open_in_new,
+                                  size: 12,
+                                  color: Color(0xFF94A3B8),
+                                ),
                               ],
                             ),
                           ),
@@ -1223,7 +1375,9 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                                 if (sub != null)
                                   Container(
                                     padding: const EdgeInsets.symmetric(
-                                        horizontal: 6, vertical: 2),
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
                                     decoration: BoxDecoration(
                                       color: const Color(0xFFD1FAE5),
                                       borderRadius: BorderRadius.circular(4),
@@ -1273,8 +1427,11 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                                 },
                                 child: Row(
                                   children: const [
-                                    Icon(Icons.picture_as_pdf,
-                                        size: 14, color: Color(0xFFDC2626)),
+                                    Icon(
+                                      Icons.picture_as_pdf,
+                                      size: 14,
+                                      color: Color(0xFFDC2626),
+                                    ),
                                     SizedBox(width: 4),
                                     Text(
                                       'View PDF',
@@ -1324,7 +1481,10 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
               maxLines: 3,
               decoration: InputDecoration(
                 hintText: 'Reason for rejection...',
-                hintStyle: const TextStyle(fontSize: 13, color: Color(0xFFCBD5E1)),
+                hintStyle: const TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFFCBD5E1),
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
@@ -1335,7 +1495,10 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: Color(0xFF64748B)),
+            ),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -1353,10 +1516,115 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFDC2626),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             child: const Text('Reject', style: TextStyle(color: Colors.white)),
           ),
+        ],
+      ),
+    );
+  }
+
+  /// Helper to build a professional looking Goal Card
+  Widget _buildGoalCard({
+    required BuildContext context,
+    required String title,
+    required String description,
+    required String? pdfUrl,
+    required IconData icon,
+    required Color color,
+    required Color bgColor,
+    required Color borderColor,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 20, color: color),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            description,
+            style: const TextStyle(
+              fontSize: 13,
+              color: Color(0xFF334155),
+              height: 1.5,
+            ),
+          ),
+          if (pdfUrl != null && pdfUrl.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            InkWell(
+              onTap: () async {
+                try {
+                  await launchUrl(
+                    Uri.parse(pdfUrl),
+                    mode: LaunchMode.externalApplication,
+                  );
+                } catch (_) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Could not open PDF'),
+                        backgroundColor: Color(0xFFEF4444),
+                      ),
+                    );
+                  }
+                }
+              },
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: borderColor),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(
+                      Icons.picture_as_pdf,
+                      size: 16,
+                      color: Color(0xFFDC2626),
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      'View Goal PDF',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFFDC2626),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
