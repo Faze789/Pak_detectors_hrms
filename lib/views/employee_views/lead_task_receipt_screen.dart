@@ -504,16 +504,17 @@ class _PostAcceptanceActions extends StatelessWidget {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: _assignmentsStream,
       builder: (context, snap) {
-        // Compute "current week assignments exist" + "all final-week accepted".
+        // Compute "current week assignments exist" + "all current week accepted".
         final all = snap.data?.docs.map((d) => d.data()).toList() ??
             const <Map<String, dynamic>>[];
         final currentWeekAssignments =
             all.where((a) => a['weekNumber'] == currentWeek).toList();
         final hasCurrentAssignments = currentWeekAssignments.isNotEmpty;
-        final finalWeekAccepted = isFinalWeek &&
-            currentWeekAssignments.isNotEmpty &&
+        final allCurrentAccepted = currentWeekAssignments.isNotEmpty &&
             currentWeekAssignments
                 .every((a) => a['status'] == 'accepted');
+        final hasNextPhase = currentWeek < totalWeeks;
+        final finalWeekAccepted = isFinalWeek && allCurrentAccepted;
 
         // Submit-to-HR gate: final week + all accepted + ≤3 days + not already.
         final canSubmit = isFinalWeek &&
@@ -521,13 +522,31 @@ class _PostAcceptanceActions extends StatelessWidget {
             withinSubmitWindow &&
             taskStatus != 'submitted';
 
-        // Smart assign / edit label.
-        final assignLabel = hasCurrentAssignments
-            ? 'Edit Week $currentWeek Tasks'
-            : 'Assign Week $currentWeek Tasks';
-        final assignSubtitle = hasCurrentAssignments
-            ? 'Update this week\'s per-member instructions or attachments.'
-            : 'Write fresh instructions for this week and assign to members.';
+        // ── Smart target week ──────────────────────────────────────
+        // When this week's assignments are all accepted and there's a next
+        // phase, advance the assign card to currentWeek + 1. Without this,
+        // clicking "Continue Breakdown" defaults to currentWeek and just
+        // edits the already-accepted week in place, never activating the
+        // next phase. The explicit "Assign Week N+1 Tasks" button in
+        // LeadReviewScreen also points at this same target.
+        final shouldAdvance = allCurrentAccepted && hasNextPhase;
+        final targetWeek = shouldAdvance ? currentWeek + 1 : currentWeek;
+
+        final String assignLabel;
+        final String assignSubtitle;
+        if (shouldAdvance) {
+          assignLabel = 'Assign Week $targetWeek Tasks';
+          assignSubtitle =
+              'Week $currentWeek is fully accepted. Define Week $targetWeek\'s work for each member.';
+        } else if (hasCurrentAssignments) {
+          assignLabel = 'Edit Week $currentWeek Tasks';
+          assignSubtitle =
+              'Update this week\'s per-member instructions or attachments.';
+        } else {
+          assignLabel = 'Assign Week $currentWeek Tasks';
+          assignSubtitle =
+              'Write fresh instructions for this week and assign to members.';
+        }
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -567,7 +586,7 @@ class _PostAcceptanceActions extends StatelessWidget {
                   task,
                   leadEmpId:
                       (task['lead_id'] ?? user?.uid ?? '').toString(),
-                  weekNumber: currentWeek,
+                  weekNumber: targetWeek,
                 );
               },
             ),

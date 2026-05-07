@@ -69,7 +69,10 @@ class _BreakdownSheetState extends State<_BreakdownSheet> {
   late final bool _isV2;
   late final int _totalWeeks;
   late final List<Map<String, dynamic>> _members;
-  late final int _weekNumber; // v2: the week being assigned
+  // Mutable so the smart auto-advance in [_hydrateV2FromFirestore] can bump
+  // it from currentWeek → currentWeek+1 when the caller forgot to pin one
+  // and the current week is already fully accepted.
+  late int _weekNumber;
 
   // v2 state ───────────────────────────────────────────────────────
   // empId -> instruction controller for this week.
@@ -129,11 +132,42 @@ class _BreakdownSheetState extends State<_BreakdownSheet> {
   }
 
   /// Pre-fill fields from any existing weekly_assignments docs for this week.
+  ///
+  /// Also performs a **defensive auto-advance**: when the resolved week's
+  /// assignments are already all `accepted` and a next phase exists, bump
+  /// `_weekNumber` to `currentWeek + 1`. This catches every path that
+  /// dispatches into the sheet without explicitly pinning a week (e.g. the
+  /// EmployeeGoalsScreen popup-menu "assign" → defaults to `task.currentWeek`)
+  /// so the lead's intent ("assign the next week") doesn't silently get
+  /// remapped to "rewrite the already-completed week's instructions in
+  /// place" — which is exactly the trap that prevented `currentWeek` from
+  /// ever advancing in your data.
   Future<void> _hydrateV2FromFirestore() async {
     setState(() => _v2Loading = true);
     try {
       final svc = TaskService();
       final existing = await svc.getAllWeeklyAssignments(widget.task['id']);
+
+      // Auto-advance check — only when the resolved week IS the parent's
+      // currentWeek. We don't override an explicitly-pinned future week
+      // (e.g. LeadReviewScreen's "Assign Week N+1 Tasks" button) and we
+      // don't auto-advance past totalWeeks.
+      final taskCurrentWeek =
+          (widget.task['currentWeek'] as int?) ?? 1;
+      if (_weekNumber == taskCurrentWeek &&
+          taskCurrentWeek < _totalWeeks) {
+        final currentDocs = existing
+            .where((a) => a['weekNumber'] == taskCurrentWeek)
+            .toList();
+        final allAccepted = currentDocs.isNotEmpty &&
+            currentDocs.every((a) => a['status'] == 'accepted');
+        if (allAccepted) {
+          _weekNumber = taskCurrentWeek + 1;
+        }
+      }
+
+      // Pre-fill text fields with any existing instruction for the resolved
+      // week (works for both edit-current and assign-next cases).
       for (final a in existing) {
         if ((a['weekNumber'] as int?) != _weekNumber) continue;
         final empId = (a['empId'] ?? '').toString().toLowerCase();

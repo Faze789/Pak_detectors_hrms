@@ -563,84 +563,42 @@ class TaskViewModel extends ChangeNotifier {
     final totalWeeks = (taskData['totalWeeks'] ?? 0) as int;
     if (members.isEmpty || totalWeeks <= 1) return;
 
-    // Build a case-insensitive submissions lookup
-    final subsLower = <String, Map<String, dynamic>>{};
-    submissions.forEach((k, v) {
-      if (v is Map<String, dynamic>) subsLower[k.toLowerCase()] = v;
-    });
-
-    // Check if every NON-LEAD member's submission is 'accepted'
-    final leadId = (taskData['lead_id'] ?? '').toString().toLowerCase();
+    // Check if every member's submission is 'accepted'
     for (final memberEntry in members.values) {
-      if (memberEntry is! Map<String, dynamic>) continue;
-      final memberEmpId = (memberEntry['emp_id'] ?? '')
-          .toString()
-          .toLowerCase();
-      if (memberEmpId.isEmpty || memberEmpId == leadId) continue; // skip lead
-      final sub = subsLower[memberEmpId];
-      if (sub == null || sub['status'] != 'accepted') {
-        return; // Not all accepted yet
-      }
-    }
-
-    // Find current week from weeklyDeadlines — the first week that is 'assigned'
-    // but whose members have all been accepted. We advance from it.
-    final deadlines = taskData['weeklyDeadlines'] as List? ?? [];
-
-    // Find the highest assigned week number
-    int currentAssignedWeek = 0;
-    for (final d in deadlines) {
-      final w = Map<String, dynamic>.from(d as Map);
-      if (w['assigned'] == true) {
-        final wNum = (w['week'] as int?) ?? 0;
-        if (wNum > currentAssignedWeek) currentAssignedWeek = wNum;
-      }
-    }
-
-    // If nothing was marked assigned, treat week 1 as current
-    if (currentAssignedWeek == 0) currentAssignedWeek = 1;
-
-    final nextWeek = currentAssignedWeek + 1;
-    if (nextWeek > totalWeeks) return; // All weeks done
-
-    // Get only actual members (excluding lead)
-    final membersForForward = <String, dynamic>{};
-    members.forEach((k, v) {
-      if (v is Map<String, dynamic>) {
-        final empId = (v['emp_id'] ?? '').toString().toLowerCase();
-        if (empId.isNotEmpty && empId != leadId) {
-          membersForForward[k] = v;
+      if (memberEntry is Map<String, dynamic>) {
+        final memberEmpId = (memberEntry['emp_id'] ?? '').toString();
+        if (memberEmpId.isEmpty) continue;
+        final sub = submissions[memberEmpId];
+        if (sub is! Map<String, dynamic> || sub['status'] != 'accepted') {
+          return; // Not all accepted yet
         }
       }
-    });
+    }
 
-    if (membersForForward.isEmpty) return;
-
-    // Mark week 1 (current) as assigned in weeklyDeadlines before advancing
-    // This fixes the missing 'assigned: true' flag
-    final updatedDeadlines = List<Map<String, dynamic>>.from(
-      deadlines.map((e) => Map<String, dynamic>.from(e as Map)),
-    );
-    for (int i = 0; i < updatedDeadlines.length; i++) {
-      if (updatedDeadlines[i]['week'] == currentAssignedWeek) {
-        updatedDeadlines[i]['assigned'] = true;
+    // All accepted — find next unassigned week
+    final deadlines = taskData['weeklyDeadlines'] as List? ?? [];
+    int nextWeek = 0;
+    for (final d in deadlines) {
+      final w = Map<String, dynamic>.from(d as Map);
+      if (w['assigned'] != true) {
+        nextWeek = (w['week'] as int?) ?? 0;
+        break;
       }
     }
-    await FirebaseFirestore.instance.collection('tasks').doc(taskId).update({
-      'weeklyDeadlines': updatedDeadlines,
-    });
 
-    // Auto-forward next week to all non-lead members
+    if (nextWeek == 0 || nextWeek > totalWeeks) return; // All weeks done
+
+    // Auto-forward next week
     await _service.forwardTaskToAllMembers(
       taskId: taskId,
-      members: membersForForward,
+      members: members,
       instructions: taskData['description'] ?? '',
       weekNumber: nextWeek,
     );
 
-    // Notify members
+    // Notify all members about next week
     final taskTitle = taskData['title'] ?? '';
-    for (final entry in membersForForward.values) {
+    for (final entry in members.values) {
       if (entry is Map<String, dynamic>) {
         final memberEmpId = (entry['emp_id'] ?? '').toString();
         if (memberEmpId.isNotEmpty) {

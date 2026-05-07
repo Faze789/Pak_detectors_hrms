@@ -362,7 +362,12 @@ class TaskService {
     required String memberName,
     required String submissionText,
     String? pdfUrl,
+    int? weekNumber, // ← add this parameter
   }) async {
+    final taskDoc = await _tasks.doc(taskId).get();
+    final resolvedWeek =
+        weekNumber ?? (taskDoc.data()?['currentWeek'] as int?) ?? 1;
+
     await _tasks.doc(taskId).update({
       'member_submissions.$empId': {
         'memberName': memberName,
@@ -370,6 +375,7 @@ class TaskService {
         'pdfUrl': pdfUrl ?? '',
         'submittedAt': FieldValue.serverTimestamp(),
         'status': 'submitted',
+        'weekNumber': resolvedWeek, // ← always stamp weekNumber
       },
     });
     // v2 bridge: append an attempt to the active week so the v2 review flow
@@ -539,8 +545,8 @@ class TaskService {
     switch (duration.toLowerCase()) {
       case 'weekly':
         return 7;
-      case 'bi-weekly':
-        return 14;
+      // case 'bi-weekly':
+      //   return 14;
       case 'monthly':
         return 28;
       case 'bi-monthly':
@@ -1168,7 +1174,7 @@ class TaskService {
       'updatedAt': FieldValue.serverTimestamp(),
     };
 
-    if (!snap.exists) {
+    if (isActivation || !snap.exists) {
       base['status'] = 'pending';
       base['attempts'] = <Map<String, dynamic>>[];
       base['barrier'] = null;

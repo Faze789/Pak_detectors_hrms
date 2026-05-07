@@ -50,7 +50,7 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
   // to these three durations.
   final Map<String, int> _durations = {
     'Weekly': 7,
-    'Bi-Weekly': 14,
+    // 'Bi-Weekly': 14,
     'Monthly': 28,
   };
 
@@ -625,8 +625,8 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                                       // time, so use a creation-timestamp +
                                       // lead prefix. Files are reorganised
                                       // logically via the attachment metadata.
-                                      final ts = DateTime.now()
-                                          .millisecondsSinceEpoch;
+                                      final ts =
+                                          DateTime.now().millisecondsSinceEpoch;
                                       final basePrefix =
                                           'task_attachments/${ts}_${_selectedLeadEmpId ?? 'lead'}';
                                       if (_pickedFiles.isNotEmpty) {
