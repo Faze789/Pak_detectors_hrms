@@ -6,13 +6,15 @@ import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:hrms_app/services/storage_service.dart';
+import 'package:hrms_app/services/task_history_sheet.dart';
+import 'package:hrms_app/views/employee_views/showAssignToMembersSheet.dart';
 import 'package:hrms_app/views/lead_employee_chat_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/task_viewmodel.dart';
-import '../../widgets/edit_task_dialog.dart';
 
 class EmployeeGoalsScreen extends StatefulWidget {
   const EmployeeGoalsScreen({super.key});
@@ -60,6 +62,73 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
     });
   }
 
+  Widget _chipWidget(IconData icon, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: const Color(0xFF64748B)),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: Color(0xFF64748B),
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTaskDescBlock({
+    required String label,
+    required Color labelColor,
+    required Color labelBg,
+    required String text,
+  }) {
+    if (text.trim().isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: labelBg,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: labelColor,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            text,
+            style: const TextStyle(
+              fontSize: 13,
+              color: Color(0xFF334155),
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   bool _isLeadForTask(Map<String, dynamic> task) {
     final taskLeadId = (task['lead_id'] ?? '').toString().toLowerCase();
     final currentEmpId = (_empId ?? '').toLowerCase();
@@ -78,6 +147,61 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
       }
     }
     return null;
+  }
+
+  Widget _buildDetailHeading(String title, IconData icon, Color color) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: color),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: color,
+            letterSpacing: 1.1,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPdfButton(String url, String label) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: () async {
+          try {
+            await launchUrl(
+              Uri.parse(url),
+              mode: LaunchMode.externalApplication,
+            );
+          } catch (e) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Could not open PDF: $e'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        },
+        icon: const Icon(Icons.picture_as_pdf, size: 18, color: Colors.white),
+        label: Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFFDC2626),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      ),
+    );
   }
 
   Future<void> _requestNewTask() async {
@@ -795,7 +919,7 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
     return null;
   }
 
-  // ----- Task Card (with primary PDF button) -----
+  // ----- Task Card -----
   Widget _buildTaskCard(BuildContext context, Map<String, dynamic> task) {
     final primaryPdfUrl = _getPrimaryPdfUrl(task);
     final bool hasPrimaryPdf =
@@ -862,74 +986,295 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
           ),
         ],
       ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: () => _showTaskDetails(context, task),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+      // ── FIX: single Column child containing InkWell + remaining content ──
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── tappable top section ─────────────────────────────────────────
+          InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: () => _showTaskDetails(context, task),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Flexible(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
+                  // Status / duration / role badges row
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: statusBg,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (isApproved)
+                                const Padding(
+                                  padding: EdgeInsets.only(right: 4),
+                                  child: Icon(
+                                    Icons.check_circle,
+                                    size: 12,
+                                    color: Color(0xFF065F46),
+                                  ),
+                                ),
+                              Flexible(
+                                child: Text(
+                                  statusLabel,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: statusFg,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                      decoration: BoxDecoration(
-                        color: statusBg,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (isApproved)
-                            const Padding(
-                              padding: EdgeInsets.only(right: 4),
-                              child: Icon(
-                                Icons.check_circle,
-                                size: 12,
-                                color: Color(0xFF065F46),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.schedule_outlined,
+                              size: 12,
+                              color: Color(0xFF2563EB),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              task['duration'] ?? '',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF2563EB),
                               ),
                             ),
-                          Flexible(
-                            child: Text(
-                              statusLabel,
-                              overflow: TextOverflow.ellipsis,
+                          ],
+                        ),
+                      ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isLead
+                              ? const Color(0xFFFEF3C7)
+                              : const Color(0xFFEDE9FE),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isLead
+                                  ? Icons.star_rounded
+                                  : Icons.person_outline,
+                              size: 12,
+                              color: isLead
+                                  ? const Color(0xFF92400E)
+                                  : const Color(0xFF6D28D9),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              isLead ? 'LEAD' : 'MEMBER',
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
-                                color: statusFg,
+                                color: isLead
+                                    ? const Color(0xFF92400E)
+                                    : const Color(0xFF6D28D9),
                               ),
                             ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      if (isLead && !isApproved) _buildOptionsMenu(task),
+                      if (!isLead || isApproved)
+                        Text(
+                          dateStr,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFF94A3B8),
                           ),
-                        ],
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Title + history button
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          task['title'] ?? 'Untitled',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () {
+                          final sw = MediaQuery.of(context).size.width;
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            constraints: sw >= 768
+                                ? const BoxConstraints(
+                                    maxWidth: 720,
+                                    minWidth: 400,
+                                  )
+                                : null,
+                            builder: (_) => TaskHistorySheet(
+                              task: task,
+                              currentEmpId: _empId ?? '',
+                              isLead: isLead,
+                            ),
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEFF6FF),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFBFDBFE)),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.history_rounded,
+                                size: 13,
+                                color: Color(0xFF2563EB),
+                              ),
+                              SizedBox(width: 4),
+                              Text(
+                                'History',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF2563EB),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+
+                  // Primary description block
+                  _buildTaskDescBlock(
+                    label: isUnscheduled ? 'Unscheduled Task' : 'Priority Task',
+                    labelColor: isUnscheduled
+                        ? const Color(0xFFD97706)
+                        : const Color(0xFF1D4ED8),
+                    labelBg: isUnscheduled
+                        ? const Color(0xFFFEF3C7)
+                        : const Color(0xFFDBEAFE),
+                    text: (task['description'] ?? '').toString(),
+                  ),
+
+                  // Secondary description block
+                  if ((task['secondaryDescription'] ?? '')
+                      .toString()
+                      .trim()
+                      .isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    _buildTaskDescBlock(
+                      label: 'Normal Goals',
+                      labelColor: const Color(0xFF7C3AED),
+                      labelBg: const Color(0xFFEDE9FE),
+                      text: (task['secondaryDescription'] ?? '').toString(),
+                    ),
+                  ],
+
+                  // Primary PDF button
+                  if (hasPrimaryPdf) ...[
+                    const SizedBox(height: 10),
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        try {
+                          await launchUrl(
+                            Uri.parse(primaryPdfUrl),
+                            mode: LaunchMode.externalApplication,
+                          );
+                        } catch (e) {
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Could not open PDF: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      },
+                      icon: const Icon(
+                        Icons.picture_as_pdf,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                      label: const Text(
+                        'View Attached PDF',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFDC2626),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEFF6FF),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+                  ],
+
+                  // Weekly progress bar (lead only)
+                  if (isLead && totalWeeks > 1 && isApproved) ...[
+                    const SizedBox(height: 8),
+                    Row(
                       children: [
                         const Icon(
-                          Icons.schedule_outlined,
-                          size: 12,
+                          Icons.date_range,
+                          size: 13,
                           color: Color(0xFF2563EB),
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          task['duration'] ?? '',
+                          'Weekly Progress: ${weeklyDeadlines.where((w) => (w as Map)['assigned'] == true).length}/$totalWeeks weeks assigned',
                           style: const TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
@@ -938,444 +1283,489 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                         ),
                       ],
                     ),
-                  ),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isLead
-                          ? const Color(0xFFFEF3C7)
-                          : const Color(0xFFEDE9FE),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          isLead ? Icons.star_rounded : Icons.person_outline,
-                          size: 12,
-                          color: isLead
-                              ? const Color(0xFF92400E)
-                              : const Color(0xFF6D28D9),
+                    const SizedBox(height: 4),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: weeklyDeadlines.isEmpty
+                            ? 0
+                            : weeklyDeadlines
+                                      .where(
+                                        (w) => (w as Map)['assigned'] == true,
+                                      )
+                                      .length /
+                                  totalWeeks,
+                        minHeight: 6,
+                        backgroundColor: const Color(0xFFE2E8F0),
+                        valueColor: const AlwaysStoppedAnimation<Color>(
+                          Color(0xFF2563EB),
                         ),
-                        const SizedBox(width: 4),
-                        Text(
-                          isLead ? 'LEAD' : 'MEMBER',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: isLead
-                                ? const Color(0xFF92400E)
-                                : const Color(0xFF6D28D9),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  if (isLead && !isApproved) _buildOptionsMenu(task),
-                  if (!isLead || isApproved)
-                    Text(
-                      dateStr,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Color(0xFF94A3B8),
                       ),
                     ),
+                  ],
                 ],
               ),
-              const SizedBox(height: 12),
-              Text(
-                task['title'] ?? 'Untitled',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF0F172A),
-                ),
-              ),
-              const SizedBox(height: 6),
-              _buildTaskDescBlock(
-                label: isUnscheduled ? 'Unscheduled Task' : 'Priority Task',
-                labelColor: isUnscheduled
-                    ? const Color(0xFFD97706)
-                    : const Color(0xFF1D4ED8),
-                labelBg: isUnscheduled
-                    ? const Color(0xFFFEF3C7)
-                    : const Color(0xFFDBEAFE),
-                text: (task['description'] ?? '').toString(),
-              ),
+            ),
+          ),
 
-              if ((task['secondaryDescription'] ?? '')
-                  .toString()
-                  .trim()
-                  .isNotEmpty) ...[
-                const SizedBox(height: 6),
-                _buildTaskDescBlock(
-                  label: 'SECONDARY',
-                  labelColor: const Color(0xFF7C3AED),
-                  labelBg: const Color(0xFFEDE9FE),
-                  text: (task['secondaryDescription'] ?? '').toString(),
-                ),
-              ],
-
-              // ----- Primary PDF button in card (only if primary PDF exists) -----
-              if (hasPrimaryPdf) ...[
-                const SizedBox(height: 10),
-                ElevatedButton.icon(
-                  onPressed: () async {
-                    try {
-                      await launchUrl(
-                        Uri.parse(primaryPdfUrl!),
-                        mode: LaunchMode.externalApplication,
-                      );
-                    } catch (e) {
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Could not open PDF: $e'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  },
-                  icon: const Icon(
-                    Icons.picture_as_pdf,
-                    size: 16,
-                    color: Colors.white,
-                  ),
-                  label: const Text(
-                    'View Attached PDF',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFDC2626),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                ),
-              ],
-
-              if (isLead && totalWeeks > 1 && isApproved) ...[
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.date_range,
-                      size: 13,
-                      color: Color(0xFF2563EB),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Weekly Progress: ${weeklyDeadlines.where((w) => (w as Map)['assigned'] == true).length}/$totalWeeks weeks assigned',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF2563EB),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: weeklyDeadlines.isEmpty
-                        ? 0
-                        : weeklyDeadlines
-                                  .where((w) => (w as Map)['assigned'] == true)
-                                  .length /
-                              totalWeeks,
-                    minHeight: 6,
-                    backgroundColor: const Color(0xFFE2E8F0),
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                      Color(0xFF2563EB),
-                    ),
-                  ),
-                ),
-              ],
-
-              if (remainingDays != null && !isApproved) ...[
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.timer_outlined,
-                      size: 13,
-                      color: remainingDays <= 0
-                          ? const Color(0xFFDC2626)
-                          : remainingDays <= 3
-                          ? const Color(0xFFD97706)
-                          : const Color(0xFF16A34A),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      remainingDays > 0
-                          ? '$remainingDays day${remainingDays == 1 ? '' : 's'} left'
-                          : remainingDays == 0
-                          ? 'Due today'
-                          : 'Overdue by ${-remainingDays} day${remainingDays == -1 ? '' : 's'}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: remainingDays <= 0
-                            ? const Color(0xFFDC2626)
-                            : remainingDays <= 3
-                            ? const Color(0xFFD97706)
-                            : const Color(0xFF16A34A),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-              const SizedBox(height: 12),
-
-              if (!isLead && totalWeeks > 1) ...[
-                Builder(
-                  builder: (_) {
-                    final memberTasks =
-                        task['member_tasks'] as Map<String, dynamic>? ?? {};
-                    final currentEmpId = (_empId ?? '').toLowerCase();
-                    Map<String, dynamic>? myTask;
-                    for (final key in memberTasks.keys) {
-                      if (key.toLowerCase() == currentEmpId) {
-                        myTask = memberTasks[key] as Map<String, dynamic>?;
-                        break;
+          // ── non-tappable bottom section ──────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Weekly assignment FutureBuilder (member only)
+                if (!isLead && totalWeeks > 1) ...[
+                  FutureBuilder<QuerySnapshot>(
+                    future: FirebaseFirestore.instance
+                        .collection('tasks')
+                        .doc((task['id'] ?? '').toString())
+                        .collection('weekly_assignments')
+                        .where('empId', isEqualTo: (_empId ?? '').toLowerCase())
+                        .get(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Padding(
+                          padding: EdgeInsets.only(bottom: 12.0),
+                          child: Text(
+                            'Loading week instructions...',
+                            style: TextStyle(fontSize: 12, color: Colors.grey),
+                          ),
+                        );
                       }
-                    }
-                    final weekNum = myTask?['weekNumber'] as int?;
-                    if (weekNum == null) return const SizedBox.shrink();
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF2563EB).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFFBFDBFE)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
+
+                      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                        return const SizedBox.shrink();
+                      }
+
+                      final targetWeek =
+                          task['currentWeek'] ?? task['weekNumber'] ?? 2;
+
+                      String specificDesc = '';
+                      int assignedWeek = targetWeek;
+
+                      try {
+                        final doc = snapshot.data!.docs.firstWhere(
+                          (d) =>
+                              (d.data()
+                                  as Map<String, dynamic>)['weekNumber'] ==
+                              targetWeek,
+                        );
+                        specificDesc =
+                            (doc.data()
+                                as Map<String, dynamic>)['instruction'] ??
+                            '';
+                        assignedWeek =
+                            (doc.data()
+                                as Map<String, dynamic>)['weekNumber'] ??
+                            targetWeek;
+                      } catch (_) {
+                        final doc = snapshot.data!.docs.last;
+                        specificDesc =
+                            (doc.data()
+                                as Map<String, dynamic>)['instruction'] ??
+                            '';
+                        assignedWeek =
+                            (doc.data()
+                                as Map<String, dynamic>)['weekNumber'] ??
+                            targetWeek;
+                      }
+
+                      if (specificDesc.trim().isEmpty) {
+                        return const SizedBox.shrink();
+                      }
+
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(
-                              Icons.date_range,
-                              size: 14,
-                              color: Color(0xFF2563EB),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Your Assignment: Week $weekNum of $totalWeeks',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF2563EB),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ],
-
-              if (!isLead && task['leadName'] != null) ...[
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 12,
-                      backgroundColor: const Color(0xFFDBEAFE),
-                      child: Text(
-                        (task['leadName'] ?? '?')[0].toUpperCase(),
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF2563EB),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'Lead: ${task['leadName']}',
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF334155),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-              ],
-
-              Row(
-                children: [
-                  _chipWidget(
-                    Icons.group_outlined,
-                    '${members.length} members',
-                  ),
-                  if (task['taskType'] != null) ...[
-                    const SizedBox(width: 8),
-                    _chipWidget(
-                      Icons.category_outlined,
-                      (task['taskType'] as String).toUpperCase(),
-                    ),
-                    const SizedBox(width: 30),
-                    isLead
-                        ? Row(
-                            children: [
-                              feed_back_button(
-                                const TextStyle(
-                                  fontSize: 11,
-                                  color: Color(0xFF2563EB),
-                                ),
-                                Icons.feedback_outlined,
-                                'Feedback',
-                                () => _showFeedbackMemberPicker(context, task),
-                              ),
-                            ],
-                          )
-                        : feed_back_button(
-                            const TextStyle(
-                              fontSize: 11,
-                              color: Color(0xFF2563EB),
-                            ),
-                            Icons.feedback_outlined,
-                            'Send a query',
-                            () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => LeadEmployeeChatScreen(
-                                    taskId: task['id'] ?? '',
-                                    taskTitle: task['title'] ?? '',
-                                    leadEmpId: task['lead_id'] ?? '',
-                                    leadName: task['leadName'] ?? '',
-                                    employeeEmpId: _empId ?? '',
-                                    employeeName:
-                                        context
-                                            .read<AuthViewModel>()
-                                            .currentUser
-                                            ?.name ??
-                                        '',
-                                    currentUserEmpId: _empId ?? '',
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                  ],
-                ],
-              ),
-
-              if (isApproved &&
-                  status != 'submitted' &&
-                  status != 'completed') ...[
-                const SizedBox(height: 10),
-                Builder(
-                  builder: (_) {
-                    if (isLead) {
-                      final isOverdue =
-                          remainingDays != null && remainingDays < 0;
-                      if (isOverdue) {
-                        return _buildOverdueBlock(context, task, role: 'lead');
-                      }
-                      final hasRejection = (task['rejectionReason'] ?? '')
-                          .toString()
-                          .isNotEmpty;
-                      return Column(
-                        children: [
-                          if (hasRejection) ...[
                             Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(10),
-                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFFEF2F2),
+                                color: const Color(0xFFEFF6FF),
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
-                                  color: const Color(0xFFFECACA),
+                                  color: const Color(0xFFBFDBFE),
                                 ),
                               ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Text(
-                                    'HR Rejection Reason:',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                      color: Color(0xFF991B1B),
-                                    ),
+                                  const Icon(
+                                    Icons.date_range,
+                                    size: 14,
+                                    color: Color(0xFF2563EB),
                                   ),
-                                  const SizedBox(height: 4),
+                                  const SizedBox(width: 6),
                                   Text(
-                                    task['rejectionReason'].toString(),
+                                    'Your Assignment: Week $assignedWeek of $totalWeeks',
                                     style: const TextStyle(
                                       fontSize: 12,
-                                      color: Color(0xFFDC2626),
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF2563EB),
                                     ),
                                   ),
                                 ],
                               ),
                             ),
+                            const SizedBox(height: 8),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: const Color(0xFFE2E8F0),
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Row(
+                                    children: [
+                                      Icon(
+                                        Icons.assignment_outlined,
+                                        size: 14,
+                                        color: Color(0xFF475569),
+                                      ),
+                                      SizedBox(width: 6),
+                                      Text(
+                                        'Instructions for this Week:',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF475569),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    specificDesc,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      color: Color(0xFF334155),
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ],
+
+                // Lead name (member view)
+                if (!isLead && task['leadName'] != null) ...[
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 12,
+                        backgroundColor: const Color(0xFFDBEAFE),
+                        child: Text(
+                          (task['leadName'] ?? '?')[0].toUpperCase(),
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF2563EB),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Lead: ${task['leadName']}',
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF334155),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                ],
+
+                // Chips + feedback/query button
+                Row(
+                  children: [
+                    _chipWidget(
+                      Icons.group_outlined,
+                      '${members.length} members',
+                    ),
+                    if (task['taskType'] != null) ...[
+                      const SizedBox(width: 8),
+                      _chipWidget(
+                        Icons.category_outlined,
+                        (task['taskType'] as String).toUpperCase(),
+                      ),
+                      const SizedBox(width: 30),
+                      isLead
+                          ? Row(
+                              children: [
+                                feed_back_button(
+                                  const TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xFF2563EB),
+                                  ),
+                                  Icons.feedback_outlined,
+                                  'Feedback',
+                                  () =>
+                                      _showFeedbackMemberPicker(context, task),
+                                ),
+                              ],
+                            )
+                          : feed_back_button(
+                              const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF2563EB),
+                              ),
+                              Icons.feedback_outlined,
+                              'Send a query',
+                              () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => LeadEmployeeChatScreen(
+                                      taskId: task['id'] ?? '',
+                                      taskTitle: task['title'] ?? '',
+                                      leadEmpId: task['lead_id'] ?? '',
+                                      leadName: task['leadName'] ?? '',
+                                      employeeEmpId: _empId ?? '',
+                                      employeeName:
+                                          context
+                                              .read<AuthViewModel>()
+                                              .currentUser
+                                              ?.name ??
+                                          '',
+                                      currentUserEmpId: _empId ?? '',
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                    ],
+                  ],
+                ),
+
+                // Assign Task to Members button (lead, pending)
+                if (isLead && status == 'pending') ...[
+                  const SizedBox(height: 10),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () => showAssignToMembersSheet(
+                        context,
+                        task,
+                        onAssigned: _refreshTasks,
+                      ),
+                      icon: const Icon(
+                        Icons.send_rounded,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                      label: const Text(
+                        'Assign Task to Members',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2563EB),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+
+                // Assign Next Week's Tasks button (lead, approved, multi-week)
+                if (isLead &&
+                    isApproved &&
+                    totalWeeks > 1 &&
+                    status != 'submitted' &&
+                    status != 'completed') ...[
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => showAssignToMembersSheet(
+                        context,
+                        task,
+                        onAssigned: _refreshTasks,
+                      ),
+                      icon: const Icon(
+                        Icons.calendar_view_week_rounded,
+                        size: 16,
+                        color: Color(0xFF2563EB),
+                      ),
+                      label: const Text(
+                        'Assign Next Week\'s Tasks',
+                        style: TextStyle(
+                          color: Color(0xFF2563EB),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        side: const BorderSide(color: Color(0xFF2563EB)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+
+                // Submit / overdue section
+                if (isApproved &&
+                    status != 'submitted' &&
+                    status != 'completed') ...[
+                  const SizedBox(height: 10),
+                  Builder(
+                    builder: (_) {
+                      if (isLead) {
+                        final isOverdue =
+                            remainingDays != null && remainingDays < 0;
+                        if (isOverdue) {
+                          return _buildOverdueBlock(
+                            context,
+                            task,
+                            role: 'lead',
+                          );
+                        }
+                        final hasRejection = (task['rejectionReason'] ?? '')
+                            .toString()
+                            .isNotEmpty;
+                        return Column(
+                          children: [
+                            if (hasRejection) ...[
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(10),
+                                margin: const EdgeInsets.only(bottom: 8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFEF2F2),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: const Color(0xFFFECACA),
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'HR Rejection Reason:',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF991B1B),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      task['rejectionReason'].toString(),
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Color(0xFFDC2626),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 6),
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  child: OutlinedButton.icon(
+                                    onPressed: () async {
+                                      final members =
+                                          task['members']
+                                              as Map<String, dynamic>? ??
+                                          {};
+                                      final ok = await context
+                                          .read<TaskViewModel>()
+                                          .pushBackToMembers(
+                                            taskId: task['id'],
+                                            members: members,
+                                          );
+                                      if (ok && mounted) {
+                                        _refreshTasks();
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              'Tasks pushed back to members for corrections',
+                                            ),
+                                            backgroundColor: Color(0xFF2563EB),
+                                          ),
+                                        );
+                                      }
+                                    },
+                                    icon: const Icon(
+                                      Icons.replay,
+                                      size: 14,
+                                      color: Color(0xFFDC2626),
+                                    ),
+                                    label: const Text(
+                                      'Push Back to Members',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Color(0xFFDC2626),
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 6,
+                                      ),
+                                      side: const BorderSide(
+                                        color: Color(0xFFDC2626),
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                             Padding(
                               padding: const EdgeInsets.only(bottom: 6),
                               child: SizedBox(
                                 width: double.infinity,
                                 child: OutlinedButton.icon(
-                                  onPressed: () async {
-                                    final members =
-                                        task['members']
-                                            as Map<String, dynamic>? ??
-                                        {};
-                                    final ok = await context
-                                        .read<TaskViewModel>()
-                                        .pushBackToMembers(
-                                          taskId: task['id'],
-                                          members: members,
-                                        );
-                                    if (ok && mounted) {
-                                      _refreshTasks();
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                            'Tasks pushed back to members for corrections',
-                                          ),
-                                          backgroundColor: Color(0xFF2563EB),
-                                        ),
-                                      );
-                                    }
-                                  },
+                                  onPressed: () => _showMemberSubmissions(
+                                    context,
+                                    task['id'],
+                                  ),
                                   icon: const Icon(
-                                    Icons.replay,
+                                    Icons.assignment_turned_in,
                                     size: 14,
-                                    color: Color(0xFFDC2626),
+                                    color: Color(0xFF2563EB),
                                   ),
                                   label: const Text(
-                                    'Push Back to Members',
+                                    'View Member Submissions',
                                     style: TextStyle(
                                       fontSize: 12,
-                                      color: Color(0xFFDC2626),
+                                      color: Color(0xFF2563EB),
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
@@ -1384,7 +1774,7 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                                       vertical: 6,
                                     ),
                                     side: const BorderSide(
-                                      color: Color(0xFFDC2626),
+                                      color: Color(0xFF2563EB),
                                     ),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(8),
@@ -1393,33 +1783,112 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                                 ),
                               ),
                             ),
-                          ],
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 6),
-                            child: SizedBox(
+                            Builder(
+                              builder: (_) {
+                                final tw = (task['totalWeeks'] ?? 0) as int;
+                                if (tw <= 1) return const SizedBox.shrink();
+                                final wd =
+                                    task['weeklyDeadlines'] as List? ?? [];
+                                final assignedWeeks = wd
+                                    .where(
+                                      (w) => (w as Map)['assigned'] == true,
+                                    )
+                                    .length;
+                                final memberSubs =
+                                    task['member_submissions']
+                                        as Map<String, dynamic>? ??
+                                    {};
+                                final taskMembers =
+                                    task['members'] as Map<String, dynamic>? ??
+                                    {};
+                                final totalMembers = taskMembers.length;
+                                int submittedCount = 0;
+                                int acceptedCount = 0;
+                                for (final entry in memberSubs.values) {
+                                  if (entry is Map<String, dynamic>) {
+                                    final st = (entry['status'] ?? '')
+                                        .toString();
+                                    if (st == 'submitted') submittedCount++;
+                                    if (st == 'accepted') acceptedCount++;
+                                  }
+                                }
+                                final allDone = assignedWeeks >= tw;
+                                final statusText = allDone
+                                    ? 'All $tw weeks assigned'
+                                    : 'Week $assignedWeeks of $tw — ${acceptedCount + submittedCount}/$totalMembers submitted';
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 6),
+                                  child: Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: allDone
+                                          ? const Color(0xFFECFDF5)
+                                          : const Color(0xFFFFF7ED),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: allDone
+                                            ? const Color(0xFF6EE7B7)
+                                            : const Color(0xFFFED7AA),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          allDone
+                                              ? Icons.check_circle
+                                              : Icons.schedule,
+                                          size: 16,
+                                          color: allDone
+                                              ? const Color(0xFF059669)
+                                              : const Color(0xFFF59E0B),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            statusText,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: allDone
+                                                  ? const Color(0xFF059669)
+                                                  : const Color(0xFFB45309),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                            SizedBox(
                               width: double.infinity,
-                              child: OutlinedButton.icon(
+                              child: ElevatedButton.icon(
                                 onPressed: () =>
-                                    _showMemberSubmissions(context, task['id']),
+                                    _showSubmitDialog(context, task),
                                 icon: const Icon(
-                                  Icons.assignment_turned_in,
-                                  size: 14,
-                                  color: Color(0xFF2563EB),
+                                  Icons.upload_file,
+                                  size: 16,
+                                  color: Colors.white,
                                 ),
-                                label: const Text(
-                                  'View Member Submissions',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Color(0xFF2563EB),
+                                label: Text(
+                                  hasRejection
+                                      ? 'Resubmit to HR'
+                                      : 'Submit Task to HR',
+                                  style: const TextStyle(
+                                    color: Colors.white,
                                     fontWeight: FontWeight.w600,
+                                    fontSize: 12,
                                   ),
                                 ),
-                                style: OutlinedButton.styleFrom(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF16A34A),
                                   padding: const EdgeInsets.symmetric(
-                                    vertical: 6,
-                                  ),
-                                  side: const BorderSide(
-                                    color: Color(0xFF2563EB),
+                                    vertical: 8,
                                   ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(8),
@@ -1427,311 +1896,238 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                                 ),
                               ),
                             ),
-                          ),
-                          Builder(
-                            builder: (_) {
-                              final tw = (task['totalWeeks'] ?? 0) as int;
-                              if (tw <= 1) return const SizedBox.shrink();
-                              final wd = task['weeklyDeadlines'] as List? ?? [];
-                              final assignedWeeks = wd
-                                  .where((w) => (w as Map)['assigned'] == true)
-                                  .length;
-                              final memberSubs =
-                                  task['member_submissions']
-                                      as Map<String, dynamic>? ??
-                                  {};
-                              final taskMembers =
-                                  task['members'] as Map<String, dynamic>? ??
-                                  {};
-                              final totalMembers = taskMembers.length;
-                              int submittedCount = 0;
-                              int acceptedCount = 0;
-                              for (final entry in memberSubs.values) {
-                                if (entry is Map<String, dynamic>) {
-                                  final st = (entry['status'] ?? '').toString();
-                                  if (st == 'submitted') submittedCount++;
-                                  if (st == 'accepted') acceptedCount++;
-                                }
-                              }
-                              final allDone = assignedWeeks >= tw;
-                              final statusText = allDone
-                                  ? 'All $tw weeks assigned'
-                                  : 'Week $assignedWeeks of $tw — ${acceptedCount + submittedCount}/$totalMembers submitted';
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 6),
-                                child: Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 8,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: allDone
-                                        ? const Color(0xFFECFDF5)
-                                        : const Color(0xFFFFF7ED),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: allDone
-                                          ? const Color(0xFF6EE7B7)
-                                          : const Color(0xFFFED7AA),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        allDone
-                                            ? Icons.check_circle
-                                            : Icons.schedule,
-                                        size: 16,
-                                        color: allDone
-                                            ? const Color(0xFF059669)
-                                            : const Color(0xFFF59E0B),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          statusText,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w600,
-                                            color: allDone
-                                                ? const Color(0xFF059669)
-                                                : const Color(0xFFB45309),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: () => _showSubmitDialog(context, task),
-                              icon: const Icon(
-                                Icons.upload_file,
-                                size: 16,
-                                color: Colors.white,
-                              ),
-                              label: Text(
-                                hasRejection
-                                    ? 'Resubmit to HR'
-                                    : 'Submit Task to HR',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF16A34A),
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 8,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      );
-                    } else {
-                      final mySub = _getMemberSubmission(task);
-                      final memberIsOverdue =
-                          remainingDays != null && remainingDays < 0;
-                      final mySubStatus = (mySub?['status'] ?? '').toString();
-                      if (memberIsOverdue && mySubStatus != 'accepted') {
-                        return _buildOverdueBlock(
-                          context,
-                          task,
-                          role: 'member',
-                        );
-                      }
-                      if (mySub != null) {
-                        final myStatus = (mySub['status'] ?? 'submitted')
-                            .toString();
-                        final isRejected = myStatus == 'rejected';
-                        final isAccepted = myStatus == 'accepted';
-                        return Column(
-                          children: [
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 6,
-                                horizontal: 10,
-                              ),
-                              decoration: BoxDecoration(
-                                color: isAccepted
-                                    ? const Color(0xFFD1FAE5)
-                                    : isRejected
-                                    ? const Color(0xFFFEE2E2)
-                                    : const Color(0xFFDBEAFE),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                isAccepted
-                                    ? 'Work Accepted by Lead'
-                                    : isRejected
-                                    ? 'Work Rejected — Resubmit Required'
-                                    : 'Submitted to Lead',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: isAccepted
-                                      ? const Color(0xFF065F46)
-                                      : isRejected
-                                      ? const Color(0xFF991B1B)
-                                      : const Color(0xFF1E40AF),
-                                ),
-                              ),
-                            ),
-                            if (isRejected &&
-                                (mySub['rejectionReason'] ?? '')
-                                    .toString()
-                                    .isNotEmpty) ...[
-                              const SizedBox(height: 6),
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFEF2F2),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                    color: const Color(0xFFFECACA),
-                                  ),
-                                ),
-                                child: Text(
-                                  'Reason: ${mySub['rejectionReason']}',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: Color(0xFFDC2626),
-                                  ),
-                                ),
-                              ),
-                            ],
-                            if (!isAccepted) ...[
-                              const SizedBox(height: 6),
-                              SizedBox(
-                                width: double.infinity,
-                                child: OutlinedButton.icon(
-                                  onPressed: () =>
-                                      _showSubmitDialog(context, task),
-                                  icon: const Icon(
-                                    Icons.refresh,
-                                    size: 14,
-                                    color: Color(0xFF2563EB),
-                                  ),
-                                  label: Text(
-                                    isRejected
-                                        ? 'Re-submit Work'
-                                        : 'Update Submission',
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      color: Color(0xFF2563EB),
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  style: OutlinedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 4,
-                                    ),
-                                    side: const BorderSide(
-                                      color: Color(0xFF2563EB),
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
                           ],
                         );
-                      }
-                      return SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: () => _showSubmitDialog(context, task),
-                          icon: const Icon(
-                            Icons.upload_file,
-                            size: 16,
-                            color: Colors.white,
-                          ),
-                          label: const Text(
-                            'Submit Work',
-                            style: TextStyle(
+                      } else {
+                        final mySub = _getMemberSubmission(task);
+                        final memberIsOverdue =
+                            remainingDays != null && remainingDays < 0;
+
+                        final memberTasks =
+                            task['member_tasks'] as Map<String, dynamic>? ?? {};
+                        final currentEmpId = (_empId ?? '').toLowerCase();
+                        Map<String, dynamic>? myTask;
+                        for (final key in memberTasks.keys) {
+                          if (key.toLowerCase() == currentEmpId) {
+                            myTask = memberTasks[key] as Map<String, dynamic>?;
+                            break;
+                          }
+                        }
+                        final currentWeekNum = myTask?['weekNumber'] as int?;
+
+                        bool hasValidSubmission = false;
+                        String mySubStatus = '';
+
+                        if (mySub != null) {
+                          mySubStatus = (mySub['status'] ?? '').toString();
+                          final subWeekNum = mySub['weekNumber'] as int?;
+
+                          if (mySubStatus != 'pending' &&
+                              mySubStatus.isNotEmpty) {
+                            if (currentWeekNum == null ||
+                                subWeekNum == null ||
+                                subWeekNum == currentWeekNum) {
+                              hasValidSubmission = true;
+                            }
+                          }
+                        }
+
+                        if (memberIsOverdue &&
+                            (!hasValidSubmission ||
+                                mySubStatus != 'accepted')) {
+                          return _buildOverdueBlock(
+                            context,
+                            task,
+                            role: 'member',
+                          );
+                        }
+
+                        if (hasValidSubmission) {
+                          final isRejected = mySubStatus == 'rejected';
+                          final isAccepted = mySubStatus == 'accepted';
+                          return Column(
+                            children: [
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 6,
+                                  horizontal: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isAccepted
+                                      ? const Color(0xFFD1FAE5)
+                                      : isRejected
+                                      ? const Color(0xFFFEE2E2)
+                                      : const Color(0xFFDBEAFE),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  isAccepted
+                                      ? 'Work Accepted by Lead'
+                                      : isRejected
+                                      ? 'Work Rejected — Resubmit Required'
+                                      : 'Submitted to Lead',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: isAccepted
+                                        ? const Color(0xFF065F46)
+                                        : isRejected
+                                        ? const Color(0xFF991B1B)
+                                        : const Color(0xFF1E40AF),
+                                  ),
+                                ),
+                              ),
+                              if (isRejected &&
+                                  (mySub!['rejectionReason'] ?? '')
+                                      .toString()
+                                      .isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFEF2F2),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: const Color(0xFFFECACA),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    'Reason: ${mySub['rejectionReason']}',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: Color(0xFFDC2626),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              if (!isAccepted) ...[
+                                const SizedBox(height: 6),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: OutlinedButton.icon(
+                                    onPressed: () =>
+                                        _showSubmitDialog(context, task),
+                                    icon: const Icon(
+                                      Icons.refresh,
+                                      size: 14,
+                                      color: Color(0xFF2563EB),
+                                    ),
+                                    label: Text(
+                                      isRejected
+                                          ? 'Re-submit Work'
+                                          : 'Update Submission',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Color(0xFF2563EB),
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 4,
+                                      ),
+                                      side: const BorderSide(
+                                        color: Color(0xFF2563EB),
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          );
+                        }
+
+                        return SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () => _showSubmitDialog(context, task),
+                            icon: const Icon(
+                              Icons.upload_file,
+                              size: 16,
                               color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
+                            ),
+                            label: Text(
+                              currentWeekNum != null &&
+                                      (task['totalWeeks'] ?? 0) as int > 1
+                                  ? 'Submit Week $currentWeekNum Work'
+                                  : 'Submit Work',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF16A34A),
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
                             ),
                           ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF16A34A),
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                        ),
-                      );
-                    }
-                  },
-                ),
-              ],
-
-              if (status == 'submitted') ...[
-                const SizedBox(height: 10),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEDE9FE),
-                    borderRadius: BorderRadius.circular(8),
+                        );
+                      }
+                    },
                   ),
-                  child: const Text(
-                    'Submitted — Awaiting HR Review',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF6D28D9),
+                ],
+
+                // Submitted banner
+                if (status == 'submitted') ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEDE9FE),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'Submitted — Awaiting HR Review',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF6D28D9),
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
 
-              if (status == 'completed') ...[
-                const SizedBox(height: 10),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFD1FAE5),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Text(
-                    'Completed',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF065F46),
+                // Completed banner
+                if (status == 'completed') ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD1FAE5),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'Completed',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF065F46),
+                      ),
                     ),
                   ),
-                ),
+                ],
               ],
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
 
-  // ----- The following methods are unchanged from the original (kept for completeness) -----
   void _showAssignAdHocDialog(
     BuildContext ctx,
     List<Map<String, dynamic>> members,
@@ -2161,12 +2557,59 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                             ),
                           ),
                           const SizedBox(height: 4),
-                          Text(
-                            '${memberSubs.length} of ${members.length} members submitted',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: Color(0xFF64748B),
-                            ),
+                          Builder(
+                            builder: (_) {
+                              final leadId = (_empId ?? '').toLowerCase();
+                              final actualMembers = members.values.where((m) {
+                                if (m is! Map<String, dynamic>) return false;
+                                return (m['emp_id'] ?? '')
+                                        .toString()
+                                        .toLowerCase() !=
+                                    leadId;
+                              }).length;
+
+                              final memberTasks =
+                                  freshTask['member_tasks']
+                                      as Map<String, dynamic>? ??
+                                  {};
+
+                              int submittedCount = 0;
+                              for (final k in memberSubs.keys) {
+                                if (k.toLowerCase() == leadId) continue;
+                                final sub =
+                                    memberSubs[k] as Map<String, dynamic>?;
+
+                                final mTaskKey = memberTasks.keys.firstWhere(
+                                  (mk) => mk.toLowerCase() == k.toLowerCase(),
+                                  orElse: () => '',
+                                );
+                                final mTask =
+                                    memberTasks[mTaskKey]
+                                        as Map<String, dynamic>?;
+
+                                final subStatus = (sub?['status'] ?? '')
+                                    .toString();
+                                final cWeek = mTask?['weekNumber'] as int?;
+                                final sWeek = sub?['weekNumber'] as int?;
+
+                                if (sub != null &&
+                                    subStatus != 'pending' &&
+                                    subStatus.isNotEmpty &&
+                                    (cWeek == null ||
+                                        sWeek == null ||
+                                        sWeek == cWeek)) {
+                                  submittedCount++;
+                                }
+                              }
+
+                              return Text(
+                                '$submittedCount of $actualMembers members submitted',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: Color(0xFF64748B),
+                                ),
+                              );
+                            },
                           ),
                           const SizedBox(height: 16),
 
@@ -2185,6 +2628,11 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                             ...members.entries.map((entry) {
                               final m = entry.value as Map<String, dynamic>;
                               final empId = (m['emp_id'] ?? '').toString();
+                              if (empId.toLowerCase() ==
+                                  (_empId ?? '').toLowerCase()) {
+                                return const SizedBox.shrink();
+                              }
+
                               Map<String, dynamic>? sub;
                               for (final key in memberSubs.keys) {
                                 if (key.toLowerCase() == empId.toLowerCase()) {
@@ -2193,20 +2641,46 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                                   break;
                                 }
                               }
-                              final hasSubmitted = sub != null;
+
+                              final memberTasks =
+                                  freshTask['member_tasks']
+                                      as Map<String, dynamic>? ??
+                                  {};
+                              Map<String, dynamic>? mTask;
+                              for (final key in memberTasks.keys) {
+                                if (key.toLowerCase() == empId.toLowerCase()) {
+                                  mTask =
+                                      memberTasks[key] as Map<String, dynamic>?;
+                                  break;
+                                }
+                              }
+
+                              final currentWeekNum =
+                                  mTask?['weekNumber'] as int?;
+                              final subWeekNum = sub?['weekNumber'] as int?;
                               final subStatus = (sub?['status'] ?? '')
                                   .toString();
+
+                              final hasSubmitted =
+                                  sub != null &&
+                                  subStatus != 'pending' &&
+                                  subStatus.isNotEmpty &&
+                                  (currentWeekNum == null ||
+                                      subWeekNum == null ||
+                                      subWeekNum == currentWeekNum);
+
                               final isAccepted = subStatus == 'accepted';
                               final isRejected = subStatus == 'rejected';
 
                               Color badgeBg;
                               Color badgeFg;
                               String badgeText;
-                              if (isAccepted) {
+
+                              if (hasSubmitted && isAccepted) {
                                 badgeBg = const Color(0xFFD1FAE5);
                                 badgeFg = const Color(0xFF065F46);
                                 badgeText = 'Accepted';
-                              } else if (isRejected) {
+                              } else if (hasSubmitted && isRejected) {
                                 badgeBg = const Color(0xFFFEE2E2);
                                 badgeFg = const Color(0xFF991B1B);
                                 badgeText = 'Rejected';
@@ -2224,18 +2698,18 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                                 margin: const EdgeInsets.only(bottom: 12),
                                 padding: const EdgeInsets.all(14),
                                 decoration: BoxDecoration(
-                                  color: isAccepted
+                                  color: hasSubmitted && isAccepted
                                       ? const Color(0xFFF0FDF4)
-                                      : isRejected
+                                      : hasSubmitted && isRejected
                                       ? const Color(0xFFFEF2F2)
                                       : hasSubmitted
                                       ? const Color(0xFFEFF6FF)
                                       : const Color(0xFFFEF2F2),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                    color: isAccepted
+                                    color: hasSubmitted && isAccepted
                                         ? const Color(0xFFA7F3D0)
-                                        : isRejected
+                                        : hasSubmitted && isRejected
                                         ? const Color(0xFFFECACA)
                                         : hasSubmitted
                                         ? const Color(0xFFBFDBFE)
@@ -2312,7 +2786,7 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                                       const Divider(height: 1),
                                       const SizedBox(height: 10),
                                       Text(
-                                        sub!['submissionText'] ?? '',
+                                        sub['submissionText'] ?? '',
                                         style: const TextStyle(
                                           fontSize: 13,
                                           color: Color(0xFF475569),
@@ -2327,11 +2801,11 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                                           width: double.infinity,
                                           child: ElevatedButton.icon(
                                             onPressed: () async {
-                                              final url = sub?['pdfUrl']
+                                              final url = sub!['pdfUrl']
                                                   .toString();
                                               try {
                                                 await launchUrl(
-                                                  Uri.parse(url!),
+                                                  Uri.parse(url),
                                                   mode: LaunchMode
                                                       .externalApplication,
                                                 );
@@ -2630,13 +3104,28 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
       padding: EdgeInsets.zero,
       constraints: const BoxConstraints(),
       onSelected: (value) {
-        if (value == 'edit') {
+        if (value == 'assign') {
+          showAssignToMembersSheet(context, task, onAssigned: _refreshTasks);
+        } else if (value == 'edit') {
           _showTaskDetails(context, task, startInEditMode: true);
         } else if (value == 'approve') {
           _approveTask(task);
         }
       },
       itemBuilder: (_) => const [
+        PopupMenuItem(
+          value: 'assign',
+          child: Row(
+            children: [
+              Icon(Icons.send_rounded, size: 16, color: Color(0xFF16A34A)),
+              SizedBox(width: 8),
+              Text(
+                'Assign to Members',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
         PopupMenuItem(
           value: 'edit',
           child: Row(
@@ -2663,6 +3152,14 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
         ),
       ],
     );
+  }
+
+  void _showTaskDetails(
+    BuildContext context,
+    Map<String, dynamic> task, {
+    bool startInEditMode = false,
+  }) {
+    // Implement your task details logic
   }
 
   Future<void> _approveTask(
@@ -2713,7 +3210,8 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
     String? pickedFileName;
     String? pickedFilePath;
     Uint8List? pickedFileBytes;
-    bool uploading = false;
+
+    final savingRef = [false];
 
     final sdw = MediaQuery.of(context).size.width;
     showModalBottomSheet(
@@ -2727,7 +3225,112 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
       ),
       builder: (sheetCtx) {
         return StatefulBuilder(
-          builder: (sheetCtx, setSheetState) {
+          builder: (_, setSheetState) {
+            final isSaving = savingRef[0];
+
+            Future<void> handleSubmit() async {
+              final text = textCtrl.text.trim();
+              if (text.isEmpty) {
+                ScaffoldMessenger.of(sheetCtx).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please describe what you have done.'),
+                    backgroundColor: Color(0xFFDC2626),
+                  ),
+                );
+                return;
+              }
+
+              setSheetState(() => savingRef[0] = true);
+
+              String? uploadedPdfUrl;
+              if (pickedFileBytes != null && pickedFileName != null) {
+                try {
+                  final platformFile = PlatformFile(
+                    name: pickedFileName!,
+                    size: pickedFileBytes!.length,
+                    bytes: pickedFileBytes,
+                    path: pickedFilePath,
+                  );
+                  final meta = await StorageService().uploadPdf(
+                    storagePath:
+                        'task_submissions/${task['id']}/$_empId'
+                        '/${DateTime.now().millisecondsSinceEpoch}.pdf',
+                    file: platformFile,
+                    uploadedBy: _empId ?? '',
+                    uploaderRole: isLead ? 'lead' : 'member',
+                  );
+                  uploadedPdfUrl = meta['url'] as String?;
+                } catch (e) {
+                  setSheetState(() => savingRef[0] = false);
+                  if (!sheetCtx.mounted) return;
+                  ScaffoldMessenger.of(sheetCtx).showSnackBar(
+                    SnackBar(
+                      content: Text('PDF upload failed: $e'),
+                      backgroundColor: const Color(0xFFDC2626),
+                    ),
+                  );
+                  return;
+                }
+              }
+
+              bool ok;
+              try {
+                final taskVm = context.read<TaskViewModel>();
+                if (isLead) {
+                  ok = await taskVm.submitTask(
+                    taskId: task['id'],
+                    summary: summaryCtrl.text.trim(),
+                    submissionText: text,
+                    submittedBy: _empId ?? '',
+                    submittedByRole: 'lead',
+                    pdfUrl: uploadedPdfUrl,
+                  );
+                } else {
+                  ok = await taskVm.submitMemberWork(
+                    taskId: task['id'],
+                    empId: _empId ?? '',
+                    memberName:
+                        context.read<AuthViewModel>().currentUser?.name ?? '',
+                    submissionText: text,
+                    leadEmpId: task['lead_id'] ?? '',
+                    taskTitle: task['title'] ?? '',
+                    pdfUrl: uploadedPdfUrl,
+                  );
+                }
+              } catch (e) {
+                setSheetState(() => savingRef[0] = false);
+                if (!sheetCtx.mounted) return;
+                ScaffoldMessenger.of(sheetCtx).showSnackBar(
+                  SnackBar(
+                    content: Text('Submission error: $e'),
+                    backgroundColor: const Color(0xFFDC2626),
+                  ),
+                );
+                return;
+              }
+
+              setSheetState(() => savingRef[0] = false);
+
+              if (!sheetCtx.mounted) return;
+              Navigator.of(sheetCtx).pop();
+
+              if (!mounted) return;
+              final taskVm = context.read<TaskViewModel>();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    ok
+                        ? 'Submitted successfully'
+                        : (taskVm.errorMessage ?? 'Submission failed'),
+                  ),
+                  backgroundColor: ok
+                      ? const Color(0xFF16A34A)
+                      : const Color(0xFFDC2626),
+                ),
+              );
+              if (ok) _refreshTasks();
+            }
+
             return Padding(
               padding: EdgeInsets.only(
                 left: 24,
@@ -2868,503 +3471,106 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                       ),
                       const SizedBox(height: 8),
                     ],
+
                     OutlinedButton.icon(
-                      onPressed: () async {
-                        final result = await FilePicker.platform.pickFiles(
-                          type: kIsWeb ? FileType.custom : FileType.any,
-                          allowedExtensions: kIsWeb ? ['pdf'] : null,
-                          withData: true,
-                        );
-                        if (result != null &&
-                            result.files.single.name.isNotEmpty) {
-                          final file = result.files.single;
-                          if (!file.name.toLowerCase().endsWith('.pdf')) {
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Please select a PDF file.'),
-                                backgroundColor: Color(0xFFEF4444),
-                              ),
-                            );
-                            return;
-                          }
-
-                          Uint8List? fileBytes = file.bytes;
-                          String? errorDetail;
-
-                          if (!kIsWeb &&
-                              (fileBytes == null || fileBytes.isEmpty) &&
-                              file.path != null &&
-                              file.path!.isNotEmpty) {
-                            await Future.delayed(
-                              const Duration(milliseconds: 200),
-                            );
-                            try {
-                              final f = File(file.path!);
-                              if (await f.exists()) {
-                                fileBytes = await f.readAsBytes();
-                              } else {
-                                errorDetail = 'File not found at path';
-                              }
-                            } catch (e) {
-                              errorDetail = e.toString();
-                              debugPrint('[PDF] readAsBytes failed: $e');
-                            }
-                          }
-
-                          if (fileBytes != null && fileBytes.isNotEmpty) {
-                            setSheetState(() {
-                              pickedFileName = file.name;
-                              pickedFilePath = kIsWeb ? null : file.path;
-                              pickedFileBytes = fileBytes;
-                            });
-                          } else {
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  'Could not read PDF.${errorDetail != null ? ' Error: $errorDetail' : ''} Try selecting again.',
-                                ),
-                                backgroundColor: const Color(0xFFEF4444),
-                              ),
-                            );
-                          }
-                        }
-                      },
-                      icon: const Icon(
-                        Icons.picture_as_pdf,
-                        size: 18,
-                        color: Color(0xFF2563EB),
-                      ),
-                      label: const Text(
-                        'Attach PDF (Optional)',
-                        style: TextStyle(
-                          color: Color(0xFF2563EB),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFF2563EB)),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: uploading
-                            ? null
-                            : () async {
-                                final text = textCtrl.text.trim();
-                                if (text.isEmpty) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Submission details cannot be empty.',
-                                      ),
-                                      backgroundColor: Color(0xFFDC2626),
-                                    ),
+                      onPressed: isSaving
+                          ? null
+                          : () async {
+                              final result = await FilePicker.platform
+                                  .pickFiles(
+                                    type: kIsWeb
+                                        ? FileType.custom
+                                        : FileType.any,
+                                    allowedExtensions: kIsWeb ? ['pdf'] : null,
+                                    withData: true,
                                   );
-                                  return;
-                                }
-                                setSheetState(() => uploading = true);
-                                // Submission logic (use taskVm.submitTask or submitMemberWork)
-                                await Future.delayed(
-                                  const Duration(seconds: 1),
-                                );
-                                if (!context.mounted) return;
-                                setSheetState(() => uploading = false);
-                                Navigator.pop(sheetCtx);
-                                ScaffoldMessenger.of(context).showSnackBar(
+                              if (result == null) return;
+                              final file = result.files.single;
+                              if (!file.name.toLowerCase().endsWith('.pdf')) {
+                                if (!sheetCtx.mounted) return;
+                                ScaffoldMessenger.of(sheetCtx).showSnackBar(
                                   const SnackBar(
-                                    content: Text('Successfully Submitted!'),
-                                    backgroundColor: Color(0xFF16A34A),
+                                    content: Text('Please select a PDF file.'),
+                                    backgroundColor: Color(0xFFEF4444),
                                   ),
                                 );
-                              },
+                                return;
+                              }
+                              Uint8List? fileBytes = file.bytes;
+                              if (!kIsWeb &&
+                                  (fileBytes == null || fileBytes.isEmpty) &&
+                                  file.path != null) {
+                                await Future.delayed(
+                                  const Duration(milliseconds: 200),
+                                );
+                                try {
+                                  final f = File(file.path!);
+                                  if (await f.exists()) {
+                                    fileBytes = await f.readAsBytes();
+                                  }
+                                } catch (e) {
+                                  debugPrint('[PDF] readAsBytes failed: $e');
+                                }
+                              }
+                              setSheetState(() {
+                                pickedFileName = file.name;
+                                pickedFilePath = file.path;
+                                pickedFileBytes = fileBytes;
+                              });
+                            },
+                      icon: const Icon(
+                        Icons.attach_file,
+                        size: 16,
+                        color: Color(0xFF2563EB),
+                      ),
+                      label: const Text('Attach PDF'),
+                    ),
+                    const SizedBox(height: 20),
+
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: isSaving ? null : handleSubmit,
+                        icon: isSaving
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.send_rounded,
+                                size: 16,
+                                color: Colors.white,
+                              ),
+                        label: Text(
+                          isSaving
+                              ? 'Submitting…'
+                              : (isLead ? 'Submit to HR' : 'Submit Work'),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF16A34A),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
                         ),
-                        child: uploading
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text(
-                                'Confirm Submission',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  // ----- IMPROVED TASK DETAILS with primary and secondary sections -----
-  void _showTaskDetails(
-    BuildContext context,
-    Map<String, dynamic> task, {
-    bool startInEditMode = false,
-  }) {
-    final title = (task['title'] ?? 'Untitled').toString();
-    final primaryDesc = (task['description'] ?? 'No description available.')
-        .toString();
-    final secondaryDesc = (task['secondaryDescription'] ?? '').toString();
-    final status = (task['status'] ?? 'pending').toString();
-    final primaryPdfUrl = _getPrimaryPdfUrl(task);
-    final secondaryPdfUrl = _getSecondaryPdfUrl(task);
-    final rejectionReason = (task['rejectionReason'] ?? '').toString();
-
-    final createdAt = task['createdAt'] as Timestamp?;
-    final deadline = task['deadline'] as Timestamp?;
-    final approvedAt = task['approvedAt'] as Timestamp?;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.6,
-          minChildSize: 0.4,
-          maxChildSize: 0.9,
-          builder: (_, controller) {
-            return Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-              ),
-              padding: const EdgeInsets.all(24),
-              child: ListView(
-                controller: controller,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFCBD5E1),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          title,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF0F172A),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEFF6FF),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          status.toUpperCase(),
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF2563EB),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-
-                  // PRIMARY SECTION
-                  _buildDetailHeading(
-                    'PRIMARY TASK',
-                    Icons.flag_rounded,
-                    const Color(0xFF2563EB),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    primaryDesc,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      height: 1.5,
-                      color: Color(0xFF475569),
-                    ),
-                  ),
-                  if (primaryPdfUrl != null && primaryPdfUrl.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    _buildPdfButton(primaryPdfUrl, 'View Primary PDF Document'),
-                  ],
-
-                  // SECONDARY SECTION (if exists)
-                  if (secondaryDesc.isNotEmpty) ...[
-                    const SizedBox(height: 24),
-                    _buildDetailHeading(
-                      'SECONDARY TASK',
-                      Icons.event_note,
-                      const Color(0xFF7C3AED),
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      secondaryDesc,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        height: 1.5,
-                        color: Color(0xFF475569),
-                      ),
-                    ),
-                    if (secondaryPdfUrl != null &&
-                        secondaryPdfUrl.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      _buildPdfButton(
-                        secondaryPdfUrl,
-                        'View Secondary PDF Document',
-                      ),
-                    ],
                   ],
-
-                  const SizedBox(height: 24),
-                  const Divider(color: Color(0xFFE2E8F0)),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Previous History',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF1E293B),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  if (createdAt != null)
-                    _buildHistoryTimelineItem(
-                      icon: Icons.add_circle_outline,
-                      color: const Color(0xFF2563EB),
-                      title: 'Task Created & Assigned',
-                      date: createdAt.toDate(),
-                    ),
-                  if (deadline != null)
-                    _buildHistoryTimelineItem(
-                      icon: Icons.timer_outlined,
-                      color: const Color(0xFFD97706),
-                      title: 'Deadline Enforced',
-                      date: deadline.toDate(),
-                    ),
-                  if (rejectionReason.isNotEmpty)
-                    _buildHistoryTimelineItem(
-                      icon: Icons.cancel_outlined,
-                      color: const Color(0xFFDC2626),
-                      title: 'Task Rejected by HR/Lead',
-                      subtitle: 'Reason: $rejectionReason',
-                    ),
-                  if (approvedAt != null)
-                    _buildHistoryTimelineItem(
-                      icon: Icons.check_circle_outline,
-                      color: const Color(0xFF16A34A),
-                      title: 'Task Officially Approved',
-                      date: approvedAt.toDate(),
-                    ),
-                ],
+                ),
               ),
             );
           },
         );
       },
-    );
-  }
-
-  Widget _buildHistoryTimelineItem({
-    required IconData icon,
-    required Color color,
-    required String title,
-    String? subtitle,
-    DateTime? date,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                    color: Color(0xFF0F172A),
-                  ),
-                ),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      color: Color(0xFFDC2626),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-                if (date != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    '${date.day}/${date.month}/${date.year} at ${date.hour}:${date.minute.toString().padLeft(2, '0')}',
-                    style: const TextStyle(
-                      color: Color(0xFF94A3B8),
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTaskDescBlock({
-    required String label,
-    required Color labelColor,
-    required Color labelBg,
-    required String text,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: labelBg,
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              color: labelColor,
-            ),
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          text,
-          style: const TextStyle(
-            fontSize: 13,
-            color: Color(0xFF475569),
-            height: 1.4,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _chipWidget(IconData icon, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF1F5F9),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: const Color(0xFF64748B)),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF475569),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDetailHeading(String title, IconData icon, Color color) {
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: color),
-        const SizedBox(width: 8),
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: color,
-            letterSpacing: 1.1,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPdfButton(String url, String label) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: () async => await launchUrl(
-          Uri.parse(url),
-          mode: LaunchMode.externalApplication,
-        ),
-        icon: const Icon(Icons.picture_as_pdf, size: 18, color: Colors.white),
-        label: Text(
-          label,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFFDC2626),
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-      ),
     );
   }
 }

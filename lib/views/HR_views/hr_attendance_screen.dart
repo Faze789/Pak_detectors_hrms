@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/attendance_model.dart';
 import '../../viewmodels/attendance_viewmodel.dart';
 import '../../viewmodels/employee_viewmodel.dart';
@@ -130,9 +131,6 @@ String _calcHours(DateTime? inT, DateTime? outT) {
 }
 
 // ─── _deriveStatus reads stored AttendanceStatus directly ────────────────────
-// No hardcoded time thresholds. Late/absent/leave are driven by the value
-// written to Firestore by the service at check-in time.
-// ─────────────────────────────────────────────────────────────────────────────
 _Status _deriveStatus(AttendanceModel? rec) {
   if (rec == null) return _Status.absent;
 
@@ -174,6 +172,33 @@ String? _statusDetail(AttendanceModel? rec) {
       return 'Half Day';
     default:
       return null;
+  }
+}
+
+// ─── Convert raw Firestore status string → _Status ───────────────────────────
+_Status _statusFromString(String? s) {
+  switch ((s ?? '').toLowerCase()) {
+    case 'checkedin':
+    case 'checked_in':
+    case 'present':
+    case 'onbreak':
+    case 'on_break':
+    case 'halfday':
+    case 'half_day':
+      return _Status.present;
+    case 'late':
+      return _Status.late;
+    case 'absent':
+      return _Status.absent;
+    case 'onleave':
+    case 'on_leave':
+    case 'firsthalfleave':
+    case 'first_half_leave':
+    case 'secondhalfleave':
+    case 'second_half_leave':
+      return _Status.leave;
+    default:
+      return _Status.unknown;
   }
 }
 
@@ -240,19 +265,8 @@ class _HRAttendanceScreenState extends State<HRAttendanceScreen> {
     for (final emp in targets) {
       AttendanceModel? rec;
 
-      // Always try archive first
       rec = await vm.getArchivedAttendanceForDay(emp.uid, _selectedDate);
 
-      // FIX: For today, use getEmployeeLiveRecord instead of getLiveAttendance.
-
-      // getLiveAttendance called loadToday() which is designed for the currently
-      // logged-in user. Calling it in a loop for multiple employees corrupted
-      // the ViewModel's shared state (todayAttendance, officeSettings etc.)
-      // causing wrong statuses: checked-in-late shown as Present, absent shown
-      // as Late, etc.
-
-      // getEmployeeLiveRecord reads directly from the Firestore live collection
-      // without touching any ViewModel state — safe for any employee.
       if (isToday) {
         final liveRec = await vm.getEmployeeLiveRecord(emp.uid);
         if (liveRec != null) rec = liveRec;
@@ -330,6 +344,8 @@ class _HRAttendanceScreenState extends State<HRAttendanceScreen> {
     }
   }
 
+  bool get _isToday => _isSameDay(_selectedDate, DateTime.now());
+
   @override
   Widget build(BuildContext context) {
     final sw = MediaQuery.of(context).size.width;
@@ -381,6 +397,16 @@ class _HRAttendanceScreenState extends State<HRAttendanceScreen> {
                   isMobile: isMobile,
                   date: _selectedDate,
                 ),
+                const SizedBox(height: 20),
+
+                // ── Live Attendance Section (today only) ──────────────────
+                if (_isToday)
+                  _LiveAttendanceCard(
+                    employees: _employees,
+                    isMobile: isMobile,
+                    filterUid: _selectedEmployeeUid,
+                  ),
+
                 const SizedBox(height: 32),
               ]),
             ),
@@ -400,6 +426,624 @@ class _EmpInfo {
     required this.role,
     required this.department,
   });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// _LiveRecord — plain data class built directly from raw Firestore fields.
+// No AttendanceModel parsing involved — timestamps are read as-is from
+// Firestore Timestamp objects, so the displayed times always match the DB.
+// ══════════════════════════════════════════════════════════════════════════════
+class _LiveRecord {
+  final String userId;
+  final DateTime? checkInTime;
+  final DateTime? checkOutTime;
+  final String? checkInAddress;
+  final String? checkOutAddress;
+  final String status;
+  final int totalWorkSeconds;
+  final int totalBreakSeconds;
+
+  const _LiveRecord({
+    required this.userId,
+    this.checkInTime,
+    this.checkOutTime,
+    this.checkInAddress,
+    this.checkOutAddress,
+    required this.status,
+    required this.totalWorkSeconds,
+    required this.totalBreakSeconds,
+  });
+
+  /// Build from a raw Firestore document map.
+  /// Reads checkInTime / checkOutTime directly from Timestamp — never falls
+  /// back to DateTime.now(), so the value shown is always what was saved.
+  factory _LiveRecord.fromDoc(Map<String, dynamic> data) {
+    DateTime? ts(String key) {
+      final v = data[key];
+      if (v == null) return null;
+      if (v is Timestamp) return v.toDate();
+      return null; // anything else is treated as absent
+    }
+
+    return _LiveRecord(
+      userId: (data['userId'] as String?) ?? '',
+      checkInTime: ts('checkInTime'),
+      checkOutTime: ts('checkOutTime'),
+      checkInAddress: data['checkInAddress'] as String?,
+      checkOutAddress: data['checkOutAddress'] as String?,
+      status: (data['status'] as String?) ?? '',
+      totalWorkSeconds: (data['totalWorkSeconds'] as int?) ?? 0,
+      totalBreakSeconds: (data['totalBreakSeconds'] as int?) ?? 0,
+    );
+  }
+
+  String get workLabel {
+    if (totalWorkSeconds <= 0) return '—';
+    final h = totalWorkSeconds ~/ 3600;
+    final m = (totalWorkSeconds % 3600) ~/ 60;
+    return '${h}h ${m}m';
+  }
+}
+
+// ── Direct Firestore stream for attendance_live ───────────────────────────────
+// Reads the ENTIRE attendance_live collection with no date filter.
+// This collection only ever holds today's active records (the service clears
+// documents at end of day), so no compound query or composite index is needed.
+// This also avoids timezone mismatches that caused the stream to stall.
+Stream<List<_LiveRecord>> _streamLiveRecords() {
+  return FirebaseFirestore.instance
+      .collection('attendance_live')
+      .snapshots()
+      .map(
+        (snap) => snap.docs
+            .map((doc) => _LiveRecord.fromDoc(doc.data()))
+            .where((r) => r.userId.isNotEmpty)
+            .toList(),
+      );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// LIVE ATTENDANCE CARD
+// ══════════════════════════════════════════════════════════════════════════════
+class _LiveAttendanceCard extends StatelessWidget {
+  final List<_EmpInfo> employees;
+  final bool isMobile;
+  final String? filterUid;
+
+  const _LiveAttendanceCard({
+    required this.employees,
+    required this.isMobile,
+    this.filterUid,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Card header ────────────────────────────────────────────────
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFFF0FDF4), Color(0xFFECFDF5)],
+              ),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+              border: Border(bottom: BorderSide(color: Color(0xFFD1FAE5))),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF059669),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.sensors_rounded,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Live Attendance',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                      Text(
+                        'Real-time check-ins · attendance_live',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                _PulsingDot(),
+              ],
+            ),
+          ),
+
+          // ── Stream body ────────────────────────────────────────────────
+          StreamBuilder<List<_LiveRecord>>(
+            stream: _streamLiveRecords(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Padding(
+                  padding: EdgeInsets.all(40),
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+
+              if (snapshot.hasError) {
+                return Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Center(
+                    child: Text(
+                      'Error loading live data: ${snapshot.error}',
+                      style: const TextStyle(
+                        color: Color(0xFF991B1B),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                );
+              }
+
+              // uid → _LiveRecord (raw, timestamp-correct)
+              final liveMap = <String, _LiveRecord>{
+                for (final r in snapshot.data ?? [])
+                  if (r.userId.isNotEmpty) r.userId: r,
+              };
+
+              final displayEmps = filterUid != null
+                  ? employees.where((e) => e.uid == filterUid).toList()
+                  : employees;
+
+              final activeEmps = displayEmps
+                  .where((e) => liveMap.containsKey(e.uid))
+                  .toList();
+
+              if (activeEmps.isEmpty) return _LiveEmptyState();
+
+              return isMobile
+                  ? _LiveMobileList(emps: activeEmps, liveMap: liveMap)
+                  : _LiveDesktopTable(emps: activeEmps, liveMap: liveMap);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Pulsing green dot widget ──────────────────────────────────────────────────
+class _PulsingDot extends StatefulWidget {
+  @override
+  State<_PulsingDot> createState() => _PulsingDotState();
+}
+
+class _PulsingDotState extends State<_PulsingDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+    _anim = Tween<double>(begin: 0.4, end: 1.0).animate(_ctrl);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _anim,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: const BoxDecoration(
+              color: Color(0xFF059669),
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 5),
+          const Text(
+            'LIVE',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF059669),
+              letterSpacing: 1.0,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Desktop table for live records ────────────────────────────────────────────
+class _LiveDesktopTable extends StatelessWidget {
+  final List<_EmpInfo> emps;
+  final Map<String, _LiveRecord> liveMap;
+
+  const _LiveDesktopTable({required this.emps, required this.liveMap});
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minWidth: MediaQuery.of(context).size.width - 40,
+        ),
+        child: Table(
+          columnWidths: const {
+            0: FlexColumnWidth(2.5), // Employee
+            1: FlexColumnWidth(1.8), // Department
+            2: FlexColumnWidth(1.2), // Check In
+            3: FlexColumnWidth(1.2), // Check Out
+            4: FlexColumnWidth(2.0), // Location
+            5: FlexColumnWidth(1.5), // Status
+            6: FlexColumnWidth(1.0), // Work Time
+          },
+          children: [
+            TableRow(
+              decoration: const BoxDecoration(color: Color(0xFFF0FDF4)),
+              children: [
+                _TH('Employee'),
+                _TH('Department'),
+                _TH('Check In', center: true),
+                _TH('Check Out', center: true),
+                _TH('Location'),
+                _TH('Status', center: true),
+                _TH('Work Time', center: true),
+              ],
+            ),
+            ...emps.asMap().entries.map((entry) {
+              final i = entry.key;
+              final emp = entry.value;
+              final rec = liveMap[emp.uid]!;
+              final status = _statusFromString(rec.status);
+
+              return TableRow(
+                decoration: BoxDecoration(
+                  color: i.isEven ? Colors.white : const Color(0xFFF9FAFB),
+                  border: const Border(
+                    bottom: BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                ),
+                children: [
+                  // Employee
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFDBEAFE),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Center(
+                            child: Text(
+                              emp.name.isNotEmpty
+                                  ? emp.name[0].toUpperCase()
+                                  : '?',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF2563EB),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Flexible(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                emp.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                  color: Color(0xFF0F172A),
+                                ),
+                              ),
+                              Text(
+                                emp.role,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFF64748B),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Department
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    child: Text(
+                      emp.department,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF475569),
+                      ),
+                    ),
+                  ),
+                  // Check In — raw timestamp from Firestore
+                  _TD(_fmtTime(rec.checkInTime)),
+                  // Check Out — raw timestamp, '—' if null
+                  _TD(_fmtTime(rec.checkOutTime)),
+                  // Location
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.location_on_rounded,
+                          size: 13,
+                          color: Color(0xFF94A3B8),
+                        ),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            rec.checkInAddress ?? '—',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF475569),
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Status
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    child: Center(child: _StatusBadge(status: status)),
+                  ),
+                  // Work time
+                  _TD(rec.workLabel),
+                ],
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Mobile list for live records ──────────────────────────────────────────────
+class _LiveMobileList extends StatelessWidget {
+  final List<_EmpInfo> emps;
+  final Map<String, _LiveRecord> liveMap;
+
+  const _LiveMobileList({required this.emps, required this.liveMap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: emps.asMap().entries.map((entry) {
+        final i = entry.key;
+        final emp = entry.value;
+        final rec = liveMap[emp.uid]!;
+        final status = _statusFromString(rec.status);
+
+        return Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: i.isEven ? Colors.white : const Color(0xFFF9FAFB),
+            border: const Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDBEAFE),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Center(
+                  child: Text(
+                    emp.name.isNotEmpty ? emp.name[0].toUpperCase() : '?',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF2563EB),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            emp.name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                        ),
+                        _StatusBadge(status: status),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      emp.role,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    if (rec.checkInAddress != null)
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.location_on_rounded,
+                            size: 12,
+                            color: Color(0xFF94A3B8),
+                          ),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              rec.checkInAddress!,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF64748B),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        _TimeChip(
+                          icon: Icons.login_rounded,
+                          label: 'In',
+                          // raw timestamp — never DateTime.now()
+                          value: _fmtTime(rec.checkInTime),
+                          color: const Color(0xFF059669),
+                        ),
+                        const SizedBox(width: 8),
+                        _TimeChip(
+                          icon: Icons.logout_rounded,
+                          label: 'Out',
+                          value: _fmtTime(rec.checkOutTime),
+                          color: const Color(0xFFDC2626),
+                        ),
+                        const SizedBox(width: 8),
+                        _TimeChip(
+                          icon: Icons.timer_outlined,
+                          label: 'Worked',
+                          value: rec.workLabel,
+                          color: const Color(0xFF7C3AED),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+// ── Live empty state ──────────────────────────────────────────────────────────
+class _LiveEmptyState extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 36),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0FDF4),
+                borderRadius: BorderRadius.circular(30),
+              ),
+              child: const Icon(
+                Icons.sensors_off_rounded,
+                size: 28,
+                color: Color(0xFF6EE7B7),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'No live check-ins yet today',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+                color: Color(0xFF475569),
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Records will appear as employees check in',
+              style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -857,7 +1501,6 @@ class _TableCard extends StatelessWidget {
 
   const _TableCard({
     this.employees_data,
-
     required this.rows,
     required this.loading,
     required this.isMobile,
@@ -915,23 +1558,7 @@ class _TableCard extends StatelessWidget {
                           color: Color(0xFF0F172A),
                         ),
                       ),
-                      IconButton(
-                        onPressed: () {
-                          if (employees_data != null &&
-                              employees_data!.isNotEmpty) {
-                            debugPrint(
-                              "First Employee: ${employees_data!.first.name}",
-                            );
-                          } else {
-                            debugPrint("No employee data available");
-                          }
-                        },
-                        icon: Icon(
-                          Icons.person_search_rounded,
-                          size: 18,
-                          color: Colors.grey.shade500,
-                        ),
-                      ),
+
                       Text(
                         dateLabel,
                         style: const TextStyle(

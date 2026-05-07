@@ -353,7 +353,7 @@ class AttendanceModel {
 
   /// Defensive Timestamp/String/DateTime parser. Never throws.
   /// Returns `fallback` (default = DateTime.now()) on any failure.
-  static DateTime _parseDate(dynamic v, {DateTime? fallback}) {
+  static DateTime _parseDate(dynamic v) {
     // final fb = fallback ?? DateTime.now();
     // if (v == null) return fb;
     // if (v is DateTime) return v;

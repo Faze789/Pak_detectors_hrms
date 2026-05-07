@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:hrms_app/viewmodels/task_viewmodel.dart';
+import 'package:hrms_app/views/HR_views/hr_task_audit_screen.dart';
 import 'package:hrms_app/widgets/edit_task_dialog.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -954,6 +955,39 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                         ),
                       ],
                     ),
+                  if (task['schemaVersion'] == 2) ...[
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.of(parentContext).pop();
+                          Navigator.of(parentContext).push(
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  HRTaskAuditScreen(taskId: task['id']),
+                            ),
+                          );
+                        },
+                        icon: const Icon(
+                          Icons.fact_check_outlined,
+                          size: 16,
+                          color: Color(0xFF2563EB),
+                        ),
+                        label: const Text(
+                          'Full Audit Timeline',
+                          style: TextStyle(color: Color(0xFF2563EB)),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          side: const BorderSide(color: Color(0xFF2563EB)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                 ],
               ),

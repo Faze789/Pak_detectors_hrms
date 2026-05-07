@@ -176,7 +176,11 @@ class TaskViewModel extends ChangeNotifier {
     }
   }
 
-  /// Submit a new task and refresh the list
+  /// Submit a new task and refresh the list.
+  ///
+  /// `createdBy*` are forwarded to [TaskService.createTask] so the hr_create
+  /// audit event can be written. They're optional only for backward compat
+  /// with any pre-v2 callers; the HR form now always passes them.
   Future<bool> assignTask({
     List<Map<String, dynamic>>? members,
     required String lead_id,
@@ -190,12 +194,15 @@ class TaskViewModel extends ChangeNotifier {
     List<Map<String, dynamic>>? attachments,
     String? secondaryDescription,
     List<Map<String, dynamic>>? secondaryAttachments,
+    String? createdBy,
+    String? createdByName,
+    String? createdByRole,
   }) async {
     _submitting = true;
     notifyListeners();
 
     try {
-      await _service.createTask(
+      final newTaskId = await _service.createTask(
         members: members,
         lead_id: lead_id,
         leadName: leadName,
@@ -208,12 +215,16 @@ class TaskViewModel extends ChangeNotifier {
         attachments: attachments,
         secondaryDescription: secondaryDescription,
         secondaryAttachments: secondaryAttachments,
+        createdBy: createdBy,
+        createdByName: createdByName,
+        createdByRole: createdByRole,
       );
 
       // Notify the lead about the new task assignment
       if (lead_id.isNotEmpty) {
         await FirebaseFirestore.instance.collection('task_notifications').add({
           'lead_id': lead_id,
+          'taskId': newTaskId,
           'title': 'New Task Assigned',
           'body': '"$title" has been assigned to you by HR',
           'type': 'task',
@@ -235,6 +246,7 @@ class TaskViewModel extends ChangeNotifier {
   }
 
   /// Edit an existing task: saves old version to history, updates document
+  /// Edit an existing task: saves old version to history, updates document
   Future<bool> editTask({
     required String taskId,
     required Map<String, dynamic> currentData,
@@ -245,6 +257,8 @@ class TaskViewModel extends ChangeNotifier {
     required String newStatus,
     required String modifiedBy,
     required String modifiedByRole,
+    String? newPrimaryGoal, // ← NEW: primary goal text (priority tasks only)
+    String? newNormalGoal, // ← NEW: normal/secondary goal text
   }) async {
     _submitting = true;
     notifyListeners();
@@ -260,6 +274,8 @@ class TaskViewModel extends ChangeNotifier {
         newStatus: newStatus,
         modifiedBy: modifiedBy,
         modifiedByRole: modifiedByRole,
+        newPrimaryGoal: newPrimaryGoal,
+        newNormalGoal: newNormalGoal,
       );
 
       // Create notification for the lead in Firestore
@@ -547,42 +563,84 @@ class TaskViewModel extends ChangeNotifier {
     final totalWeeks = (taskData['totalWeeks'] ?? 0) as int;
     if (members.isEmpty || totalWeeks <= 1) return;
 
-    // Check if every member's submission is 'accepted'
+    // Build a case-insensitive submissions lookup
+    final subsLower = <String, Map<String, dynamic>>{};
+    submissions.forEach((k, v) {
+      if (v is Map<String, dynamic>) subsLower[k.toLowerCase()] = v;
+    });
+
+    // Check if every NON-LEAD member's submission is 'accepted'
+    final leadId = (taskData['lead_id'] ?? '').toString().toLowerCase();
     for (final memberEntry in members.values) {
-      if (memberEntry is Map<String, dynamic>) {
-        final memberEmpId = (memberEntry['emp_id'] ?? '').toString();
-        if (memberEmpId.isEmpty) continue;
-        final sub = submissions[memberEmpId];
-        if (sub is! Map<String, dynamic> || sub['status'] != 'accepted') {
-          return; // Not all accepted yet
-        }
+      if (memberEntry is! Map<String, dynamic>) continue;
+      final memberEmpId = (memberEntry['emp_id'] ?? '')
+          .toString()
+          .toLowerCase();
+      if (memberEmpId.isEmpty || memberEmpId == leadId) continue; // skip lead
+      final sub = subsLower[memberEmpId];
+      if (sub == null || sub['status'] != 'accepted') {
+        return; // Not all accepted yet
       }
     }
 
-    // All accepted — find next unassigned week
+    // Find current week from weeklyDeadlines — the first week that is 'assigned'
+    // but whose members have all been accepted. We advance from it.
     final deadlines = taskData['weeklyDeadlines'] as List? ?? [];
-    int nextWeek = 0;
+
+    // Find the highest assigned week number
+    int currentAssignedWeek = 0;
     for (final d in deadlines) {
       final w = Map<String, dynamic>.from(d as Map);
-      if (w['assigned'] != true) {
-        nextWeek = (w['week'] as int?) ?? 0;
-        break;
+      if (w['assigned'] == true) {
+        final wNum = (w['week'] as int?) ?? 0;
+        if (wNum > currentAssignedWeek) currentAssignedWeek = wNum;
       }
     }
 
-    if (nextWeek == 0 || nextWeek > totalWeeks) return; // All weeks done
+    // If nothing was marked assigned, treat week 1 as current
+    if (currentAssignedWeek == 0) currentAssignedWeek = 1;
 
-    // Auto-forward next week
+    final nextWeek = currentAssignedWeek + 1;
+    if (nextWeek > totalWeeks) return; // All weeks done
+
+    // Get only actual members (excluding lead)
+    final membersForForward = <String, dynamic>{};
+    members.forEach((k, v) {
+      if (v is Map<String, dynamic>) {
+        final empId = (v['emp_id'] ?? '').toString().toLowerCase();
+        if (empId.isNotEmpty && empId != leadId) {
+          membersForForward[k] = v;
+        }
+      }
+    });
+
+    if (membersForForward.isEmpty) return;
+
+    // Mark week 1 (current) as assigned in weeklyDeadlines before advancing
+    // This fixes the missing 'assigned: true' flag
+    final updatedDeadlines = List<Map<String, dynamic>>.from(
+      deadlines.map((e) => Map<String, dynamic>.from(e as Map)),
+    );
+    for (int i = 0; i < updatedDeadlines.length; i++) {
+      if (updatedDeadlines[i]['week'] == currentAssignedWeek) {
+        updatedDeadlines[i]['assigned'] = true;
+      }
+    }
+    await FirebaseFirestore.instance.collection('tasks').doc(taskId).update({
+      'weeklyDeadlines': updatedDeadlines,
+    });
+
+    // Auto-forward next week to all non-lead members
     await _service.forwardTaskToAllMembers(
       taskId: taskId,
-      members: members,
+      members: membersForForward,
       instructions: taskData['description'] ?? '',
       weekNumber: nextWeek,
     );
 
-    // Notify all members about next week
+    // Notify members
     final taskTitle = taskData['title'] ?? '';
-    for (final entry in members.values) {
+    for (final entry in membersForForward.values) {
       if (entry is Map<String, dynamic>) {
         final memberEmpId = (entry['emp_id'] ?? '').toString();
         if (memberEmpId.isNotEmpty) {
@@ -999,6 +1057,527 @@ class TaskViewModel extends ChangeNotifier {
       _taskHistory = [];
     }
     notifyListeners();
+  }
+
+  // ── v2 Hierarchical Task Workflow ─────────────────────────────────
+  // These methods drive the schemaVersion=2 flow. They wrap [TaskService]
+  // calls, emit audit events via [TaskService.logEvent], and write to
+  // `task_notifications` so FCM/in-app notifications fire.
+
+  /// Lead acceptance — variant is one of:
+  ///   'accepted_as_is'      : single-tap accept of HR's original task
+  ///   'accepted_with_edits' : lead modified title/desc/attachments before accepting
+  ///   'team_changed'        : lead changed the member list before/with accepting
+  Future<bool> leadAcceptTask({
+    required String taskId,
+    required String variant,
+    required String leadEmpId,
+    required String leadName,
+    required String taskTitle,
+    Map<String, dynamic>? editsPayload,
+    Map<String, dynamic>? membersPayload,
+  }) async {
+    try {
+      final state = variant == 'team_changed' ? 'accepted_with_edits' : variant;
+      await _service.setLeadAcceptanceState(
+        taskId: taskId,
+        state: state,
+        leadEmpId: leadEmpId,
+      );
+
+      final eventType = switch (variant) {
+        'accepted_as_is' => 'lead_accept_as_is',
+        'accepted_with_edits' => 'lead_edit_and_accept',
+        'team_changed' => 'lead_team_change',
+        _ => 'lead_accept_as_is',
+      };
+
+      final eventId = await _service.logEvent(
+        taskId: taskId,
+        type: eventType,
+        actorId: leadEmpId,
+        actorName: leadName,
+        actorRole: 'lead',
+        payload: {
+          if (editsPayload != null) ...editsPayload,
+          if (membersPayload != null) 'members': membersPayload,
+        },
+      );
+
+      // Notify HR that the lead has accepted
+      await _notifyAllHr(
+        taskId: taskId,
+        title: switch (variant) {
+          'accepted_as_is' => 'Task Accepted by Lead',
+          'accepted_with_edits' => 'Task Edited & Accepted by Lead',
+          'team_changed' => 'Lead Modified Team & Accepted',
+          _ => 'Task Accepted by Lead',
+        },
+        body: '$leadName accepted "$taskTitle"',
+        eventId: eventId,
+      );
+
+      return true;
+    } catch (e) {
+      errorMessage = 'Failed to accept task: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Lead applies edits (title/description/attachments) to the task without
+  /// accepting yet. Used by the "Edit & Accept" flow before the explicit
+  /// acceptance step.
+  Future<bool> leadApplyEdits({
+    required String taskId,
+    String? title,
+    String? description,
+    String? secondaryDescription,
+    List<Map<String, dynamic>>? attachments,
+    List<Map<String, dynamic>>? secondaryAttachments,
+  }) async {
+    try {
+      await _service.applyLeadEdits(
+        taskId: taskId,
+        title: title,
+        description: description,
+        secondaryDescription: secondaryDescription,
+        attachments: attachments,
+        secondaryAttachments: secondaryAttachments,
+      );
+      return true;
+    } catch (e) {
+      errorMessage = 'Failed to apply edits: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Lead updates the member list with min-1 validation. Logs a
+  /// `lead_team_change` event when members actually changed.
+  Future<bool> leadUpdateMembers({
+    required String taskId,
+    required Map<String, dynamic> previousMembers,
+    required Map<String, dynamic> newMembers,
+    required String leadEmpId,
+    required String leadName,
+  }) async {
+    if (newMembers.isEmpty) {
+      errorMessage = 'A task must have at least one member.';
+      notifyListeners();
+      return false;
+    }
+    try {
+      await _service.updateTaskMembers(taskId: taskId, membersMap: newMembers);
+      await _service.logEvent(
+        taskId: taskId,
+        type: 'lead_team_change',
+        actorId: leadEmpId,
+        actorName: leadName,
+        actorRole: 'lead',
+        payload: {
+          'previousCount': previousMembers.length,
+          'newCount': newMembers.length,
+          'newMembers': newMembers,
+        },
+      );
+      return true;
+    } catch (e) {
+      errorMessage = 'Failed to update members: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Lead writes/updates the per-(week, member) instruction during breakdown.
+  /// Persists to `weekly_assignments` and logs `lead_breakdown`. Notifies the
+  /// member that their week is assigned.
+  ///
+  /// Dates are derived inside [TaskService.upsertWeeklyAssignment] — when the
+  /// lead saves a week beyond `currentWeek`, that call implicitly activates
+  /// the new phase (sets startDate=NOW, endDate=NOW+cycle, bumps currentWeek,
+  /// closes prior).
+  Future<bool> leadSetWeekInstruction({
+    required String taskId,
+    required int weekNumber,
+    required String empId,
+    required String memberName,
+    required String instruction,
+    required String leadEmpId,
+    required String leadName,
+    required String taskTitle,
+    List<Map<String, dynamic>>? attachments,
+    bool notify = true,
+  }) async {
+    try {
+      await _service.upsertWeeklyAssignment(
+        taskId: taskId,
+        weekNumber: weekNumber,
+        empId: empId,
+        memberName: memberName,
+        instruction: instruction,
+        attachments: attachments,
+      );
+      final eventId = await _service.logEvent(
+        taskId: taskId,
+        type: 'lead_breakdown',
+        actorId: leadEmpId,
+        actorName: leadName,
+        actorRole: 'lead',
+        weekNumber: weekNumber,
+        memberEmpId: empId,
+        payload: {'instruction': instruction, 'memberName': memberName},
+        attachments: attachments,
+      );
+      if (notify) {
+        await FirebaseFirestore.instance.collection('task_notifications').add({
+          'lead_id': empId,
+          'taskId': taskId,
+          'weekNumber': weekNumber,
+          'eventId': eventId,
+          'title': 'Week $weekNumber Assigned',
+          'body': 'You have a Week $weekNumber breakdown for "$taskTitle"',
+          'type': 'task',
+          'createdAt': FieldValue.serverTimestamp(),
+          'read': false,
+        });
+      }
+      return true;
+    } catch (e) {
+      errorMessage = 'Failed to set week instruction: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Mark the parent task as breakdown-complete (or not). The lead
+  /// breakdown UI calls this after saving all (week, member) cells.
+  Future<bool> leadSetBreakdownComplete({
+    required String taskId,
+    required bool complete,
+  }) async {
+    try {
+      await _service.markBreakdownComplete(taskId, complete);
+      return true;
+    } catch (e) {
+      errorMessage = 'Failed to update breakdown state: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Member submits work for a single (week, member) pair. Records the
+  /// attempt, logs `member_submit` (or `member_resubmit` for attempts > 1),
+  /// notifies the lead.
+  Future<bool> memberSubmitWeeklyWork({
+    required String taskId,
+    required int weekNumber,
+    required String empId,
+    required String memberName,
+    required String text,
+    required String leadEmpId,
+    required String taskTitle,
+    List<Map<String, dynamic>>? attachments,
+  }) async {
+    _submitting = true;
+    notifyListeners();
+    try {
+      final attemptNumber = await _service.appendSubmissionAttempt(
+        taskId: taskId,
+        weekNumber: weekNumber,
+        empId: empId,
+        text: text,
+        attachments: attachments,
+      );
+      final eventId = await _service.logEvent(
+        taskId: taskId,
+        type: attemptNumber == 1 ? 'member_submit' : 'member_resubmit',
+        actorId: empId,
+        actorName: memberName,
+        actorRole: 'member',
+        weekNumber: weekNumber,
+        memberEmpId: empId,
+        payload: {'attemptNumber': attemptNumber, 'text': text},
+        attachments: attachments,
+      );
+      if (leadEmpId.isNotEmpty) {
+        await FirebaseFirestore.instance.collection('task_notifications').add({
+          'lead_id': leadEmpId,
+          'taskId': taskId,
+          'weekNumber': weekNumber,
+          'memberEmpId': empId,
+          'eventId': eventId,
+          'title': attemptNumber == 1
+              ? 'Member Submission'
+              : 'Member Resubmitted',
+          'body':
+              '$memberName submitted Week $weekNumber work for "$taskTitle"',
+          'type': 'task',
+          'createdAt': FieldValue.serverTimestamp(),
+          'read': false,
+        });
+      }
+      // HR summary notification on every member submission (spec §7)
+      await _notifyAllHr(
+        taskId: taskId,
+        title: 'Member Submission (audit)',
+        body: '$memberName submitted Week $weekNumber on "$taskTitle"',
+        weekNumber: weekNumber,
+        memberEmpId: empId,
+        eventId: eventId,
+      );
+
+      _submitting = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      errorMessage = 'Failed to submit work: $e';
+      _submitting = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Lead accepts or rejects the most recent attempt on a (week, member).
+  /// Logs `lead_accept_member` / `lead_reject_member`, notifies the member.
+  Future<bool> leadReviewWeeklyWork({
+    required String taskId,
+    required int weekNumber,
+    required String empId,
+    required String memberName,
+    required bool accept,
+    required String leadEmpId,
+    required String leadName,
+    required String taskTitle,
+    String? rejectReason,
+  }) async {
+    try {
+      await _service.reviewLastAttempt(
+        taskId: taskId,
+        weekNumber: weekNumber,
+        empId: empId,
+        accept: accept,
+        rejectReason: rejectReason,
+        reviewerId: leadEmpId,
+      );
+      final eventId = await _service.logEvent(
+        taskId: taskId,
+        type: accept ? 'lead_accept_member' : 'lead_reject_member',
+        actorId: leadEmpId,
+        actorName: leadName,
+        actorRole: 'lead',
+        weekNumber: weekNumber,
+        memberEmpId: empId,
+        payload: {
+          if (!accept && rejectReason != null) 'rejectReason': rejectReason,
+        },
+      );
+      await FirebaseFirestore.instance.collection('task_notifications').add({
+        'lead_id': empId,
+        'taskId': taskId,
+        'weekNumber': weekNumber,
+        'eventId': eventId,
+        'title': accept ? 'Work Accepted' : 'Work Rejected',
+        'body': accept
+            ? 'Your Week $weekNumber work on "$taskTitle" was accepted'
+            : 'Week $weekNumber rejected. Reason: ${rejectReason ?? 'no reason'}',
+        'type': 'task',
+        'createdAt': FieldValue.serverTimestamp(),
+        'read': false,
+      });
+      if (!accept) {
+        // Spec §7: HR summary notification on rejections too.
+        await _notifyAllHr(
+          taskId: taskId,
+          title: 'Lead Rejection (audit)',
+          body:
+              '$leadName rejected $memberName\'s Week $weekNumber on "$taskTitle"',
+          weekNumber: weekNumber,
+          memberEmpId: empId,
+          eventId: eventId,
+        );
+      }
+      return true;
+    } catch (e) {
+      errorMessage = 'Failed to review work: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Member raises a barrier — only available once the week's deadline has
+  /// passed without an accepted submission.
+  Future<bool> memberRaiseBarrier({
+    required String taskId,
+    required int weekNumber,
+    required String empId,
+    required String memberName,
+    required String reason,
+    required String leadEmpId,
+    required String taskTitle,
+  }) async {
+    try {
+      await _service.setBarrier(
+        taskId: taskId,
+        weekNumber: weekNumber,
+        empId: empId,
+        reason: reason,
+      );
+      final eventId = await _service.logEvent(
+        taskId: taskId,
+        type: 'member_barrier',
+        actorId: empId,
+        actorName: memberName,
+        actorRole: 'member',
+        weekNumber: weekNumber,
+        memberEmpId: empId,
+        payload: {'reason': reason},
+      );
+      if (leadEmpId.isNotEmpty) {
+        await FirebaseFirestore.instance.collection('task_notifications').add({
+          'lead_id': leadEmpId,
+          'taskId': taskId,
+          'weekNumber': weekNumber,
+          'memberEmpId': empId,
+          'eventId': eventId,
+          'title': 'Barrier Raised',
+          'body':
+              '$memberName raised a barrier for Week $weekNumber of "$taskTitle"',
+          'type': 'task',
+          'createdAt': FieldValue.serverTimestamp(),
+          'read': false,
+        });
+      }
+      return true;
+    } catch (e) {
+      errorMessage = 'Failed to raise barrier: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Lead's final submission of the whole task back to HR. Sets task status
+  /// to 'submitted' and notifies all HR users.
+  Future<bool> leadSubmitTaskToHr({
+    required String taskId,
+    required String leadEmpId,
+    required String leadName,
+    required String taskTitle,
+    String? summary,
+  }) async {
+    _submitting = true;
+    notifyListeners();
+    try {
+      await _service.submitV2TaskToHr(taskId: taskId, summary: summary);
+      final eventId = await _service.logEvent(
+        taskId: taskId,
+        type: 'lead_submit_to_hr',
+        actorId: leadEmpId,
+        actorName: leadName,
+        actorRole: 'lead',
+        payload: {if (summary != null) 'summary': summary},
+      );
+      await _notifyAllHr(
+        taskId: taskId,
+        title: 'Task Submitted by Lead',
+        body: '$leadName submitted "$taskTitle" for HR review',
+        eventId: eventId,
+      );
+      _submitting = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      errorMessage = 'Failed to submit task: $e';
+      _submitting = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Lead activates the next week immediately (or after the current week
+  /// expired). Shifts dates via [TaskService.activateNextWeek], logs the
+  /// `lead_activate_week` event and notifies every member of the new active
+  /// week.
+  Future<bool> leadActivateNextWeek({
+    required String taskId,
+    required int currentWeekNumber,
+    required String leadEmpId,
+    required String leadName,
+    required String taskTitle,
+    required Map<String, dynamic> members,
+  }) async {
+    try {
+      await _service.activateNextWeek(
+        taskId: taskId,
+        currentWeekNumber: currentWeekNumber,
+      );
+      final nextWeek = currentWeekNumber + 1;
+      final eventId = await _service.logEvent(
+        taskId: taskId,
+        type: 'lead_activate_week',
+        actorId: leadEmpId,
+        actorName: leadName,
+        actorRole: 'lead',
+        weekNumber: nextWeek,
+        payload: {'previousWeek': currentWeekNumber},
+      );
+
+      // Notify each member that the new week is active.
+      for (final m in members.values) {
+        if (m is Map<String, dynamic>) {
+          final empId = (m['emp_id'] ?? '').toString();
+          if (empId.isEmpty) continue;
+          await FirebaseFirestore.instance.collection('task_notifications').add({
+            'lead_id': empId,
+            'taskId': taskId,
+            'weekNumber': nextWeek,
+            'eventId': eventId,
+            'title': 'Week $nextWeek Activated',
+            'body':
+                'Week $nextWeek of "$taskTitle" is now active. Submit your work before the deadline.',
+            'type': 'task',
+            'createdAt': FieldValue.serverTimestamp(),
+            'read': false,
+          });
+        }
+      }
+      notifyListeners();
+      return true;
+    } catch (e) {
+      errorMessage = 'Failed to activate next week: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Internal helper — fan-out a notification to every HR user.
+  Future<void> _notifyAllHr({
+    required String taskId,
+    required String title,
+    required String body,
+    int? weekNumber,
+    String? memberEmpId,
+    String? eventId,
+  }) async {
+    final hrUsers = await FirebaseFirestore.instance
+        .collection('users')
+        .where('role', isEqualTo: 'hr')
+        .get();
+    for (final hrDoc in hrUsers.docs) {
+      final hrEmpId = hrDoc.data()['emp_id'] ?? hrDoc.id;
+      await FirebaseFirestore.instance.collection('task_notifications').add({
+        'lead_id': hrEmpId,
+        'taskId': taskId,
+        if (weekNumber != null) 'weekNumber': weekNumber,
+        if (memberEmpId != null) 'memberEmpId': memberEmpId,
+        if (eventId != null) 'eventId': eventId,
+        'title': title,
+        'body': body,
+        'type': 'task',
+        'createdAt': FieldValue.serverTimestamp(),
+        'read': false,
+      });
+    }
   }
 
   /// Check all approved multi-week tasks for this lead.

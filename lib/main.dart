@@ -20,6 +20,10 @@ import 'package:hrms_app/viewmodels/employee_report_viewmodel.dart';
 import 'package:hrms_app/viewmodels/task_viewmodel.dart';
 import 'package:hrms_app/views/HR_views/apply_screen.dart';
 import 'package:hrms_app/views/HR_views/employee_screen.dart';
+import 'package:hrms_app/views/HR_views/hr_task_audit_screen.dart';
+import 'package:hrms_app/views/employee_views/lead_review_screen.dart';
+import 'package:hrms_app/views/employee_views/lead_task_receipt_screen.dart';
+import 'package:hrms_app/views/employee_views/member_weekly_submit_screen.dart';
 import 'package:provider/provider.dart';
 
 import 'firebase_options.dart';
@@ -575,7 +579,69 @@ class _AppInitState extends State<_AppInit> {
     });
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage msg) {
       debugPrint('[FCM Tapped] type: ${msg.data['type']}');
+      _deepLinkFromFcm(msg.data);
     });
+  }
+
+  /// FCM tap → deep-link into the v2 hierarchical task screens when the
+  /// payload carries `taskId`. Falls back to a no-op for legacy / non-task
+  /// notifications since the in-app notifications screen handles those.
+  Future<void> _deepLinkFromFcm(Map<String, dynamic> data) async {
+    final taskId = (data['taskId'] ?? '').toString();
+    if (taskId.isEmpty) return;
+    if (!mounted) return;
+    try {
+      final taskDoc = await FirebaseFirestore.instance
+          .collection('tasks')
+          .doc(taskId)
+          .get();
+      if (!taskDoc.exists || taskDoc.data()?['schemaVersion'] != 2) return;
+      if (!mounted) return;
+
+      final user = context.read<AuthViewModel>().currentUser;
+      final role = (user?.role ?? '').toLowerCase();
+      final isHR = role == 'hr';
+      final eventId = (data['eventId'] ?? '').toString();
+      final weekRaw = data['weekNumber'];
+      final weekNumber = weekRaw is int
+          ? weekRaw
+          : int.tryParse(weekRaw?.toString() ?? '');
+
+      Widget? target;
+      if (isHR) {
+        target = HRTaskAuditScreen(
+          taskId: taskId,
+          highlightedEventId: eventId.isEmpty ? null : eventId,
+          highlightedWeekNumber: weekNumber,
+        );
+      } else {
+        final myUid = user?.uid ?? '';
+        if (myUid.isEmpty) return;
+        final me = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(myUid)
+            .get();
+        if (!mounted) return;
+        final myEmpId = (me.data()?['emp_id'] ?? '').toString();
+        final leadId =
+            (taskDoc.data()?['lead_id'] ?? '').toString().toLowerCase();
+        final isLead = leadId.isNotEmpty && leadId == myEmpId.toLowerCase();
+        if (isLead) {
+          if (weekNumber != null &&
+              (data['memberEmpId'] ?? '').toString().isNotEmpty) {
+            target = LeadReviewScreen(taskId: taskId);
+          } else {
+            target = LeadTaskReceiptScreen(taskId: taskId);
+          }
+        } else {
+          target = MemberWeeklySubmitScreen(taskId: taskId, empId: myEmpId);
+        }
+      }
+      if (!mounted) return;
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => target!));
+    } catch (e) {
+      debugPrint('[FCM deep-link] failed: $e');
+    }
   }
 
   @override

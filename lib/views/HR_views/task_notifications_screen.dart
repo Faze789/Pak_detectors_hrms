@@ -4,40 +4,124 @@ import 'package:provider/provider.dart';
 import '../../services/task_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../employee_views/EmployeeGoalsScreen.dart';
+import '../employee_views/lead_review_screen.dart';
+import '../employee_views/lead_task_receipt_screen.dart';
+import '../employee_views/member_weekly_submit_screen.dart';
 import '../employee_views/team_reports_screen.dart';
 import '../HR_views/employee_reports_screen.dart';
 import '../HR_views/AssignTaskByHR.dart';
+import '../HR_views/hr_task_audit_screen.dart';
 
 class TaskNotificationsScreen extends StatelessWidget {
   final String recipientId;
   const TaskNotificationsScreen({super.key, required this.recipientId});
 
-  /// Determine the target screen based on the notification type AND the
-  /// receiver's role. The receiver's role is the source of truth — never
-  /// the sender's context. This prevents HR from being routed to the
-  /// employee-side screen when an employee notifies them.
-  void _navigateToScreen(BuildContext context, Map<String, dynamic> n) {
+  /// Route a tapped notification to the most specific screen possible.
+  ///
+  /// For v2 task notifications carrying `taskId`, deep-link straight to the
+  /// task / week / event:
+  ///   * HR  → [HRTaskAuditScreen] with the event highlighted
+  ///   * Lead receiving a member-level event (has `weekNumber`) → [LeadReviewScreen]
+  ///   * Lead receiving a task-level event → [LeadTaskReceiptScreen]
+  ///   * Member → [MemberWeeklySubmitScreen]
+  ///
+  /// For pre-v2 task notifications and report notifications, keep the
+  /// legacy "open the section root" behaviour.
+  Future<void> _navigateToScreen(
+    BuildContext context,
+    Map<String, dynamic> n,
+  ) async {
     final type = (n['type'] ?? '').toString();
     final title = (n['title'] ?? '').toString();
+    final taskId = (n['taskId'] ?? '').toString();
+    final weekNumber = n['weekNumber'] as int?;
     final user = context.read<AuthViewModel>().currentUser;
     final role = (user?.role ?? '').toLowerCase();
     final isHR = role == 'hr';
 
-    Widget targetScreen;
-
-    // Report-related notifications
+    // Report notifications retain the existing top-level routing.
     if (type == 'report' || title.contains('Report')) {
-      targetScreen =
-          isHR ? const EmployeeReportsScreen() : const TeamReportsScreen();
-    } else {
-      // Task & team notifications — route by RECEIVER's role
-      targetScreen =
-          isHR ? const AssignTaskByHR() : const EmployeeGoalsScreen();
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              isHR ? const EmployeeReportsScreen() : const TeamReportsScreen(),
+        ),
+      );
+      return;
     }
 
+    // Try deep-link for v2 task notifications.
+    if (taskId.isNotEmpty) {
+      try {
+        final taskDoc = await FirebaseFirestore.instance
+            .collection('tasks')
+            .doc(taskId)
+            .get();
+        if (taskDoc.exists && taskDoc.data()?['schemaVersion'] == 2) {
+          if (!context.mounted) return;
+          // Resolve the current user's empId for member routing.
+          final myUid = user?.uid ?? '';
+          String myEmpId = '';
+          if (!isHR && myUid.isNotEmpty) {
+            final me = await FirebaseFirestore.instance
+                .collection('users')
+                .doc(myUid)
+                .get();
+            myEmpId = (me.data()?['emp_id'] ?? '').toString();
+          }
+          if (!context.mounted) return;
+
+          Widget target;
+          if (isHR) {
+            target = HRTaskAuditScreen(
+              taskId: taskId,
+              highlightedEventId: (n['eventId'] ?? '').toString().isEmpty
+                  ? null
+                  : (n['eventId']).toString(),
+              highlightedWeekNumber: weekNumber,
+            );
+          } else {
+            // Lead vs member: compare emp_id with task's lead_id.
+            final leadId =
+                (taskDoc.data()?['lead_id'] ?? '').toString().toLowerCase();
+            final isLead =
+                leadId.isNotEmpty && leadId == myEmpId.toLowerCase();
+            if (isLead) {
+              // If the notification was about a member's submission/barrier
+              // (carries weekNumber + memberEmpId), jump into the review screen.
+              if (weekNumber != null &&
+                  (n['memberEmpId'] ?? '').toString().isNotEmpty) {
+                target = LeadReviewScreen(taskId: taskId);
+              } else {
+                target = LeadTaskReceiptScreen(taskId: taskId);
+              }
+            } else {
+              target = MemberWeeklySubmitScreen(
+                taskId: taskId,
+                empId: myEmpId,
+              );
+            }
+          }
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => target),
+          );
+          return;
+        }
+      } catch (_) {
+        // Fall through to legacy routing.
+      }
+    }
+
+    if (!context.mounted) return;
+    // Legacy fallback for pre-v2 tasks (or notifications missing taskId).
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => targetScreen),
+      MaterialPageRoute(
+        builder: (_) =>
+            isHR ? const AssignTaskByHR() : const EmployeeGoalsScreen(),
+      ),
     );
   }
 

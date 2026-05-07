@@ -1,8 +1,7 @@
-import 'dart:io';
 import 'package:file_picker/file_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:hrms_app/services/storage_service.dart';
+import 'package:hrms_app/viewmodels/auth_viewmodel.dart';
 import 'package:hrms_app/viewmodels/task_viewmodel.dart';
 import 'package:hrms_app/views/HR_views/CheckAssignedTasks.dart';
 import 'package:provider/provider.dart';
@@ -46,13 +45,16 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
     'Support',
   ];
 
+  // Spec: weekly / bi_weekly / monthly only. Legacy bi-monthly/quarterly tasks
+  // continue to render in the rest of the app, but new HR tasks are limited
+  // to these three durations.
   final Map<String, int> _durations = {
     'Weekly': 7,
     'Bi-Weekly': 14,
-    'Monthly': 30,
-    'Every 2 Months': 60,
-    'Quarterly': 90,
+    'Monthly': 28,
   };
+
+  final StorageService _storage = StorageService();
 
   @override
   void initState() {
@@ -74,33 +76,12 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
   Future<void> _pickFiles({required List<PlatformFile> target}) async {
     final result = await FilePicker.platform.pickFiles(
       allowMultiple: true,
-      type: kIsWeb ? FileType.custom : FileType.any,
-      allowedExtensions: kIsWeb ? ['pdf', 'doc', 'docx', 'png', 'jpg'] : null,
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
       withData: true,
     );
     if (result == null) return;
     setState(() => target.addAll(result.files));
-  }
-
-  Future<List<Map<String, dynamic>>> _uploadAttachments(
-    List<PlatformFile> files,
-  ) async {
-    final attachments = <Map<String, dynamic>>[];
-    for (final file in files) {
-      final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
-      final ref = FirebaseStorage.instance.ref('task_attachments/$fileName');
-      if (file.bytes != null) {
-        await ref.putData(file.bytes!);
-      } else if (!kIsWeb && file.path != null) {
-        await ref.putFile(File(file.path!));
-      } else {
-        continue;
-      }
-      final url = await ref.getDownloadURL();
-      final ext = file.extension?.toLowerCase() ?? '';
-      attachments.add({'name': file.name, 'url': url, 'type': ext});
-    }
-    return attachments;
   }
 
   @override
@@ -626,6 +607,13 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                                       )
                                       .toList();
 
+                                  final hrUser = context
+                                      .read<AuthViewModel>()
+                                      .currentUser;
+                                  final hrUid = hrUser?.uid ?? '';
+                                  final hrName = hrUser?.name ?? '';
+                                  final hrRole = hrUser?.role ?? 'hr';
+
                                   List<Map<String, dynamic>>? attachments;
                                   List<Map<String, dynamic>>?
                                   secondaryAttachments;
@@ -633,15 +621,31 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                                       _secondaryPickedFiles.isNotEmpty) {
                                     setState(() => _uploading = true);
                                     try {
+                                      // We don't have the taskId yet at upload
+                                      // time, so use a creation-timestamp +
+                                      // lead prefix. Files are reorganised
+                                      // logically via the attachment metadata.
+                                      final ts = DateTime.now()
+                                          .millisecondsSinceEpoch;
+                                      final basePrefix =
+                                          'task_attachments/${ts}_${_selectedLeadEmpId ?? 'lead'}';
                                       if (_pickedFiles.isNotEmpty) {
-                                        attachments = await _uploadAttachments(
-                                          _pickedFiles,
-                                        );
+                                        attachments = await _storage
+                                            .uploadManyPdfs(
+                                              pathPrefix: '$basePrefix/primary',
+                                              files: _pickedFiles,
+                                              uploadedBy: hrUid,
+                                              uploaderRole: 'hr',
+                                            );
                                       }
                                       if (_secondaryPickedFiles.isNotEmpty) {
-                                        secondaryAttachments =
-                                            await _uploadAttachments(
-                                              _secondaryPickedFiles,
+                                        secondaryAttachments = await _storage
+                                            .uploadManyPdfs(
+                                              pathPrefix:
+                                                  '$basePrefix/secondary',
+                                              files: _secondaryPickedFiles,
+                                              uploadedBy: hrUid,
+                                              uploaderRole: 'hr',
                                             );
                                       }
                                     } catch (e) {
@@ -685,6 +689,9 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                                         widget.unscheduled_task
                                         ? null
                                         : secondaryAttachments,
+                                    createdBy: hrUid,
+                                    createdByName: hrName,
+                                    createdByRole: hrRole,
                                   );
 
                                   if (!context.mounted) return;
