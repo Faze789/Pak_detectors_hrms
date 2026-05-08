@@ -50,7 +50,7 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
   // to these three durations.
   final Map<String, int> _durations = {
     'Weekly': 7,
-    // 'Bi-Weekly': 14,
+    'Bi-Weekly': 14,
     'Monthly': 28,
   };
 

@@ -545,8 +545,8 @@ class TaskService {
     switch (duration.toLowerCase()) {
       case 'weekly':
         return 7;
-      // case 'bi-weekly':
-      //   return 14;
+      case 'bi-weekly':
+        return 14;
       case 'monthly':
         return 28;
       case 'bi-monthly':

@@ -516,11 +516,14 @@ class _PostAcceptanceActions extends StatelessWidget {
         final hasNextPhase = currentWeek < totalWeeks;
         final finalWeekAccepted = isFinalWeek && allCurrentAccepted;
 
-        // Submit-to-HR gate: final week + all accepted + ≤3 days + not already.
-        final canSubmit = isFinalWeek &&
-            finalWeekAccepted &&
-            withinSubmitWindow &&
-            taskStatus != 'submitted';
+        // Submit-to-HR gate (per spec):
+        //   "lead can submit the task to HR only if all weeks tasks been
+        //    done and assigned to members OR 3 days left for the deadline".
+        // So either condition unlocks it (was AND before).
+        final allWeeksDoneAndAccepted = isFinalWeek && finalWeekAccepted;
+        final canSubmit =
+            (allWeeksDoneAndAccepted || withinSubmitWindow) &&
+                taskStatus != 'submitted';
 
         // ── Smart target week ──────────────────────────────────────
         // When this week's assignments are all accepted and there's a next
@@ -609,17 +612,14 @@ class _PostAcceptanceActions extends StatelessWidget {
               icon: Icons.send_rounded,
               title: 'Submit to HR',
               subtitle: canSubmit
-                  ? 'Hand the completed task back to HR for sign-off.'
+                  ? (allWeeksDoneAndAccepted
+                      ? 'All weeks accepted — hand the task back to HR.'
+                      : 'Final $daysRemaining day${daysRemaining == 1 ? '' : 's'} — submit what\'s ready.')
                   : taskStatus == 'submitted'
                       ? 'Already submitted.'
-                      : !isFinalWeek
-                          ? 'Available after Week $totalWeeks is complete.'
-                          : !finalWeekAccepted
-                              ? 'Accept every member\'s final-week submission first.'
-                              : !withinSubmitWindow
-                                  ? 'Available in the final 3 days '
-                                      '(${daysRemaining > 0 ? '$daysRemaining day${daysRemaining == 1 ? '' : 's'} remaining' : 'deadline reached'}).'
-                                  : '',
+                      : 'Unlocks once every week is accepted '
+                          'OR the final 3 days begin '
+                          '($daysRemaining day${daysRemaining == 1 ? '' : 's'} remaining).',
               onTap: canSubmit ? () => _confirmSubmitToHr(context) : null,
             ),
           ],

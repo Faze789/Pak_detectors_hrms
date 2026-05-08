@@ -933,7 +933,24 @@ class _CheckAssignedTasksState extends State<CheckAssignedTasks> {
                           child: OutlinedButton.icon(
                             onPressed: () {
                               Navigator.of(parentContext).pop();
-                              showTaskHistorySheet(parentContext, task);
+                              // For v2 tasks the "History" button surfaces
+                              // the FULL chronological audit (HR creation,
+                              // lead acceptance, breakdown per (week,
+                              // member), member submissions/resubmissions,
+                              // lead accept/reject, lead-submit-to-HR, HR
+                              // accept/reject). Pre-v2 tasks keep the
+                              // legacy version-snapshot sheet.
+                              if (task['schemaVersion'] == 2) {
+                                Navigator.of(parentContext).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => HRTaskAuditScreen(
+                                      taskId: task['id'],
+                                    ),
+                                  ),
+                                );
+                              } else {
+                                showTaskHistorySheet(parentContext, task);
+                              }
                             },
                             icon: const Icon(
                               Icons.history_rounded,

@@ -3,7 +3,6 @@ import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:hrms_app/services/storage_service.dart';
@@ -60,6 +59,34 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
         taskVm.checkWeeklyReminders(empId);
       }
     });
+  }
+
+  Future<void> _sendNotification({
+    required String targetEmpId,
+    required String title,
+    required String body,
+  }) async {
+    if (targetEmpId.isEmpty) return;
+    await FirebaseFirestore.instance.collection('task_notifications').add({
+      'lead_id': targetEmpId, // Matches your existing schema for recipients
+      'title': title,
+      'body': body,
+      'type': 'task',
+      'createdAt': FieldValue.serverTimestamp(),
+      'read': false,
+    });
+  }
+
+  Future<void> _notifyHR({required String title, required String body}) async {
+    final hrUsers = await FirebaseFirestore.instance
+        .collection('users')
+        .where('role', isEqualTo: 'hr')
+        .get();
+
+    for (final doc in hrUsers.docs) {
+      final hrEmpId = doc.data()['emp_id'] ?? doc.id;
+      await _sendNotification(targetEmpId: hrEmpId, title: title, body: body);
+    }
   }
 
   Widget _chipWidget(IconData icon, String label) {
@@ -2134,7 +2161,6 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
   ) {
     // (original implementation – kept as is)
   }
-
   Widget _buildOverdueBlock(
     BuildContext context,
     Map<String, dynamic> task, {
@@ -2174,35 +2200,50 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
         SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(
-            onPressed: hasMyReason
-                ? null
-                : () => _showNoSubmissionReasonDialog(context, task, role),
-            icon: Icon(
-              hasMyReason ? Icons.check_circle : Icons.edit_note_rounded,
-              size: 14,
-              color: hasMyReason
-                  ? const Color(0xFF94A3B8)
-                  : const Color(0xFFB45309),
-            ),
-            label: Text(
-              hasMyReason ? 'Reason Submitted' : 'Reason for Non-Submission',
+            onPressed: () async {
+              final members = task['members'] as Map<String, dynamic>? ?? {};
+              final ok = await context.read<TaskViewModel>().pushBackToMembers(
+                taskId: task['id'],
+                members: members,
+              );
+              if (ok && mounted) {
+                // NEW: Notify all assigned members
+                for (final memberId in members.keys) {
+                  await _sendNotification(
+                    targetEmpId: memberId,
+                    title: 'Task Pushed Back',
+                    body:
+                        'Lead pushed back "${task['title']}" for corrections.',
+                  );
+                }
+
+                _refreshTasks();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Tasks pushed back to members for corrections',
+                    ),
+                    backgroundColor: Color(0xFF2563EB),
+                  ),
+                );
+              }
+            },
+            // FIX: Added required icon parameter
+            icon: const Icon(Icons.replay, size: 16, color: Color(0xFF2563EB)),
+            // FIX: Added required label parameter
+            label: const Text(
+              'Push Back to Members',
               style: TextStyle(
-                fontSize: 12,
+                color: Color(0xFF2563EB),
                 fontWeight: FontWeight.w600,
-                color: hasMyReason
-                    ? const Color(0xFF94A3B8)
-                    : const Color(0xFFB45309),
+                fontSize: 13,
               ),
             ),
             style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              side: BorderSide(
-                color: hasMyReason
-                    ? const Color(0xFFCBD5E1)
-                    : const Color(0xFFB45309),
-              ),
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              side: const BorderSide(color: Color(0xFF2563EB)),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(10),
               ),
             ),
           ),
@@ -2927,6 +2968,13 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                                                             m['name'] ?? '',
                                                       );
                                                   if (ok) {
+                                                    await _sendNotification(
+                                                      targetEmpId: empId,
+                                                      title: 'Work Accepted',
+                                                      body:
+                                                          'Your lead accepted your submission for task "$taskId".',
+                                                    );
+
                                                     Navigator.of(
                                                       sheetCtx,
                                                     ).pop();

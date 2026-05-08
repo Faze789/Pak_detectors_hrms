@@ -471,10 +471,48 @@ class TaskViewModel extends ChangeNotifier {
     }
   }
 
-  /// HR accepts a submitted task
-  Future<bool> acceptSubmission(String taskId) async {
+  /// HR accepts a submitted task. Optional `hr*` / `leadEmpId` params fire
+  /// the v2 `hr_accept` audit event and notify the lead — both new params
+  /// are optional to keep legacy call sites working.
+  Future<bool> acceptSubmission(
+    String taskId, {
+    String? hrEmpId,
+    String? hrName,
+    String? leadEmpId,
+    String? taskTitle,
+  }) async {
     try {
       await _service.acceptSubmission(taskId);
+
+      // v2 audit event so the HR audit timeline shows the HR sign-off.
+      String? eventId;
+      if (hrEmpId != null && hrEmpId.isNotEmpty) {
+        eventId = await _service.logEvent(
+          taskId: taskId,
+          type: 'hr_accept',
+          actorId: hrEmpId,
+          actorName: hrName ?? 'HR',
+          actorRole: 'hr',
+          payload: {if (taskTitle != null) 'taskTitle': taskTitle},
+        );
+      }
+
+      // Notify the lead.
+      if (leadEmpId != null && leadEmpId.isNotEmpty) {
+        await FirebaseFirestore.instance.collection('task_notifications').add({
+          'lead_id': leadEmpId,
+          'taskId': taskId,
+          if (eventId != null) 'eventId': eventId,
+          'title': 'Task Accepted by HR',
+          'body': taskTitle == null
+              ? 'HR has accepted your task.'
+              : 'HR has accepted "$taskTitle".',
+          'type': 'task',
+          'createdAt': FieldValue.serverTimestamp(),
+          'read': false,
+        });
+      }
+
       notifyListeners();
       return true;
     } catch (e) {
@@ -484,23 +522,42 @@ class TaskViewModel extends ChangeNotifier {
     }
   }
 
-  /// HR rejects a submitted task — notifies the lead
+  /// HR rejects a submitted task — notifies the lead and logs an audit event.
   Future<bool> rejectSubmission(
     String taskId,
     String reason, {
     String? leadEmpId,
+    String? hrEmpId,
+    String? hrName,
+    String? taskTitle,
   }) async {
     try {
       await _service.rejectSubmission(taskId, reason);
+
+      String? eventId;
+      if (hrEmpId != null && hrEmpId.isNotEmpty) {
+        eventId = await _service.logEvent(
+          taskId: taskId,
+          type: 'hr_reject',
+          actorId: hrEmpId,
+          actorName: hrName ?? 'HR',
+          actorRole: 'hr',
+          payload: {
+            'rejectReason': reason,
+            if (taskTitle != null) 'taskTitle': taskTitle,
+          },
+        );
+      }
 
       // Notify lead about rejection
       if (leadEmpId != null && leadEmpId.isNotEmpty) {
         await FirebaseFirestore.instance.collection('task_notifications').add({
           'lead_id': leadEmpId,
+          'taskId': taskId,
+          if (eventId != null) 'eventId': eventId,
           'title': 'Task Rejected by HR',
           'body': 'Your submission was rejected. Reason: $reason',
           'type': 'task',
-          'taskId': taskId,
           'createdAt': FieldValue.serverTimestamp(),
           'read': false,
         });
@@ -1082,6 +1139,9 @@ class TaskViewModel extends ChangeNotifier {
       return false;
     }
   }
+
+  // Add this method inside TaskViewModel class
+  // ----- Notification Helpers -----
 
   /// Lead applies edits (title/description/attachments) to the task without
   /// accepting yet. Used by the "Edit & Accept" flow before the explicit
