@@ -61,6 +61,43 @@ class LeaveService {
     return leads.toList();
   }
 
+  /// Returns the emp_ids of every HR user. The leave-request router falls
+  /// back to this set when the employee is not a project member (and not a
+  /// lead either), so HR can approve/reject directly.
+  Future<List<String>> findAllHrEmpIds() async {
+    final snap = await _users.where('role', isEqualTo: 'hr').get();
+    final out = <String>{};
+    for (final d in snap.docs) {
+      final data = d.data();
+      final empId = (data['emp_id'] ?? '').toString();
+      if (empId.isNotEmpty) out.add(empId);
+    }
+    return out.toList();
+  }
+
+  /// `true` if the user `empId` is the lead of any task (i.e. they manage a
+  /// project). Used by the routing rule: employees who are themselves a
+  /// lead-of-something do NOT fall back to HR — their own leave still goes
+  /// to HR by default since they have no upper-level lead.
+  Future<bool> isLeadOfAnyTask(String empId) async {
+    if (empId.isEmpty) return false;
+    final lower = empId.toLowerCase();
+    final snap = await _db
+        .collection('tasks')
+        .where('lead_id', isEqualTo: empId)
+        .limit(1)
+        .get();
+    if (snap.docs.isNotEmpty) return true;
+    // Fallback: some legacy tasks have lowercase lead_id. Scan one page.
+    final all = await _db.collection('tasks').limit(50).get();
+    for (final d in all.docs) {
+      if ((d.data()['lead_id'] ?? '').toString().toLowerCase() == lower) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   // ── Submit leave ──────────────────────────────────────────────────────────
 
   Future<LeaveModel> submitLeave(LeaveModel leave) async {
@@ -74,8 +111,23 @@ class LeaveService {
         ? toDate.difference(leave.fromDate).inDays + 1.0
         : 0.5;
 
-    // Detect this member's leads and fan out for approval.
+    // Routing per spec:
+    //   * If the requester is a project member → the leads of those
+    //     projects are the approvers.
+    //   * Otherwise (no project membership, e.g. unassigned employees and
+    //     leads themselves) → fall back to all HR users.
+    // The chosen approver set lands in `requiredApproverEmpIds`; both
+    // routes share the same `approvals[]` audit trail.
     final leadEmpIds = await findLeadsOfMember(leave.emp_id);
+    final List<String> approverEmpIds;
+    final String approverKind;
+    if (leadEmpIds.isNotEmpty) {
+      approverEmpIds = leadEmpIds;
+      approverKind = 'lead';
+    } else {
+      approverEmpIds = await findAllHrEmpIds();
+      approverKind = 'hr';
+    }
 
     final model = LeaveModel(
       id: docRef.id,
@@ -92,21 +144,45 @@ class LeaveService {
       reason: leave.reason,
       status: LeaveStatus.pending,
       submittedAt: DateTime.now(),
-      requiredApproverEmpIds: leadEmpIds,
+      requiredApproverEmpIds: approverEmpIds,
     );
 
-    await docRef.set(model.toMap());
+    // Save the leave doc plus a top-level `approverKind` flag so the UI
+    // can label the request ("Pending Lead Approval" vs "Pending HR
+    // Approval") without recomputing routing.
+    final saved = model.toMap();
+    saved['approverKind'] = approverKind;
+    saved['approvals'] = const <Map<String, dynamic>>[];
+    await docRef.set(saved);
 
-    // Notify each lead that needs to decide (in-app, via task_notifications
-    // so the existing FCM pipeline picks it up).
-    for (final leadEmpId in leadEmpIds) {
+    // Audit row: record the initial submission as the first entry on the
+    // `approvals[]` array so the history view reads naturally as a
+    // chronological log of every decision touching this leave.
+    await docRef.update({
+      'approvals': FieldValue.arrayUnion([
+        {
+          'empId': leave.emp_id,
+          'name': leave.employeeName,
+          'action': 'submitted',
+          'decidedAt': Timestamp.now(),
+          if (leave.reason.isNotEmpty) 'note': leave.reason,
+        },
+      ]),
+    });
+
+    // Notify every approver (lead or HR) via the existing task_notifications
+    // pipeline — that's what FCM + the in-app local notification listener
+    // are wired to read.
+    for (final approverEmpId in approverEmpIds) {
       await _db.collection('task_notifications').add({
-        'lead_id': leadEmpId,
-        'title': 'Leave Approval Needed',
-        'body': '${leave.employeeName} requested '
-            '${leave.type.label} (${leave.duration.label}). '
-            'Tap to review.',
-        'type': 'task',
+        'lead_id': approverEmpId,
+        'title': approverKind == 'hr'
+            ? 'Leave Approval Needed (HR)'
+            : 'Leave Approval Needed',
+        'body':
+            '${leave.employeeName} requested ${leave.type.label} '
+            '(${leave.duration.label}). Tap to review.',
+        'type': 'leave',
         'leaveId': docRef.id,
         'createdAt': FieldValue.serverTimestamp(),
         'read': false,
@@ -126,17 +202,50 @@ class LeaveService {
     return model;
   }
 
-  // ── Approve leave ─────────────────────────────────────────────────────────
+  // ── Approve leave (HR path) ───────────────────────────────────────────────
+  // Pass `hrEmpId` / `hrName` so the action lands on the shared
+  // `approvals[]` audit array — same as the lead path. Old callers that
+  // skip these still work; the approval is stamped with empty identity.
 
   Future<void> approveLeave(
     String leaveId,
     String employeeUserId, {
     String? note,
+    String? hrEmpId,
+    String? hrName,
   }) async {
+    final entry = <String, dynamic>{
+      'empId': hrEmpId ?? '',
+      'name': hrName ?? 'HR',
+      'role': 'hr',
+      'action': 'approved',
+      'decidedAt': Timestamp.now(),
+      if (note != null && note.isNotEmpty) 'note': note,
+    };
     await _leaves.doc(leaveId).update({
       'status': LeaveStatus.approved.value,
       if (note != null && note.isNotEmpty) 'hrNote': note,
+      'approvals': FieldValue.arrayUnion([entry]),
     });
+    // In-app + FCM notification to the requester via task_notifications.
+    try {
+      final leaveSnap = await _leaves.doc(leaveId).get();
+      final reqEmpId =
+          (leaveSnap.data()?['emp_id'] ?? '').toString();
+      if (reqEmpId.isNotEmpty) {
+        await _db.collection('task_notifications').add({
+          'lead_id': reqEmpId,
+          'title': 'Leave Approved',
+          'body': note != null && note.isNotEmpty
+              ? 'Your leave has been approved by HR. Note: $note'
+              : 'Your leave request has been approved by HR.',
+          'type': 'leave',
+          'leaveId': leaveId,
+          'createdAt': FieldValue.serverTimestamp(),
+          'read': false,
+        });
+      }
+    } catch (_) {}
     await _notify(
       title: '✅ Leave Approved',
       body: note != null && note.isNotEmpty
@@ -145,17 +254,46 @@ class LeaveService {
     );
   }
 
-  // ── Reject leave ──────────────────────────────────────────────────────────
+  // ── Reject leave (HR path) ────────────────────────────────────────────────
 
   Future<void> rejectLeave(
     String leaveId,
     String employeeUserId, {
     String? note,
+    String? hrEmpId,
+    String? hrName,
   }) async {
+    final entry = <String, dynamic>{
+      'empId': hrEmpId ?? '',
+      'name': hrName ?? 'HR',
+      'role': 'hr',
+      'action': 'rejected',
+      'decidedAt': Timestamp.now(),
+      if (note != null && note.isNotEmpty) 'note': note,
+    };
     await _leaves.doc(leaveId).update({
       'status': LeaveStatus.rejected.value,
       if (note != null && note.isNotEmpty) 'hrNote': note,
+      'approvals': FieldValue.arrayUnion([entry]),
     });
+    try {
+      final leaveSnap = await _leaves.doc(leaveId).get();
+      final reqEmpId =
+          (leaveSnap.data()?['emp_id'] ?? '').toString();
+      if (reqEmpId.isNotEmpty) {
+        await _db.collection('task_notifications').add({
+          'lead_id': reqEmpId,
+          'title': 'Leave Rejected',
+          'body': note != null && note.isNotEmpty
+              ? 'Your leave was rejected by HR. Reason: $note'
+              : 'Your leave request has been rejected by HR.',
+          'type': 'leave',
+          'leaveId': leaveId,
+          'createdAt': FieldValue.serverTimestamp(),
+          'read': false,
+        });
+      }
+    } catch (_) {}
     await _notify(
       title: '❌ Leave Rejected',
       body: note != null && note.isNotEmpty
@@ -204,6 +342,7 @@ class LeaveService {
       approvals.add({
         'empId': leadEmpId,
         'name': leadName,
+        'role': 'lead',
         'action': 'approved',
         'decidedAt': Timestamp.now(),
         if (note != null && note.isNotEmpty) 'note': note,
@@ -223,7 +362,24 @@ class LeaveService {
       });
     });
 
-    // Notify the employee
+    // Notify the requester via the standard task_notifications collection
+    // so they get the same in-app + FCM pipeline as every other channel.
+    try {
+      final leaveSnap = await _leaves.doc(leaveId).get();
+      final reqEmpId =
+          (leaveSnap.data()?['emp_id'] ?? '').toString();
+      if (reqEmpId.isNotEmpty) {
+        await _db.collection('task_notifications').add({
+          'lead_id': reqEmpId,
+          'title': 'Leave Approved',
+          'body': '$leadName approved your leave request.',
+          'type': 'leave',
+          'leaveId': leaveId,
+          'createdAt': FieldValue.serverTimestamp(),
+          'read': false,
+        });
+      }
+    } catch (_) {}
     await _notify(
       title: 'Leave update',
       body: 'A team lead approved your leave. Tap to view status.',
@@ -258,6 +414,7 @@ class LeaveService {
       approvals.add({
         'empId': leadEmpId,
         'name': leadName,
+        'role': 'lead',
         'action': 'rejected',
         'decidedAt': Timestamp.now(),
         if (reason.isNotEmpty) 'note': reason,
@@ -270,6 +427,24 @@ class LeaveService {
       });
     });
 
+    try {
+      final leaveSnap = await _leaves.doc(leaveId).get();
+      final reqEmpId =
+          (leaveSnap.data()?['emp_id'] ?? '').toString();
+      if (reqEmpId.isNotEmpty) {
+        await _db.collection('task_notifications').add({
+          'lead_id': reqEmpId,
+          'title': 'Leave Rejected',
+          'body': reason.isNotEmpty
+              ? '$leadName rejected your leave: $reason'
+              : '$leadName rejected your leave request.',
+          'type': 'leave',
+          'leaveId': leaveId,
+          'createdAt': FieldValue.serverTimestamp(),
+          'read': false,
+        });
+      }
+    } catch (_) {}
     await _notify(
       title: 'Leave rejected',
       body: 'A lead rejected your leave request. Tap to view details.',

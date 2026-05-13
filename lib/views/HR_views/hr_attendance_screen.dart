@@ -1,3 +1,4 @@
+// lib/screens/attendance/hr_attendance_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -344,6 +345,35 @@ class _HRAttendanceScreenState extends State<HRAttendanceScreen> {
     }
   }
 
+  void _showMonthlyStatus(
+    BuildContext context,
+    String uid,
+    String name,
+    DateTime initialDate,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) =>
+          _MonthlyStatusSheet(uid: uid, name: name, initialDate: initialDate),
+    );
+  }
+
+  void _showLeaveRequests(BuildContext context, String uid, String name) async {
+    final vm = context.read<AttendanceViewModel>();
+    final requests = await vm.fetchLeaveRequestsForEmployee(uid);
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) =>
+          _EmployeeLeaveRequestsSheet(employeeName: name, requests: requests),
+    );
+  }
+
   bool get _isToday => _isSameDay(_selectedDate, DateTime.now());
 
   @override
@@ -396,6 +426,10 @@ class _HRAttendanceScreenState extends State<HRAttendanceScreen> {
                   loading: _loading,
                   isMobile: isMobile,
                   date: _selectedDate,
+                  onRowTap: (uid, name) =>
+                      _showMonthlyStatus(context, uid, name, _selectedDate),
+                  onLeaveHistoryTap: (uid, name) =>
+                      _showLeaveRequests(context, uid, name),
                 ),
                 const SizedBox(height: 20),
 
@@ -417,6 +451,529 @@ class _HRAttendanceScreenState extends State<HRAttendanceScreen> {
   }
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// Monthly Status Bottom Sheet (With Month Picker & Circular Graph UI)
+// ══════════════════════════════════════════════════════════════════════════════
+class _MonthlyStatusSheet extends StatefulWidget {
+  final String uid;
+  final String name;
+  final DateTime initialDate;
+
+  const _MonthlyStatusSheet({
+    required this.uid,
+    required this.name,
+    required this.initialDate,
+  });
+
+  @override
+  State<_MonthlyStatusSheet> createState() => _MonthlyStatusSheetState();
+}
+
+class _MonthlyStatusSheetState extends State<_MonthlyStatusSheet> {
+  bool _loading = true;
+  late DateTime _selectedMonth;
+
+  int _presentCount = 0;
+  int _absentCount = 0;
+  int _leaveCount = 0;
+  int _lateCount = 0;
+
+  Map<int, _Status> _dayStatuses = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedMonth = DateTime(
+      widget.initialDate.year,
+      widget.initialDate.month,
+    );
+    _fetchData();
+  }
+
+  Future<void> _fetchData() async {
+    setState(() => _loading = true);
+    final vm = context.read<AttendanceViewModel>();
+    try {
+      final archive = await vm.getMonthlyArchiveSilent(
+        widget.uid,
+        _selectedMonth.year,
+        _selectedMonth.month,
+      );
+
+      int present = 0, absent = 0, leave = 0, late = 0;
+      Map<int, _Status> mappedStatuses = {};
+
+      if (archive != null && archive.days.isNotEmpty) {
+        for (var record in archive.days.values) {
+          final day = record.date.day;
+          final status = _deriveStatus(record);
+          mappedStatuses[day] = status;
+
+          if (status == _Status.present) {
+            present++;
+          } else if (status == _Status.absent) {
+            absent++;
+          } else if (status == _Status.leave) {
+            leave++;
+          } else if (status == _Status.late) {
+            late++;
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _dayStatuses = mappedStatuses;
+          _presentCount = present;
+          _absentCount = absent;
+          _leaveCount = leave;
+          _lateCount = late;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching monthly archive for sheet: $e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _changeMonth(int offset) {
+    setState(() {
+      _selectedMonth = DateTime(
+        _selectedMonth.year,
+        _selectedMonth.month + offset,
+      );
+    });
+    _fetchData();
+  }
+
+  Future<void> _pickMonth() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedMonth,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      initialDatePickerMode: DatePickerMode.year,
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: Color(0xFF2563EB),
+            onPrimary: Colors.white,
+            surface: Colors.white,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) {
+      setState(() {
+        _selectedMonth = DateTime(picked.year, picked.month);
+      });
+      _fetchData();
+    }
+  }
+
+  Widget _buildLegendItem(Color color, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCircularGraph() {
+    final total = _presentCount + _absentCount + _leaveCount + _lateCount;
+    final double rate = total == 0 ? 0 : ((_presentCount + _lateCount) / total);
+
+    return Container(
+      width: 120,
+      height: 120,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          CircularProgressIndicator(
+            value: rate,
+            strokeWidth: 8,
+            backgroundColor: const Color(0xFFF1F5F9),
+            valueColor: AlwaysStoppedAnimation(
+              rate >= 0.8
+                  ? const Color(0xFF10B981)
+                  : rate >= 0.5
+                  ? const Color(0xFFF59E0B)
+                  : const Color(0xFFEF4444),
+            ),
+            strokeCap: StrokeCap.round,
+          ),
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '${(rate * 100).round()}%',
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+                const Text(
+                  'Rate',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final int daysInMonth = DateUtils.getDaysInMonth(
+      _selectedMonth.year,
+      _selectedMonth.month,
+    );
+
+    return Container(
+      padding: const EdgeInsets.only(top: 16),
+      margin: const EdgeInsets.only(top: 60),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: const Color(0xFFCBD5E1),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: const Color(0xFFDBEAFE),
+                  foregroundColor: const Color(0xFF2563EB),
+                  child: Text(
+                    widget.name.isNotEmpty ? widget.name[0].toUpperCase() : '?',
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.name,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                      const Text(
+                        'Monthly Attendance Report',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 24),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                IconButton(
+                  icon: const Icon(
+                    Icons.chevron_left_rounded,
+                    color: Color(0xFF475569),
+                  ),
+                  onPressed: _loading ? null : () => _changeMonth(-1),
+                ),
+                InkWell(
+                  onTap: _loading ? null : _pickMonth,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.calendar_month_rounded,
+                          size: 16,
+                          color: Color(0xFF2563EB),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          DateFormat('MMMM yyyy').format(_selectedMonth),
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(
+                    Icons.chevron_right_rounded,
+                    color: Color(0xFF475569),
+                  ),
+                  onPressed:
+                      (_loading ||
+                          (_selectedMonth.year == DateTime.now().year &&
+                              _selectedMonth.month == DateTime.now().month))
+                      ? null
+                      : () => _changeMonth(1),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          if (_loading)
+            const Expanded(child: Center(child: CircularProgressIndicator()))
+          else ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                children: [
+                  _buildCircularGraph(),
+                  const SizedBox(width: 24),
+                  Expanded(
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _SummaryCount(
+                                label: 'Present',
+                                count: _presentCount,
+                                color: const Color(0xFF10B981),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _SummaryCount(
+                                label: 'Absent',
+                                count: _absentCount,
+                                color: const Color(0xFFEF4444),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _SummaryCount(
+                                label: 'Late',
+                                count: _lateCount,
+                                color: const Color(0xFF475569),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _SummaryCount(
+                                label: 'Leave',
+                                count: _leaveCount,
+                                color: const Color(0xFFF59E0B),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              color: Colors.white,
+              child: Wrap(
+                spacing: 20,
+                runSpacing: 8,
+                alignment: WrapAlignment.center,
+                children: [
+                  _buildLegendItem(const Color(0xFF10B981), 'Present'),
+                  _buildLegendItem(const Color(0xFFEF4444), 'Absent'),
+                  _buildLegendItem(const Color(0xFFF59E0B), 'Leave'),
+                  _buildLegendItem(const Color(0xFF475569), 'Late'),
+                ],
+              ),
+            ),
+            const Divider(height: 1, color: Color(0xFFE2E8F0)),
+            Expanded(
+              child: Container(
+                color: Colors.white,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    alignment: WrapAlignment.center,
+                    children: List.generate(daysInMonth, (index) {
+                      final day = index + 1;
+                      final status = _dayStatuses[day];
+
+                      Color bgColor = const Color(0xFFF8FAFC);
+                      Color textColor = const Color(0xFF94A3B8);
+                      Color borderColor = const Color(0xFFE2E8F0);
+
+                      if (status == _Status.present) {
+                        bgColor = const Color(0xFF10B981);
+                        textColor = Colors.white;
+                        borderColor = Colors.transparent;
+                      } else if (status == _Status.absent) {
+                        bgColor = const Color(0xFFEF4444);
+                        textColor = Colors.white;
+                        borderColor = Colors.transparent;
+                      } else if (status == _Status.leave) {
+                        bgColor = const Color(0xFFF59E0B);
+                        textColor = Colors.white;
+                        borderColor = Colors.transparent;
+                      } else if (status == _Status.late) {
+                        bgColor = const Color(0xFF475569);
+                        textColor = Colors.white;
+                        borderColor = Colors.transparent;
+                      }
+
+                      return Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: bgColor,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: borderColor),
+                          boxShadow: status != null
+                              ? [
+                                  BoxShadow(
+                                    color: bgColor.withOpacity(0.3),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ]
+                              : [],
+                        ),
+                        child: Center(
+                          child: Text(
+                            '$day',
+                            style: TextStyle(
+                              color: textColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryCount extends StatelessWidget {
+  final String label;
+  final int count;
+  final Color color;
+
+  const _SummaryCount({
+    required this.label,
+    required this.count,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.15)),
+      ),
+      child: Column(
+        children: [
+          Text(
+            '$count',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: color.withOpacity(0.8),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ─── Employee info helper ─────────────────────────────────────────────────────
 class _EmpInfo {
   final String uid, name, role, department;
@@ -429,9 +986,294 @@ class _EmpInfo {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// _LiveRecord — plain data class built directly from raw Firestore fields.
-// No AttendanceModel parsing involved — timestamps are read as-is from
-// Firestore Timestamp objects, so the displayed times always match the DB.
+// Leave Requests Bottom Sheet
+// ══════════════════════════════════════════════════════════════════════════════
+class _EmployeeLeaveRequestsSheet extends StatelessWidget {
+  final String employeeName;
+  final List<Map<String, dynamic>> requests;
+
+  const _EmployeeLeaveRequestsSheet({
+    required this.employeeName,
+    required this.requests,
+  });
+
+  String _formatDate(Timestamp? ts) {
+    if (ts == null) return '—';
+    return DateFormat('MMM d, yyyy').format(ts.toDate());
+  }
+
+  String _formatDateTime(Timestamp? ts) {
+    if (ts == null) return '—';
+    return DateFormat('MMM d, yyyy · hh:mm a').format(ts.toDate());
+  }
+
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'approved':
+        return const Color(0xFF10B981);
+      case 'declined':
+        return const Color(0xFFEF4444);
+      default:
+        return const Color(0xFFF59E0B);
+    }
+  }
+
+  Color _statusBg(String status) {
+    switch (status) {
+      case 'approved':
+        return const Color(0xFFD1FAE5);
+      case 'declined':
+        return const Color(0xFFFEE2E2);
+      default:
+        return const Color(0xFFFEF3C7);
+    }
+  }
+
+  IconData _statusIcon(String status) {
+    switch (status) {
+      case 'approved':
+        return Icons.check_circle_rounded;
+      case 'declined':
+        return Icons.cancel_rounded;
+      default:
+        return Icons.schedule_rounded;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 80),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 12),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE2E8F0),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: const Color(0xFFDBEAFE),
+                  foregroundColor: const Color(0xFF2563EB),
+                  child: Text(
+                    employeeName.isNotEmpty
+                        ? employeeName[0].toUpperCase()
+                        : '?',
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        employeeName,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                      const Text(
+                        'Leave Requests',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Divider(height: 1, color: Color(0xFFE2E8F0)),
+          Expanded(
+            child: requests.isEmpty
+                ? const Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.inbox_rounded,
+                          size: 64,
+                          color: Color(0xFFCBD5E1),
+                        ),
+                        SizedBox(height: 12),
+                        Text(
+                          'No leave requests found',
+                          style: TextStyle(
+                            color: Color(0xFF94A3B8),
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: requests.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemBuilder: (_, i) {
+                      final req = requests[i];
+                      final status = req['status'] ?? 'pending';
+                      final startTs = req['startDate'] as Timestamp?;
+                      final endTs = req['endDate'] as Timestamp?;
+                      final days = req['totalDays'] ?? 1;
+                      final note = (req['note'] ?? '').toString();
+                      final reason = (req['rejectionReason'] ?? '').toString();
+                      final reviewedAt = req['reviewedAt'] as Timestamp?;
+                      final createdAt = req['createdAt'] as Timestamp?;
+
+                      final dateStr = startTs != null && endTs != null
+                          ? days == 1
+                                ? _formatDate(startTs)
+                                : '${DateFormat('MMM d').format(startTs.toDate())} – ${_formatDate(endTs)}'
+                          : '—';
+
+                      return Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.date_range_rounded,
+                                  size: 15,
+                                  color: Color(0xFF64748B),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    dateStr,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _statusBg(status),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        _statusIcon(status),
+                                        size: 12,
+                                        color: _statusColor(status),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        status.toUpperCase(),
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: _statusColor(status),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              '$days day${days > 1 ? 's' : ''} requested',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Requested: ${_formatDateTime(createdAt)}',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF94A3B8),
+                              ),
+                            ),
+                            if (status != 'pending' && reviewedAt != null) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                'Reviewed: ${_formatDateTime(reviewedAt)}',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFF94A3B8),
+                                ),
+                              ),
+                            ],
+                            if (note.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                'Note: $note',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF475569),
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ],
+                            if (status == 'declined' && reason.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFEF2F2),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: const Color(0xFFFECACA),
+                                  ),
+                                ),
+                                child: Text(
+                                  'Reason: $reason',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFFDC2626),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// _LiveRecord
 // ══════════════════════════════════════════════════════════════════════════════
 class _LiveRecord {
   final String userId;
@@ -454,15 +1296,12 @@ class _LiveRecord {
     required this.totalBreakSeconds,
   });
 
-  /// Build from a raw Firestore document map.
-  /// Reads checkInTime / checkOutTime directly from Timestamp — never falls
-  /// back to DateTime.now(), so the value shown is always what was saved.
   factory _LiveRecord.fromDoc(Map<String, dynamic> data) {
     DateTime? ts(String key) {
       final v = data[key];
       if (v == null) return null;
       if (v is Timestamp) return v.toDate();
-      return null; // anything else is treated as absent
+      return null;
     }
 
     return _LiveRecord(
@@ -485,11 +1324,6 @@ class _LiveRecord {
   }
 }
 
-// ── Direct Firestore stream for attendance_live ───────────────────────────────
-// Reads the ENTIRE attendance_live collection with no date filter.
-// This collection only ever holds today's active records (the service clears
-// documents at end of day), so no compound query or composite index is needed.
-// This also avoids timezone mismatches that caused the stream to stall.
 Stream<List<_LiveRecord>> _streamLiveRecords() {
   return FirebaseFirestore.instance
       .collection('attendance_live')
@@ -534,7 +1368,6 @@ class _LiveAttendanceCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Card header ────────────────────────────────────────────────
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -586,8 +1419,6 @@ class _LiveAttendanceCard extends StatelessWidget {
               ],
             ),
           ),
-
-          // ── Stream body ────────────────────────────────────────────────
           StreamBuilder<List<_LiveRecord>>(
             stream: _streamLiveRecords(),
             builder: (context, snapshot) {
@@ -597,7 +1428,6 @@ class _LiveAttendanceCard extends StatelessWidget {
                   child: Center(child: CircularProgressIndicator()),
                 );
               }
-
               if (snapshot.hasError) {
                 return Padding(
                   padding: const EdgeInsets.all(24),
@@ -612,23 +1442,17 @@ class _LiveAttendanceCard extends StatelessWidget {
                   ),
                 );
               }
-
-              // uid → _LiveRecord (raw, timestamp-correct)
               final liveMap = <String, _LiveRecord>{
                 for (final r in snapshot.data ?? [])
                   if (r.userId.isNotEmpty) r.userId: r,
               };
-
               final displayEmps = filterUid != null
                   ? employees.where((e) => e.uid == filterUid).toList()
                   : employees;
-
               final activeEmps = displayEmps
                   .where((e) => liveMap.containsKey(e.uid))
                   .toList();
-
               if (activeEmps.isEmpty) return _LiveEmptyState();
-
               return isMobile
                   ? _LiveMobileList(emps: activeEmps, liveMap: liveMap)
                   : _LiveDesktopTable(emps: activeEmps, liveMap: liveMap);
@@ -640,7 +1464,6 @@ class _LiveAttendanceCard extends StatelessWidget {
   }
 }
 
-// ── Pulsing green dot widget ──────────────────────────────────────────────────
 class _PulsingDot extends StatefulWidget {
   @override
   State<_PulsingDot> createState() => _PulsingDotState();
@@ -698,7 +1521,6 @@ class _PulsingDotState extends State<_PulsingDot>
   }
 }
 
-// ── Desktop table for live records ────────────────────────────────────────────
 class _LiveDesktopTable extends StatelessWidget {
   final List<_EmpInfo> emps;
   final Map<String, _LiveRecord> liveMap;
@@ -715,13 +1537,13 @@ class _LiveDesktopTable extends StatelessWidget {
         ),
         child: Table(
           columnWidths: const {
-            0: FlexColumnWidth(2.5), // Employee
-            1: FlexColumnWidth(1.8), // Department
-            2: FlexColumnWidth(1.2), // Check In
-            3: FlexColumnWidth(1.2), // Check Out
-            4: FlexColumnWidth(2.0), // Location
-            5: FlexColumnWidth(1.5), // Status
-            6: FlexColumnWidth(1.0), // Work Time
+            0: FlexColumnWidth(2.5),
+            1: FlexColumnWidth(1.8),
+            2: FlexColumnWidth(1.2),
+            3: FlexColumnWidth(1.2),
+            4: FlexColumnWidth(2.0),
+            5: FlexColumnWidth(1.5),
+            6: FlexColumnWidth(1.0),
           },
           children: [
             TableRow(
@@ -741,7 +1563,6 @@ class _LiveDesktopTable extends StatelessWidget {
               final emp = entry.value;
               final rec = liveMap[emp.uid]!;
               final status = _statusFromString(rec.status);
-
               return TableRow(
                 decoration: BoxDecoration(
                   color: i.isEven ? Colors.white : const Color(0xFFF9FAFB),
@@ -750,7 +1571,6 @@ class _LiveDesktopTable extends StatelessWidget {
                   ),
                 ),
                 children: [
-                  // Employee
                   Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
@@ -804,7 +1624,6 @@ class _LiveDesktopTable extends StatelessWidget {
                       ],
                     ),
                   ),
-                  // Department
                   Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
@@ -818,11 +1637,8 @@ class _LiveDesktopTable extends StatelessWidget {
                       ),
                     ),
                   ),
-                  // Check In — raw timestamp from Firestore
                   _TD(_fmtTime(rec.checkInTime)),
-                  // Check Out — raw timestamp, '—' if null
                   _TD(_fmtTime(rec.checkOutTime)),
-                  // Location
                   Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
@@ -850,7 +1666,6 @@ class _LiveDesktopTable extends StatelessWidget {
                       ],
                     ),
                   ),
-                  // Status
                   Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
@@ -858,7 +1673,6 @@ class _LiveDesktopTable extends StatelessWidget {
                     ),
                     child: Center(child: _StatusBadge(status: status)),
                   ),
-                  // Work time
                   _TD(rec.workLabel),
                 ],
               );
@@ -870,7 +1684,6 @@ class _LiveDesktopTable extends StatelessWidget {
   }
 }
 
-// ── Mobile list for live records ──────────────────────────────────────────────
 class _LiveMobileList extends StatelessWidget {
   final List<_EmpInfo> emps;
   final Map<String, _LiveRecord> liveMap;
@@ -885,7 +1698,6 @@ class _LiveMobileList extends StatelessWidget {
         final emp = entry.value;
         final rec = liveMap[emp.uid]!;
         final status = _statusFromString(rec.status);
-
         return Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -971,7 +1783,6 @@ class _LiveMobileList extends StatelessWidget {
                         _TimeChip(
                           icon: Icons.login_rounded,
                           label: 'In',
-                          // raw timestamp — never DateTime.now()
                           value: _fmtTime(rec.checkInTime),
                           color: const Color(0xFF059669),
                         ),
@@ -1002,7 +1813,6 @@ class _LiveMobileList extends StatelessWidget {
   }
 }
 
-// ── Live empty state ──────────────────────────────────────────────────────────
 class _LiveEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -1498,6 +2308,8 @@ class _TableCard extends StatelessWidget {
   final bool loading;
   final bool isMobile;
   final DateTime date;
+  final Function(String, String) onRowTap;
+  final Function(String, String) onLeaveHistoryTap;
 
   const _TableCard({
     this.employees_data,
@@ -1505,6 +2317,8 @@ class _TableCard extends StatelessWidget {
     required this.loading,
     required this.isMobile,
     required this.date,
+    required this.onRowTap,
+    required this.onLeaveHistoryTap,
   });
 
   @override
@@ -1527,7 +2341,6 @@ class _TableCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -1558,7 +2371,6 @@ class _TableCard extends StatelessWidget {
                           color: Color(0xFF0F172A),
                         ),
                       ),
-
                       Text(
                         dateLabel,
                         style: const TextStyle(
@@ -1591,8 +2403,6 @@ class _TableCard extends StatelessWidget {
               ],
             ),
           ),
-
-          // Body
           loading
               ? const Padding(
                   padding: EdgeInsets.all(40),
@@ -1601,8 +2411,16 @@ class _TableCard extends StatelessWidget {
               : rows.isEmpty
               ? _EmptyTable()
               : isMobile
-              ? _MobileList(rows: rows)
-              : _DesktopTable(rows: rows),
+              ? _MobileList(
+                  rows: rows,
+                  onRowTap: onRowTap,
+                  onLeaveHistoryTap: onLeaveHistoryTap,
+                )
+              : _DesktopTable(
+                  rows: rows,
+                  onRowTap: onRowTap,
+                  onLeaveHistoryTap: onLeaveHistoryTap,
+                ),
         ],
       ),
     );
@@ -1612,7 +2430,14 @@ class _TableCard extends StatelessWidget {
 // ── Desktop Table ─────────────────────────────────────────────────────────────
 class _DesktopTable extends StatelessWidget {
   final List<_AttendanceRow> rows;
-  const _DesktopTable({required this.rows});
+  final Function(String, String) onRowTap;
+  final Function(String, String) onLeaveHistoryTap;
+
+  const _DesktopTable({
+    required this.rows,
+    required this.onRowTap,
+    required this.onLeaveHistoryTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1624,7 +2449,7 @@ class _DesktopTable extends StatelessWidget {
         ),
         child: Table(
           columnWidths: const {
-            0: FlexColumnWidth(2.5),
+            0: FlexColumnWidth(2.8),
             1: FlexColumnWidth(2.0),
             2: FlexColumnWidth(1.2),
             3: FlexColumnWidth(1.2),
@@ -1654,35 +2479,58 @@ class _DesktopTable extends StatelessWidget {
                   ),
                 ),
                 children: [
-                  // Employee
                   Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 14,
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
                       children: [
-                        Text(
-                          r.name,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                            color: Color(0xFF0F172A),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                r.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                  color: Color(0xFF0F172A),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                r.role,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFF64748B),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          r.role,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: Color(0xFF64748B),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.calendar_month_rounded,
+                            color: Color(0xFF2563EB),
+                            size: 20,
                           ),
+                          tooltip: 'Monthly Status',
+                          onPressed: () => onRowTap(r.uid, r.name),
+                        ),
+                        const SizedBox(width: 4),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.list_alt_rounded,
+                            color: Color(0xFF7C3AED),
+                            size: 20,
+                          ),
+                          tooltip: 'Leave Requests',
+                          onPressed: () => onLeaveHistoryTap(r.uid, r.name),
                         ),
                       ],
                     ),
                   ),
-                  // Department
                   Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
@@ -1711,7 +2559,6 @@ class _DesktopTable extends StatelessWidget {
                   _TD(r.checkIn ?? '—'),
                   _TD(r.checkOut ?? '—'),
                   _TD(r.workHours ?? '—'),
-                  // Status badge + optional detail
                   Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
@@ -1776,7 +2623,14 @@ Widget _TD(String value) => Padding(
 // ── Mobile Card List ──────────────────────────────────────────────────────────
 class _MobileList extends StatelessWidget {
   final List<_AttendanceRow> rows;
-  const _MobileList({required this.rows});
+  final Function(String, String) onRowTap;
+  final Function(String, String) onLeaveHistoryTap;
+
+  const _MobileList({
+    required this.rows,
+    required this.onRowTap,
+    required this.onLeaveHistoryTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1784,104 +2638,117 @@ class _MobileList extends StatelessWidget {
       children: rows.asMap().entries.map((entry) {
         final i = entry.key;
         final r = entry.value;
-        return Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: i.isEven ? Colors.white : const Color(0xFFFAFAFB),
-            border: const Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFDBEAFE),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Center(
-                  child: Text(
-                    r.name.isNotEmpty ? r.name[0].toUpperCase() : '?',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF2563EB),
+        return InkWell(
+          onTap: () => onRowTap(r.uid, r.name),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: i.isEven ? Colors.white : const Color(0xFFFAFAFB),
+              border: const Border(
+                bottom: BorderSide(color: Color(0xFFE2E8F0)),
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDBEAFE),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Center(
+                    child: Text(
+                      r.name.isNotEmpty ? r.name[0].toUpperCase() : '?',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF2563EB),
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            r.name,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14,
-                              color: Color(0xFF0F172A),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              r.name,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14,
+                                color: Color(0xFF0F172A),
+                              ),
                             ),
                           ),
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            _StatusBadge(status: r.status),
-                            if (r.statusDetail != null)
-                              Text(
-                                r.statusDetail!,
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  color: Color(0xFF94A3B8),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.calendar_month,
+                                  size: 18,
+                                  color: Color(0xFF2563EB),
                                 ),
+                                onPressed: () => onRowTap(r.uid, r.name),
                               ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      r.role,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Color(0xFF64748B),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.list_alt,
+                                  size: 18,
+                                  color: Color(0xFF7C3AED),
+                                ),
+                                onPressed: () =>
+                                    onLeaveHistoryTap(r.uid, r.name),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        _TimeChip(
-                          icon: Icons.login_rounded,
-                          label: 'In',
-                          value: r.checkIn ?? '—',
-                          color: const Color(0xFF059669),
+                      const SizedBox(height: 2),
+                      Text(
+                        r.role,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF64748B),
                         ),
-                        const SizedBox(width: 8),
-                        _TimeChip(
-                          icon: Icons.logout_rounded,
-                          label: 'Out',
-                          value: r.checkOut ?? '—',
-                          color: const Color(0xFFDC2626),
-                        ),
-                        const SizedBox(width: 8),
-                        _TimeChip(
-                          icon: Icons.timer_outlined,
-                          label: 'Hrs',
-                          value: r.workHours ?? '—',
-                          color: const Color(0xFF7C3AED),
-                        ),
-                      ],
-                    ),
-                  ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          _TimeChip(
+                            icon: Icons.login_rounded,
+                            label: 'In',
+                            value: r.checkIn ?? '—',
+                            color: const Color(0xFF059669),
+                          ),
+                          const SizedBox(width: 8),
+                          _TimeChip(
+                            icon: Icons.logout_rounded,
+                            label: 'Out',
+                            value: r.checkOut ?? '—',
+                            color: const Color(0xFFDC2626),
+                          ),
+                          const SizedBox(width: 8),
+                          _TimeChip(
+                            icon: Icons.timer_outlined,
+                            label: 'Hrs',
+                            value: r.workHours ?? '—',
+                            color: const Color(0xFF7C3AED),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       }).toList(),

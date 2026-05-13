@@ -504,25 +504,30 @@ class _PostAcceptanceActions extends StatelessWidget {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: _assignmentsStream,
       builder: (context, snap) {
-        // Compute "current week assignments exist" + "all current week accepted".
+        // Compute "current week assignments exist" + "all current week done".
+        //
+        // Under the terminal-submit spec, the lead no longer accepts/rejects
+        // member submissions — a submission is final once posted. So
+        // "done" here means every (week, member) doc is at least
+        // `submitted` (also accepts legacy `accepted` and `barrier`).
+        const doneStatuses = {'submitted', 'accepted', 'barrier'};
         final all = snap.data?.docs.map((d) => d.data()).toList() ??
             const <Map<String, dynamic>>[];
         final currentWeekAssignments =
             all.where((a) => a['weekNumber'] == currentWeek).toList();
         final hasCurrentAssignments = currentWeekAssignments.isNotEmpty;
-        final allCurrentAccepted = currentWeekAssignments.isNotEmpty &&
-            currentWeekAssignments
-                .every((a) => a['status'] == 'accepted');
+        final allCurrentDone = currentWeekAssignments.isNotEmpty &&
+            currentWeekAssignments.every(
+              (a) =>
+                  doneStatuses.contains((a['status'] ?? '').toString()),
+            );
         final hasNextPhase = currentWeek < totalWeeks;
-        final finalWeekAccepted = isFinalWeek && allCurrentAccepted;
+        final finalWeekDone = isFinalWeek && allCurrentDone;
 
-        // Submit-to-HR gate (per spec):
-        //   "lead can submit the task to HR only if all weeks tasks been
-        //    done and assigned to members OR 3 days left for the deadline".
-        // So either condition unlocks it (was AND before).
-        final allWeeksDoneAndAccepted = isFinalWeek && finalWeekAccepted;
+        // Submit-to-HR gate: every final-week submission is in OR ≤3 days.
+        final allWeeksDone = isFinalWeek && finalWeekDone;
         final canSubmit =
-            (allWeeksDoneAndAccepted || withinSubmitWindow) &&
+            (allWeeksDone || withinSubmitWindow) &&
                 taskStatus != 'submitted';
 
         // ── Smart target week ──────────────────────────────────────
@@ -532,7 +537,7 @@ class _PostAcceptanceActions extends StatelessWidget {
         // edits the already-accepted week in place, never activating the
         // next phase. The explicit "Assign Week N+1 Tasks" button in
         // LeadReviewScreen also points at this same target.
-        final shouldAdvance = allCurrentAccepted && hasNextPhase;
+        final shouldAdvance = allCurrentDone && hasNextPhase;
         final targetWeek = shouldAdvance ? currentWeek + 1 : currentWeek;
 
         final String assignLabel;
@@ -540,7 +545,7 @@ class _PostAcceptanceActions extends StatelessWidget {
         if (shouldAdvance) {
           assignLabel = 'Assign Week $targetWeek Tasks';
           assignSubtitle =
-              'Week $currentWeek is fully accepted. Define Week $targetWeek\'s work for each member.';
+              'Week $currentWeek is done. Define Week $targetWeek\'s work for each member.';
         } else if (hasCurrentAssignments) {
           assignLabel = 'Edit Week $currentWeek Tasks';
           assignSubtitle =
@@ -598,7 +603,7 @@ class _PostAcceptanceActions extends StatelessWidget {
               icon: Icons.fact_check_outlined,
               title: 'Review Submissions',
               subtitle:
-                  'Accept or reject member work. Next-week assignment opens here.',
+                  'View each member\'s submissions per week. Next-week assignment opens here.',
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
@@ -612,12 +617,12 @@ class _PostAcceptanceActions extends StatelessWidget {
               icon: Icons.send_rounded,
               title: 'Submit to HR',
               subtitle: canSubmit
-                  ? (allWeeksDoneAndAccepted
-                      ? 'All weeks accepted — hand the task back to HR.'
+                  ? (allWeeksDone
+                      ? 'All weeks submitted — hand the task back to HR.'
                       : 'Final $daysRemaining day${daysRemaining == 1 ? '' : 's'} — submit what\'s ready.')
                   : taskStatus == 'submitted'
                       ? 'Already submitted.'
-                      : 'Unlocks once every week is accepted '
+                      : 'Unlocks once every week is submitted '
                           'OR the final 3 days begin '
                           '($daysRemaining day${daysRemaining == 1 ? '' : 's'} remaining).',
               onTap: canSubmit ? () => _confirmSubmitToHr(context) : null,

@@ -133,6 +133,7 @@ class AttendanceViewModel extends ChangeNotifier {
 
   bool isCurrentUserLead = false;
 
+  bool isCurrentUserHR = false; // ─── NEW: Track if user is HR
   // ── Add this method anywhere in the class ──────────────────────────────────
   Future<void> _checkLeadStatus(String userId) async {
     try {
@@ -148,6 +149,8 @@ class AttendanceViewModel extends ChangeNotifier {
       // 1. If their main role is HR, Admin, or Lead, they have access
       if (role == 'hr' || role == 'admin' || role.contains('lead')) {
         isCurrentUserLead = true;
+        if (role == 'hr' || role == 'admin')
+          isCurrentUserHR = true; // Set HR flag
         notifyListeners();
         return;
       }
@@ -168,28 +171,60 @@ class AttendanceViewModel extends ChangeNotifier {
   }
 
   Future<void> fetchLeaveRequestsForLead(String leadEmpId) async {
-    // Replace isLoading = true; with your existing state setter
     state = ViewState.loading;
     notifyListeners();
 
     try {
-      final snap = await FirebaseFirestore.instance
-          .collection('request_for_leave')
-          .where('leadsNotified', arrayContains: leadEmpId)
-          .get();
+      Query query = FirebaseFirestore.instance.collection('request_for_leave');
+
+      // ─── NEW: HR/Admins see all requests, Leads see only their team ────────
+      if (!isCurrentUserHR) {
+        query = query.where('leadsNotified', arrayContains: leadEmpId);
+      }
+
+      final snap = await query.get();
 
       _pendingLeaveRequests = snap.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        data['id'] = doc.id;
+        return data;
+      }).toList();
+
+      // Sort newest first
+      _pendingLeaveRequests.sort((a, b) {
+        final aTs = a['createdAt'] as Timestamp?;
+        final bTs = b['createdAt'] as Timestamp?;
+        if (aTs == null || bTs == null) return 0;
+        return bTs.compareTo(aTs);
+      });
+    } catch (e) {
+      debugPrint('Error fetching leave requests: $e');
+      errorMessage = 'Failed to load leave requests.';
+    } finally {
+      state = ViewState.idle;
+      notifyListeners();
+    }
+  }
+
+  /// Fetches all leave requests (all statuses) for a given employee UID.
+  Future<List<Map<String, dynamic>>> fetchLeaveRequestsForEmployee(
+    String uid,
+  ) async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('request_for_leave')
+          .where('uid', isEqualTo: uid)
+          .orderBy('createdAt', descending: true)
+          .get();
+
+      return snap.docs.map((doc) {
         final data = doc.data();
         data['id'] = doc.id;
         return data;
       }).toList();
     } catch (e) {
-      debugPrint('Error fetching leave requests: $e');
-      errorMessage = 'Failed to load leave requests.';
-    } finally {
-      // Replace isLoading = false; with your idle state
-      state = ViewState.idle;
-      notifyListeners();
+      debugPrint('Error fetching leave requests for employee: $e');
+      return [];
     }
   }
 

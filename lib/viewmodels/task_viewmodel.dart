@@ -459,6 +459,14 @@ class TaskViewModel extends ChangeNotifier {
           'read': false,
         });
       }
+      // Audit fan-out to all HR users so HR is notified of every
+      // member submission, regardless of which UI path (v1 or v2) ran.
+      await _notifyAllHr(
+        taskId: taskId,
+        title: 'Member Submission (audit)',
+        body: '$memberName submitted work on "$taskTitle"',
+        memberEmpId: empId,
+      );
 
       _submitting = false;
       notifyListeners();
@@ -1167,6 +1175,29 @@ class TaskViewModel extends ChangeNotifier {
     } catch (e) {
       errorMessage = 'Failed to apply edits: $e';
       notifyListeners();
+      return false;
+    }
+  }
+
+  /// Submits the member's work for a specific task
+  Future<bool> submitTaskWork({
+    required String taskId,
+    required String empId,
+    required String submissionText,
+    String? pdfUrl,
+  }) async {
+    try {
+      await FirebaseFirestore.instance.collection('tasks').doc(taskId).update({
+        'member_submissions.$empId': {
+          'status': 'submitted',
+          'submissionText': submissionText,
+          'pdfUrl': pdfUrl ?? '',
+          'submittedAt': FieldValue.serverTimestamp(),
+        },
+      });
+      return true;
+    } catch (e) {
+      print('Error submitting task work: $e');
       return false;
     }
   }

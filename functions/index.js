@@ -35,7 +35,7 @@ setGlobalOptions({
 // ─────────────────────────────────────────────────────────────────────────────
 exports.markAbsentAtCutoff = onSchedule(
   {
-    schedule: "1 12 * * 1-5",
+    schedule: "1 15 * * 1-5",
     timeZone: "Asia/Karachi",
     maxInstances: 1,
   },
@@ -544,7 +544,7 @@ exports.checkInReminderShiftStart = onSchedule(
 
 // 10:00 AM — final late nudge
 exports.checkInReminder1000 = onSchedule(
-  { schedule: "0 10 * * 1-5", timeZone: "Asia/Karachi", maxInstances: 1 },
+  { schedule: "0 17 * * 1-5", timeZone: "Asia/Karachi", maxInstances: 1 },
   async () => _sendCheckInReminders(
     "checkInReminder1000",
     "Last reminder to check in",
@@ -725,7 +725,7 @@ exports.adminSetEmployeePassword = onCall(async (request) => {
 // ─────────────────────────────────────────────────────────────────────────────
 async function _runMarkAbsent({ skipFirstHalfLeave }) {
 
-  let checkInCutoff = 12;
+  let checkInCutoff = 15;
   let halfDayCutoff = 14;
   let halfDayMark = 13;
   let workStartHour = 9;
@@ -989,3 +989,151 @@ function isSameDayInTZ(dateA, dateB, timezone) {
   const strB = dateB.toLocaleDateString("en-CA", { timeZone: timezone });
   return strA === strB;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CHECK-IN REMINDERS  — Mon–Fri Asia/Karachi
+//
+// Spec: every 15 minutes from 8:50 AM until 11:00 AM, nudge employees who
+// haven't checked in yet today.
+//
+// The cron pattern `0,5,20,35,50 8,9,10,11 * * 1-5` fires at slightly more
+// times than the spec wants (it includes 8:00/8:05/8:20/8:35, 11:05/etc.) —
+// we filter those out inside via the `VALID_CHECKIN_REMINDERS` map. Keeping
+// one Cloud Function with internal filtering is cheaper than registering a
+// handful of separate functions for each individual cron line.
+//
+// Each reminder is written to `task_notifications`, which the existing
+// `onTaskNotificationCreated` trigger turns into FCM push + in-app local
+// notification (no double-wiring required).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const VALID_CHECKIN_REMINDERS = {
+  8: [50],
+  9: [5, 20, 35, 50],
+  10: [5, 20, 35, 50],
+  11: [0],
+};
+
+function _karachiHourMinute() {
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Karachi',
+    hour: 'numeric',
+    minute: 'numeric',
+    hour12: false,
+  });
+  const parts = fmt.formatToParts(new Date());
+  const h = parseInt(parts.find(p => p.type === 'hour').value, 10);
+  const m = parseInt(parts.find(p => p.type === 'minute').value, 10);
+  return { hour: h, minute: m };
+}
+
+function _todayKeyKarachi() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' });
+}
+
+exports.checkInReminders = onSchedule(
+  {
+    schedule: '0,5,20,35,50 8,9,10,11 * * 1-5',
+    timeZone: 'Asia/Karachi',
+    maxInstances: 1,
+  },
+  async () => {
+    const { hour, minute } = _karachiHourMinute();
+    const validMinutes = VALID_CHECKIN_REMINDERS[hour] || [];
+    if (!validMinutes.includes(minute)) {
+      logger.info(
+        `[checkInReminders] ${hour}:${String(minute).padStart(2, '0')} ` +
+        `not in spec — skipping.`,
+      );
+      return;
+    }
+
+    const todayKey = _todayKeyKarachi();
+    logger.info(`[checkInReminders] Running for ${todayKey} at ${hour}:${minute}`);
+
+    // Eligible recipients: every active user whose role is NOT 'hr' and who
+    // has not yet checked in today.
+    const usersSnap = await db.collection('users').get();
+    let queued = 0;
+    for (const userDoc of usersSnap.docs) {
+      const u = userDoc.data();
+      const role = (u.role || '').toString().toLowerCase();
+      const empId = (u.emp_id || '').toString();
+      if (!empId) continue;
+      if (role === 'hr') continue;          // HR doesn't need this nudge
+      if (u.disabled === true) continue;
+
+      const liveDoc = await db.collection('attendance_live').doc(userDoc.id).get();
+      if (liveDoc.exists) {
+        const live = liveDoc.data();
+        // Already checked in today → skip.
+        if ((live.dateString || '') === todayKey && live.checkInTime) continue;
+      }
+
+      await db.collection('task_notifications').add({
+        lead_id: empId,
+        title: '⏰ Check-in Reminder',
+        body: `It's ${hour}:${String(minute).padStart(2, '0')} — please check in for today.`,
+        type: 'attendance',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        read: false,
+      });
+      queued++;
+    }
+    logger.info(`[checkInReminders] Queued ${queued} reminder(s).`);
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CHECK-OUT REMINDERS  — Mon–Fri Asia/Karachi
+//
+// Spec: every 5 minutes from 6:05 PM to 6:30 PM, nudge employees who are
+// checked in but haven't checked out yet. The 6:30 PM tick is also the
+// hard cutoff — the client-side check-out button is disabled after this
+// time (see lib/views/employee_views/attendance_screen.dart).
+// ─────────────────────────────────────────────────────────────────────────────
+
+exports.checkOutReminders = onSchedule(
+  {
+    schedule: '5,10,15,20,25,30 18 * * 1-5',
+    timeZone: 'Asia/Karachi',
+    maxInstances: 1,
+  },
+  async () => {
+    const { hour, minute } = _karachiHourMinute();
+    const todayKey = _todayKeyKarachi();
+    logger.info(`[checkOutReminders] Running for ${todayKey} at ${hour}:${minute}`);
+
+    const usersSnap = await db.collection('users').get();
+    let queued = 0;
+    for (const userDoc of usersSnap.docs) {
+      const u = userDoc.data();
+      const role = (u.role || '').toString().toLowerCase();
+      const empId = (u.emp_id || '').toString();
+      if (!empId) continue;
+      if (role === 'hr') continue;
+      if (u.disabled === true) continue;
+
+      const liveDoc = await db.collection('attendance_live').doc(userDoc.id).get();
+      if (!liveDoc.exists) continue;
+      const live = liveDoc.data();
+      if ((live.dateString || '') !== todayKey) continue;
+      if (!live.checkInTime) continue;      // never checked in → no checkout
+      if (live.checkOutTime) continue;      // already checked out → done
+
+      const isFinal = (minute === 30);
+      await db.collection('task_notifications').add({
+        lead_id: empId,
+        title: isFinal ? '🚪 Final Check-out Reminder' : '🕕 Check-out Reminder',
+        body: isFinal
+          ? 'Last reminder — please check out now. After 6:30 PM the check-out button will be disabled.'
+          : `It's ${hour}:${String(minute).padStart(2, '0')} — please check out for the day.`,
+        type: 'attendance',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        read: false,
+      });
+      queued++;
+    }
+    logger.info(`[checkOutReminders] Queued ${queued} reminder(s).`);
+  },
+);

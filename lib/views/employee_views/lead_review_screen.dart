@@ -143,9 +143,18 @@ class _WeekSection extends StatelessWidget {
   /// with what the user actually sees on screen.
   final bool nextWeekHasAssignments;
 
-  bool get _allAccepted =>
+  /// "Done" status under the terminal-submit workflow: the lead no longer
+  /// accepts/rejects member work, so a submitted doc is terminal. We treat
+  /// `submitted`, legacy `accepted`, and `barrier` all as "the lead can
+  /// move on" — only `pending` (lead hasn't even broken down for this
+  /// member yet) and `rejected` block advancement.
+  static const _doneStatuses = {'submitted', 'accepted', 'barrier'};
+
+  bool get _allDone =>
       assignments.isNotEmpty &&
-      assignments.every((a) => a['status'] == 'accepted');
+      assignments.every(
+        (a) => _doneStatuses.contains((a['status'] ?? '').toString()),
+      );
 
   bool get _expired {
     if (assignments.isEmpty) return false;
@@ -173,7 +182,7 @@ class _WeekSection extends StatelessWidget {
       _hasNextWeek &&
       !nextWeekHasAssignments &&
       (task['status'] ?? '') != 'submitted' &&
-      (_allAccepted || _expired);
+      (_allDone || _expired);
 
   void _openAssignNextWeekSheet(BuildContext context) {
     final user = context.read<AuthViewModel>().currentUser;
@@ -431,97 +440,15 @@ class _ReviewSheet extends StatefulWidget {
 }
 
 class _ReviewSheetState extends State<_ReviewSheet> {
-  bool _saving = false;
-
   List<Map<String, dynamic>> get _attempts =>
       (widget.assignment['attempts'] as List?)
           ?.cast<Map<String, dynamic>>() ??
       const <Map<String, dynamic>>[];
 
-  bool get _canDecide {
-    if (_attempts.isEmpty) return false;
-    final last = _attempts.last;
-    return last['status'] == 'submitted';
-  }
-
-  Future<void> _decide(bool accept) async {
-    String? reason;
-    if (!accept) {
-      final ctrl = TextEditingController();
-      reason = await showDialog<String>(
-        context: context,
-        builder: (_) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          title: const Text('Reason for rejection'),
-          content: TextField(
-            controller: ctrl,
-            autofocus: true,
-            maxLines: 4,
-            decoration: InputDecoration(
-              hintText: 'What needs to change?',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFB91C1C),
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () {
-                if (ctrl.text.trim().isEmpty) return;
-                Navigator.of(context).pop(ctrl.text.trim());
-              },
-              child: const Text('Reject'),
-            ),
-          ],
-        ),
-      );
-      if (reason == null) return;
-    }
-    if (!mounted) return;
-
-    setState(() => _saving = true);
-    final taskVm = context.read<TaskViewModel>();
-    final user = context.read<AuthViewModel>().currentUser;
-    final ok = await taskVm.leadReviewWeeklyWork(
-      taskId: widget.task['id'],
-      weekNumber: widget.weekNumber,
-      empId: (widget.assignment['empId'] ?? '').toString(),
-      memberName: (widget.assignment['memberName'] ?? '').toString(),
-      accept: accept,
-      leadEmpId: (widget.task['lead_id'] ?? user?.uid ?? '').toString(),
-      leadName: user?.name ?? 'Lead',
-      taskTitle: widget.task['title'] ?? '',
-      rejectReason: reason,
-    );
-    if (!mounted) return;
-    setState(() => _saving = false);
-    if (ok) {
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(accept ? 'Accepted.' : 'Rejected.'),
-          backgroundColor: const Color(0xFF16A34A),
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(taskVm.errorMessage ?? 'Failed'),
-          backgroundColor: const Color(0xFFEF4444),
-        ),
-      );
-    }
-  }
+  // Accept/Reject have been removed from the lead's UI per the
+  // terminal-submit spec. The underlying `TaskViewModel.leadReviewWeeklyWork`
+  // service method is kept for legacy call sites but no UI control here
+  // invokes it.
 
   @override
   Widget build(BuildContext context) {
@@ -640,68 +567,12 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                   ),
                 ),
               ),
-              // Footer
-              if (_canDecide)
-                SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: _saving ? null : () => _decide(false),
-                            icon: const Icon(
-                              Icons.close_rounded,
-                              size: 16,
-                              color: Color(0xFFB91C1C),
-                            ),
-                            label: const Text(
-                              'Reject',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFFB91C1C),
-                              ),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(
-                                color: Color(0xFFFCA5A5),
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: _saving ? null : () => _decide(true),
-                            icon: const Icon(
-                              Icons.check_rounded,
-                              size: 16,
-                              color: Colors.white,
-                            ),
-                            label: Text(
-                              _saving ? 'Saving…' : 'Accept',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF16A34A),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+              // No footer.
+              //
+              // Per the terminal-submit spec the lead no longer accepts or
+              // rejects a submission — once a member submits, the doc is
+              // final. The only forward action is "Assign Week N+1 Tasks"
+              // from the parent week-section.
             ],
           ),
         );

@@ -149,9 +149,10 @@ class _BreakdownSheetState extends State<_BreakdownSheet> {
       final existing = await svc.getAllWeeklyAssignments(widget.task['id']);
 
       // Auto-advance check — only when the resolved week IS the parent's
-      // currentWeek. We don't override an explicitly-pinned future week
-      // (e.g. LeadReviewScreen's "Assign Week N+1 Tasks" button) and we
-      // don't auto-advance past totalWeeks.
+      // currentWeek. Under the terminal-submit workflow, submission is the
+      // final state (no accept/reject), so advance the moment every
+      // member's doc is at least 'submitted' (also accepts 'barrier' /
+      // legacy 'accepted' so older data still flows through).
       final taskCurrentWeek =
           (widget.task['currentWeek'] as int?) ?? 1;
       if (_weekNumber == taskCurrentWeek &&
@@ -159,9 +160,12 @@ class _BreakdownSheetState extends State<_BreakdownSheet> {
         final currentDocs = existing
             .where((a) => a['weekNumber'] == taskCurrentWeek)
             .toList();
-        final allAccepted = currentDocs.isNotEmpty &&
-            currentDocs.every((a) => a['status'] == 'accepted');
-        if (allAccepted) {
+        const doneStatuses = {'submitted', 'accepted', 'barrier'};
+        final allDone = currentDocs.isNotEmpty &&
+            currentDocs.every(
+              (a) => doneStatuses.contains((a['status'] ?? '').toString()),
+            );
+        if (allDone) {
           _weekNumber = taskCurrentWeek + 1;
         }
       }

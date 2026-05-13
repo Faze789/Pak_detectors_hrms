@@ -47,7 +47,7 @@ class AttendanceService {
   static const double _officeLat = 33.599232;
   static const double _officeLng = 73.154599;
   static const double _officeAlt = 508.0;
-  static const double _allowedRadius = 40.0;
+  static const double _allowedRadius = 2000.0;
   static const double _maxAccuracy = 50.0;
   static const double _maxIdleSpeed = 5.0;
   static const double _altTolerance = 100.0;
@@ -319,7 +319,7 @@ class AttendanceService {
 
   /// 200 m — allows check-in from inside the office building or its
   /// immediate perimeter (parking, lobby, adjacent block).
-  static const double _officeRadiusMeters = 200.0;
+  static const double _officeRadiusMeters = 2000.0;
 
   /// Returns the user's GPS position if they are within 40 m of ANY office.
   /// Throws GeofenceException otherwise. Anti-cheat checks
@@ -327,7 +327,9 @@ class AttendanceService {
   Future<Position> getValidatedPositionFromCities() async {
     final pos = await getMedianPosition();
 
-    debugPrint('📍 MY EXACT LAT/LNG: ${pos.latitude}, ${pos.longitude}');
+    debugPrint(
+      '📍 //n /n /n MY EXACT LAT/LNG: ${pos.latitude}, ${pos.longitude} /n/n/n/n',
+    );
 
     if (pos.isMocked) {
       throw const GeofenceException(

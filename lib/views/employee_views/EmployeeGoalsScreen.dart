@@ -9,6 +9,7 @@ import 'package:hrms_app/services/storage_service.dart';
 import 'package:hrms_app/services/task_history_sheet.dart';
 import 'package:hrms_app/views/employee_views/showAssignToMembersSheet.dart';
 import 'package:hrms_app/views/lead_employee_chat_screen.dart';
+import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 
@@ -946,6 +947,156 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
     return null;
   }
 
+  void _showTaskDetails(BuildContext context, Map<String, dynamic> task) {
+    final mw = MediaQuery.of(context).size.width;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      constraints: mw >= 768
+          ? const BoxConstraints(maxWidth: 640, minWidth: 400)
+          : null,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 24,
+            bottom: MediaQuery.of(ctx).padding.bottom + 24,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFCBD5E1),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  task['title'] ?? 'Task Details',
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if ((task['description'] ?? '').toString().isNotEmpty) ...[
+                  const Row(
+                    children: [
+                      Icon(Icons.flag, size: 16, color: Color(0xFF2563EB)),
+                      SizedBox(width: 8),
+                      Text(
+                        'Primary Goals',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E293B),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Text(
+                      task['description'].toString(),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF334155),
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                if ((task['secondaryDescription'] ?? '')
+                    .toString()
+                    .isNotEmpty) ...[
+                  const Row(
+                    children: [
+                      Icon(
+                        Icons.flag_outlined,
+                        size: 16,
+                        color: Color(0xFF7C3AED),
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        'Secondary Goals',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E293B),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Text(
+                      task['secondaryDescription'].toString(),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF334155),
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFF1F5F9),
+                      foregroundColor: const Color(0xFF334155),
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: const Text(
+                      'Close',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   // ----- Task Card -----
   Widget _buildTaskCard(BuildContext context, Map<String, dynamic> task) {
     final primaryPdfUrl = _getPrimaryPdfUrl(task);
@@ -1585,9 +1736,35 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                   ],
                 ),
 
-                // Assign Task to Members button (lead, pending)
+                // Edit task & Assign Task to Members button (lead, pending)
                 if (isLead && status == 'pending') ...[
                   const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () => _showEditTaskDialog(context, task),
+                      icon: const Icon(
+                        Icons.edit_note_rounded,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                      label: const Text(
+                        'Edit Goals & Members',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFF59E0B),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 10),
                   SizedBox(
                     width: double.infinity,
@@ -1603,7 +1780,7 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                         color: Colors.white,
                       ),
                       label: const Text(
-                        'Assign Task to Members',
+                        'Accept & Assign Task to Members',
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w700,
@@ -1716,63 +1893,63 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                                   ],
                                 ),
                               ),
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 6),
-                                child: SizedBox(
-                                  width: double.infinity,
-                                  child: OutlinedButton.icon(
-                                    onPressed: () async {
-                                      final members =
-                                          task['members']
-                                              as Map<String, dynamic>? ??
-                                          {};
-                                      final ok = await context
-                                          .read<TaskViewModel>()
-                                          .pushBackToMembers(
-                                            taskId: task['id'],
-                                            members: members,
-                                          );
-                                      if (ok && mounted) {
-                                        _refreshTasks();
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          const SnackBar(
-                                            content: Text(
-                                              'Tasks pushed back to members for corrections',
-                                            ),
-                                            backgroundColor: Color(0xFF2563EB),
-                                          ),
-                                        );
-                                      }
-                                    },
-                                    icon: const Icon(
-                                      Icons.replay,
-                                      size: 14,
-                                      color: Color(0xFFDC2626),
-                                    ),
-                                    label: const Text(
-                                      'Push Back to Members',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Color(0xFFDC2626),
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    style: OutlinedButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 6,
-                                      ),
-                                      side: const BorderSide(
-                                        color: Color(0xFFDC2626),
-                                      ),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
+                              // Padding(
+                              //   padding: const EdgeInsets.only(bottom: 6),
+                              //   child: SizedBox(
+                              //     width: double.infinity,
+                              //     child: OutlinedButton.icon(
+                              //       onPressed: () async {
+                              //         final members =
+                              //             task['members']
+                              //                 as Map<String, dynamic>? ??
+                              //             {};
+                              //         final ok = await context
+                              //             .read<TaskViewModel>()
+                              //             .pushBackToMembers(
+                              //               taskId: task['id'],
+                              //               members: members,
+                              //             );
+                              //         if (ok && mounted) {
+                              //           _refreshTasks();
+                              //           ScaffoldMessenger.of(
+                              //             context,
+                              //           ).showSnackBar(
+                              //             const SnackBar(
+                              //               content: Text(
+                              //                 'Tasks pushed back to members for corrections',
+                              //               ),
+                              //               backgroundColor: Color(0xFF2563EB),
+                              //             ),
+                              //           );
+                              //         }
+                              //       },
+                              //       icon: const Icon(
+                              //         Icons.replay,
+                              //         size: 14,
+                              //         color: Color(0xFFDC2626),
+                              //       ),
+                              //       label: const Text(
+                              //         'Push Back to Members',
+                              //         style: TextStyle(
+                              //           fontSize: 12,
+                              //           color: Color(0xFFDC2626),
+                              //           fontWeight: FontWeight.w600,
+                              //         ),
+                              //       ),
+                              //       style: OutlinedButton.styleFrom(
+                              //         padding: const EdgeInsets.symmetric(
+                              //           vertical: 6,
+                              //         ),
+                              //         side: const BorderSide(
+                              //           color: Color(0xFFDC2626),
+                              //         ),
+                              //         shape: RoundedRectangleBorder(
+                              //           borderRadius: BorderRadius.circular(8),
+                              //         ),
+                              //       ),
+                              //     ),
+                              //   ),
+                              // ),
                             ],
                             Padding(
                               padding: const EdgeInsets.only(bottom: 6),
@@ -2030,7 +2207,13 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                                   ),
                                 ),
                               ],
-                              if (!isAccepted) ...[
+                              // Terminal-submit spec: once submitted, the
+                              // entry is final. No Update / Re-submit
+                              // affordance for v2 tasks. (Pre-v2 tasks
+                              // that lack `schemaVersion: 2` still expose
+                              // the legacy v1 update button below.)
+                              if (task['schemaVersion'] != 2 &&
+                                  !isAccepted) ...[
                                 const SizedBox(height: 6),
                                 SizedBox(
                                   width: double.infinity,
@@ -2161,6 +2344,430 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
   ) {
     // (original implementation – kept as is)
   }
+
+  // ---- NEW: ADD MEMBER SHEET ----
+  void _showAddMemberSheet(
+    BuildContext context,
+    StateSetter setParentState,
+    Map<String, dynamic> currentMembers,
+    String leadEmpId,
+  ) {
+    final mw = MediaQuery.of(context).size.width;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      constraints: mw >= 768
+          ? const BoxConstraints(maxWidth: 640, minWidth: 400)
+          : null,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetCtx) {
+        return ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(sheetCtx).size.height * 0.7,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFCBD5E1),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Add Employee to Task',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Select an employee to add to this task.',
+                  style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: FutureBuilder<QuerySnapshot>(
+                    future: FirebaseFirestore.instance
+                        .collection('users')
+                        .where(
+                          'role',
+                          isEqualTo: 'employee',
+                        ) // Fetch only employees
+                        .get(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(
+                          child: CircularProgressIndicator(
+                            color: Color(0xFF2563EB),
+                          ),
+                        );
+                      }
+                      if (snapshot.hasError) {
+                        return const Center(
+                          child: Text('Error fetching employees'),
+                        );
+                      }
+
+                      final docs = snapshot.data?.docs ?? [];
+                      final availableUsers = docs.where((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final empId = (data['emp_id'] ?? '')
+                            .toString()
+                            .toLowerCase();
+
+                        // Check if already in currentMembers by matching emp_id
+                        final isAlreadyAdded = currentMembers.values.any((m) {
+                          if (m is Map) {
+                            return (m['emp_id'] ?? '')
+                                    .toString()
+                                    .toLowerCase() ==
+                                empId;
+                          }
+                          return false;
+                        });
+
+                        // Make sure the fetched employee is not the Lead or already added
+                        return empId != leadEmpId &&
+                            !isAlreadyAdded &&
+                            empId.isNotEmpty;
+                      }).toList();
+
+                      if (availableUsers.isEmpty) {
+                        return const Center(
+                          child: Text(
+                            'No other employees available.',
+                            style: TextStyle(color: Color(0xFF94A3B8)),
+                          ),
+                        );
+                      }
+
+                      return ListView.builder(
+                        itemCount: availableUsers.length,
+                        itemBuilder: (context, index) {
+                          final doc = availableUsers[index];
+                          final data = doc.data() as Map<String, dynamic>;
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: const Color(0xFFE2E8F0),
+                              ),
+                            ),
+                            child: ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: const Color(0xFFDBEAFE),
+                                child: Text(
+                                  (data['name'] ?? '?')[0].toUpperCase(),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF2563EB),
+                                  ),
+                                ),
+                              ),
+                              title: Text(
+                                data['name'] ?? 'Unknown',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              subtitle: Text(
+                                data['emp_id'] ?? '',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF64748B),
+                                ),
+                              ),
+                              trailing: const Icon(
+                                Icons.add_circle,
+                                color: Color(0xFF16A34A),
+                              ),
+                              onTap: () {
+                                setParentState(() {
+                                  currentMembers[doc.id] = {
+                                    'emp_id': data['emp_id'],
+                                    'name': data['name'],
+                                    'department': data['department'] ?? '',
+                                    'uid': doc.id,
+                                  };
+                                });
+                                Navigator.pop(sheetCtx);
+                              },
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showEditTaskDialog(BuildContext context, Map<String, dynamic> task) {
+    final descCtrl = TextEditingController(
+      text: (task['description'] ?? '').toString(),
+    );
+    final secDescCtrl = TextEditingController(
+      text: (task['secondaryDescription'] ?? '').toString(),
+    );
+    Map<String, dynamic> currentMembers = Map<String, dynamic>.from(
+      task['members'] ?? {},
+    );
+    final myEmpId = (_empId ?? '').toLowerCase();
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        bool saving = false;
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: const Text(
+                'Edit Task Details',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Primary Goals',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: descCtrl,
+                        maxLines: 3,
+                        decoration: InputDecoration(
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          contentPadding: const EdgeInsets.all(10),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Secondary Goals',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: secDescCtrl,
+                        maxLines: 3,
+                        decoration: InputDecoration(
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          contentPadding: const EdgeInsets.all(10),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      const Text(
+                        'Manage Assigned Members',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: currentMembers.isEmpty
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: Text(
+                                  'No members assigned.',
+                                  style: TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              )
+                            : ListView(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                children: currentMembers.entries.map((e) {
+                                  final m = e.value as Map<String, dynamic>;
+                                  final mId = (m['emp_id'] ?? '')
+                                      .toString()
+                                      .toLowerCase();
+                                  final isMe = mId == myEmpId;
+                                  return ListTile(
+                                    dense: true,
+                                    title: Text(
+                                      m['name'] ?? 'Unknown',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    subtitle: Text(m['emp_id'] ?? ''),
+                                    trailing: isMe
+                                        ? const Chip(
+                                            label: Text(
+                                              'Lead',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                            backgroundColor: Color(0xFF2563EB),
+                                            padding: EdgeInsets.zero,
+                                          )
+                                        : IconButton(
+                                            icon: const Icon(
+                                              Icons.remove_circle_outline,
+                                              color: Colors.red,
+                                              size: 20,
+                                            ),
+                                            onPressed: () {
+                                              setState(() {
+                                                currentMembers.remove(e.key);
+                                              });
+                                            },
+                                          ),
+                                  );
+                                }).toList(),
+                              ),
+                      ),
+                      const SizedBox(height: 12),
+                      // ADD EMPLOYEE BUTTON
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () => _showAddMemberSheet(
+                            context,
+                            setState,
+                            currentMembers,
+                            myEmpId,
+                          ),
+                          icon: const Icon(
+                            Icons.person_add_alt_1,
+                            size: 16,
+                            color: Color(0xFF2563EB),
+                          ),
+                          label: const Text(
+                            'Add Employee',
+                            style: TextStyle(
+                              color: Color(0xFF2563EB),
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            side: const BorderSide(color: Color(0xFF2563EB)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: saving ? null : () => Navigator.pop(ctx),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: saving
+                      ? null
+                      : () async {
+                          setState(() => saving = true);
+                          try {
+                            await FirebaseFirestore.instance
+                                .collection('tasks')
+                                .doc(task['id'])
+                                .update({
+                                  'description': descCtrl.text.trim(),
+                                  'secondaryDescription': secDescCtrl.text
+                                      .trim(),
+                                  'members': currentMembers,
+                                });
+                            if (!context.mounted) return;
+                            Navigator.pop(ctx);
+                            _refreshTasks();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Task updated successfully'),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          } catch (e) {
+                            setState(() => saving = false);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Error updating task: $e'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                  ),
+                  child: saving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text(
+                          'Save Changes',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildOverdueBlock(
     BuildContext context,
     Map<String, dynamic> task, {
@@ -2867,15 +3474,15 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                                             },
                                             icon: const Icon(
                                               Icons.picture_as_pdf,
-                                              size: 18,
+                                              size: 14,
                                               color: Colors.white,
                                             ),
                                             label: const Text(
-                                              'View Submitted PDF',
+                                              'View Submission PDF',
                                               style: TextStyle(
                                                 color: Colors.white,
+                                                fontSize: 12,
                                                 fontWeight: FontWeight.w600,
-                                                fontSize: 13,
                                               ),
                                             ),
                                             style: ElevatedButton.styleFrom(
@@ -2884,7 +3491,7 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                                               ),
                                               padding:
                                                   const EdgeInsets.symmetric(
-                                                    vertical: 10,
+                                                    vertical: 8,
                                                   ),
                                               shape: RoundedRectangleBorder(
                                                 borderRadius:
@@ -2892,171 +3499,7 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                                               ),
                                             ),
                                           ),
-                                        )
-                                      else
-                                        Container(
-                                          width: double.infinity,
-                                          padding: const EdgeInsets.symmetric(
-                                            vertical: 6,
-                                            horizontal: 10,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFFEF3C7),
-                                            borderRadius: BorderRadius.circular(
-                                              6,
-                                            ),
-                                          ),
-                                          child: const Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(
-                                                Icons.info_outline,
-                                                size: 14,
-                                                color: Color(0xFF92400E),
-                                              ),
-                                              SizedBox(width: 6),
-                                              Text(
-                                                'No PDF attached',
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: Color(0xFF92400E),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
                                         ),
-                                      if (isRejected &&
-                                          (sub['rejectionReason'] ?? '')
-                                              .toString()
-                                              .isNotEmpty) ...[
-                                        const SizedBox(height: 10),
-                                        Container(
-                                          width: double.infinity,
-                                          padding: const EdgeInsets.all(10),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFFEF2F2),
-                                            borderRadius: BorderRadius.circular(
-                                              8,
-                                            ),
-                                            border: Border.all(
-                                              color: const Color(0xFFFECACA),
-                                            ),
-                                          ),
-                                          child: Text(
-                                            'Rejection: ${sub['rejectionReason']}',
-                                            style: const TextStyle(
-                                              fontSize: 12,
-                                              color: Color(0xFFDC2626),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                      if (subStatus == 'submitted') ...[
-                                        const SizedBox(height: 12),
-                                        Row(
-                                          children: [
-                                            Expanded(
-                                              child: ElevatedButton.icon(
-                                                onPressed: () async {
-                                                  final ok = await context
-                                                      .read<TaskViewModel>()
-                                                      .acceptMemberWork(
-                                                        taskId: taskId,
-                                                        empId: empId,
-                                                        memberName:
-                                                            m['name'] ?? '',
-                                                      );
-                                                  if (ok) {
-                                                    await _sendNotification(
-                                                      targetEmpId: empId,
-                                                      title: 'Work Accepted',
-                                                      body:
-                                                          'Your lead accepted your submission for task "$taskId".',
-                                                    );
-
-                                                    Navigator.of(
-                                                      sheetCtx,
-                                                    ).pop();
-                                                    _showMemberSubmissions(
-                                                      context,
-                                                      taskId,
-                                                    );
-                                                  }
-                                                },
-                                                icon: const Icon(
-                                                  Icons.check_circle,
-                                                  size: 16,
-                                                  color: Colors.white,
-                                                ),
-                                                label: const Text(
-                                                  'Accept',
-                                                  style: TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 13,
-                                                  ),
-                                                ),
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: const Color(
-                                                    0xFF16A34A,
-                                                  ),
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        vertical: 10,
-                                                      ),
-                                                  shape: RoundedRectangleBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          8,
-                                                        ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Expanded(
-                                              child: ElevatedButton.icon(
-                                                onPressed: () {
-                                                  Navigator.of(sheetCtx).pop();
-                                                  _showRejectMemberDialog(
-                                                    context,
-                                                    taskId,
-                                                    empId,
-                                                    m['name'] ?? '',
-                                                  );
-                                                },
-                                                icon: const Icon(
-                                                  Icons.cancel_outlined,
-                                                  size: 16,
-                                                  color: Colors.white,
-                                                ),
-                                                label: const Text(
-                                                  'Reject',
-                                                  style: TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 13,
-                                                  ),
-                                                ),
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: const Color(
-                                                    0xFFDC2626,
-                                                  ),
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        vertical: 10,
-                                                      ),
-                                                  shape: RoundedRectangleBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          8,
-                                                        ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
                                     ],
                                   ],
                                 ),
@@ -3073,182 +3516,6 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
         );
       },
     );
-  }
-
-  void _showRejectMemberDialog(
-    BuildContext context,
-    String taskId,
-    String empId,
-    String memberName,
-  ) {
-    final reasonCtrl = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        title: Text('Reject $memberName\'s Work'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Provide a reason for rejection:',
-              style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: reasonCtrl,
-              maxLines: 3,
-              decoration: InputDecoration(
-                hintText: 'Reason for rejection...',
-                hintStyle: const TextStyle(
-                  fontSize: 13,
-                  color: Color(0xFFCBD5E1),
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: Color(0xFF64748B)),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (reasonCtrl.text.trim().isEmpty) return;
-              Navigator.of(ctx).pop();
-              final ok = await context.read<TaskViewModel>().rejectMemberWork(
-                taskId: taskId,
-                empId: empId,
-                memberName: memberName,
-                reason: reasonCtrl.text.trim(),
-              );
-              if (ok) {
-                _showMemberSubmissions(context, taskId);
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFDC2626),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: const Text('Reject', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOptionsMenu(Map<String, dynamic> task) {
-    return PopupMenuButton<String>(
-      icon: const Icon(Icons.more_vert, size: 18, color: Color(0xFF94A3B8)),
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(),
-      onSelected: (value) {
-        if (value == 'assign') {
-          showAssignToMembersSheet(context, task, onAssigned: _refreshTasks);
-        } else if (value == 'edit') {
-          _showTaskDetails(context, task, startInEditMode: true);
-        } else if (value == 'approve') {
-          _approveTask(task);
-        }
-      },
-      itemBuilder: (_) => const [
-        PopupMenuItem(
-          value: 'assign',
-          child: Row(
-            children: [
-              Icon(Icons.send_rounded, size: 16, color: Color(0xFF16A34A)),
-              SizedBox(width: 8),
-              Text(
-                'Assign to Members',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ],
-          ),
-        ),
-        PopupMenuItem(
-          value: 'edit',
-          child: Row(
-            children: [
-              Icon(Icons.edit_outlined, size: 16, color: Color(0xFF2563EB)),
-              SizedBox(width: 8),
-              Text('Edit Description'),
-            ],
-          ),
-        ),
-        PopupMenuItem(
-          value: 'approve',
-          child: Row(
-            children: [
-              Icon(
-                Icons.check_circle_outline,
-                size: 16,
-                color: Color(0xFF16A34A),
-              ),
-              SizedBox(width: 8),
-              Text('Approve'),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _showTaskDetails(
-    BuildContext context,
-    Map<String, dynamic> task, {
-    bool startInEditMode = false,
-  }) {
-    // Implement your task details logic
-  }
-
-  Future<void> _approveTask(
-    Map<String, dynamic> task, {
-    String? newDescription,
-  }) async {
-    final user = context.read<AuthViewModel>().currentUser;
-    final leadName = user?.name ?? 'Lead';
-
-    final success = await context.read<TaskViewModel>().editTask(
-      taskId: task['id'],
-      currentData: task,
-      project_status_from_employeer: 'pending',
-      newTitle: task['title'] ?? '',
-      newDescription: newDescription ?? task['description'] ?? '',
-      newDuration: task['duration'] ?? '',
-      newStatus: 'approved',
-      modifiedBy: leadName,
-      modifiedByRole: 'project lead',
-    );
-
-    if (!mounted) return;
-
-    if (success) {
-      _refreshTasks();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Task approved successfully'),
-          backgroundColor: Color(0xFF16A34A),
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            context.read<TaskViewModel>().errorMessage ?? 'Failed to approve',
-          ),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
   }
 
   void _showSubmitDialog(BuildContext context, Map<String, dynamic> task) {
@@ -3619,6 +3886,341 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
           },
         );
       },
+    );
+  }
+
+  Widget _buildOptionsMenu(Map<String, dynamic> task) {
+    return PopupMenuButton<String>(
+      onSelected: (value) {
+        if (value == 'edit') {
+          _showEditTaskDialog(context, task);
+        } else if (value == 'history') {
+          final sw = MediaQuery.of(context).size.width;
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            constraints: sw >= 768
+                ? const BoxConstraints(maxWidth: 720, minWidth: 400)
+                : null,
+            builder: (_) => TaskHistorySheet(
+              task: task,
+              currentEmpId: _empId ?? '',
+              isLead: _isLeadForTask(task),
+            ),
+          );
+        }
+      },
+      itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+        const PopupMenuItem<String>(
+          value: 'edit',
+          child: Row(
+            children: [
+              Icon(Icons.edit, size: 16),
+              SizedBox(width: 8),
+              Text('Edit Details'),
+            ],
+          ),
+        ),
+        const PopupMenuItem<String>(
+          value: 'history',
+          child: Row(
+            children: [
+              Icon(Icons.history, size: 16),
+              SizedBox(width: 8),
+              Text('View History'),
+            ],
+          ),
+        ),
+      ],
+      icon: const Icon(Icons.more_vert, size: 20, color: Color(0xFF64748B)),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Employee Leave Requests Bottom Sheet
+// ══════════════════════════════════════════════════════════════════════════════
+class _EmployeeLeaveRequestsSheet extends StatelessWidget {
+  final String employeeName;
+  final List<Map<String, dynamic>> requests;
+
+  const _EmployeeLeaveRequestsSheet({
+    required this.employeeName,
+    required this.requests,
+  });
+
+  String _formatDate(Timestamp? ts) {
+    if (ts == null) return '—';
+    return DateFormat('MMM d, yyyy').format(ts.toDate());
+  }
+
+  String _formatDateTime(Timestamp? ts) {
+    if (ts == null) return '—';
+    return DateFormat('MMM d, yyyy · hh:mm a').format(ts.toDate());
+  }
+
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'approved':
+        return const Color(0xFF10B981);
+      case 'declined':
+        return const Color(0xFFEF4444);
+      default:
+        return const Color(0xFFF59E0B);
+    }
+  }
+
+  Color _statusBg(String status) {
+    switch (status) {
+      case 'approved':
+        return const Color(0xFFD1FAE5);
+      case 'declined':
+        return const Color(0xFFFEE2E2);
+      default:
+        return const Color(0xFFFEF3C7);
+    }
+  }
+
+  IconData _statusIcon(String status) {
+    switch (status) {
+      case 'approved':
+        return Icons.check_circle_rounded;
+      case 'declined':
+        return Icons.cancel_rounded;
+      default:
+        return Icons.schedule_rounded;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 80),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 12),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE2E8F0),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: const Color(0xFFDBEAFE),
+                  foregroundColor: const Color(0xFF2563EB),
+                  child: Text(
+                    employeeName.isNotEmpty
+                        ? employeeName[0].toUpperCase()
+                        : '?',
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        employeeName,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                      const Text(
+                        'Leave Requests',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Divider(height: 1, color: Color(0xFFE2E8F0)),
+          Expanded(
+            child: requests.isEmpty
+                ? const Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.inbox_rounded,
+                          size: 64,
+                          color: Color(0xFFCBD5E1),
+                        ),
+                        SizedBox(height: 12),
+                        Text(
+                          'No leave requests found',
+                          style: TextStyle(
+                            color: Color(0xFF94A3B8),
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: requests.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemBuilder: (_, i) {
+                      final req = requests[i];
+                      final status = req['status'] ?? 'pending';
+                      final startTs = req['startDate'] as Timestamp?;
+                      final endTs = req['endDate'] as Timestamp?;
+                      final days = req['totalDays'] ?? 1;
+                      final note = (req['note'] ?? '').toString();
+                      final reason = (req['rejectionReason'] ?? '').toString();
+                      final reviewedAt = req['reviewedAt'] as Timestamp?;
+                      final createdAt = req['createdAt'] as Timestamp?;
+
+                      final dateStr = startTs != null && endTs != null
+                          ? days == 1
+                                ? _formatDate(startTs)
+                                : '${DateFormat('MMM d').format(startTs.toDate())} – ${_formatDate(endTs)}'
+                          : '—';
+
+                      return Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.date_range_rounded,
+                                  size: 15,
+                                  color: Color(0xFF64748B),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    dateStr,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _statusBg(status),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        _statusIcon(status),
+                                        size: 12,
+                                        color: _statusColor(status),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        status.toUpperCase(),
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: _statusColor(status),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              '$days day${days > 1 ? 's' : ''} requested',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Requested: ${_formatDateTime(createdAt)}',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF94A3B8),
+                              ),
+                            ),
+                            if (status != 'pending' && reviewedAt != null) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                'Reviewed: ${_formatDateTime(reviewedAt)}',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFF94A3B8),
+                                ),
+                              ),
+                            ],
+                            if (note.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                'Note: $note',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF475569),
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ],
+                            if (status == 'declined' && reason.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFEF2F2),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: const Color(0xFFFECACA),
+                                  ),
+                                ),
+                                child: Text(
+                                  'Reason: $reason',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFFDC2626),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }

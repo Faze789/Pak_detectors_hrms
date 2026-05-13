@@ -22,7 +22,7 @@ class OfficeSettings {
   final String timezone;
 
   final DateTime? updatedAt;
-  final String?   updatedBy;
+  final String? updatedBy;
 
   const OfficeSettings({
     required this.checkInCutoff,
@@ -36,61 +36,60 @@ class OfficeSettings {
   });
 
   factory OfficeSettings.defaults() => const OfficeSettings(
-    checkInCutoff: 10,
-    halfDayMark:   13,
+    checkInCutoff: 15,
+    halfDayMark: 13,
     halfDayCutoff: 14,
     workStartHour: 9,
-    workEndHour:   18,
-    timezone:      'Asia/Karachi',
+    workEndHour: 18,
+    timezone: 'Asia/Karachi',
   );
 
   factory OfficeSettings.fromMap(Map<String, dynamic> m) => OfficeSettings(
-    checkInCutoff: (m['checkInCutoff'] as num?)?.toInt() ?? 10,
-    halfDayMark:   (m['halfDayMark']   as num?)?.toInt() ?? 13,
+    checkInCutoff: (m['checkInCutoff'] as num?)?.toInt() ?? 15,
+    halfDayMark: (m['halfDayMark'] as num?)?.toInt() ?? 13,
     halfDayCutoff: (m['halfDayCutoff'] as num?)?.toInt() ?? 14,
     workStartHour: (m['workStartHour'] as num?)?.toInt() ?? 9,
-    workEndHour:   (m['workEndHour']   as num?)?.toInt() ?? 18,
-    timezone:      m['timezone']  as String? ?? 'Asia/Karachi',
-    updatedAt:     m['updatedAt'] != null
+    workEndHour: (m['workEndHour'] as num?)?.toInt() ?? 18,
+    timezone: m['timezone'] as String? ?? 'Asia/Karachi',
+    updatedAt: m['updatedAt'] != null
         ? (m['updatedAt'] as Timestamp).toDate()
         : null,
-    updatedBy:     m['updatedBy'] as String?,
+    updatedBy: m['updatedBy'] as String?,
   );
 
   Map<String, dynamic> toMap() => {
     'checkInCutoff': checkInCutoff,
-    'halfDayMark':   halfDayMark,
+    'halfDayMark': halfDayMark,
     'halfDayCutoff': halfDayCutoff,
     'workStartHour': workStartHour,
-    'workEndHour':   workEndHour,
-    'timezone':      timezone,
+    'workEndHour': workEndHour,
+    'timezone': timezone,
     if (updatedAt != null) 'updatedAt': Timestamp.fromDate(updatedAt!),
     if (updatedBy != null) 'updatedBy': updatedBy,
   };
 
   OfficeSettings copyWith({
-    int?      checkInCutoff,
-    int?      halfDayMark,
-    int?      halfDayCutoff,
-    int?      workStartHour,
-    int?      workEndHour,
-    String?   timezone,
+    int? checkInCutoff,
+    int? halfDayMark,
+    int? halfDayCutoff,
+    int? workStartHour,
+    int? workEndHour,
+    String? timezone,
     DateTime? updatedAt,
-    String?   updatedBy,
-  }) =>
-      OfficeSettings(
-        checkInCutoff: checkInCutoff ?? this.checkInCutoff,
-        halfDayMark:   halfDayMark   ?? this.halfDayMark,
-        halfDayCutoff: halfDayCutoff ?? this.halfDayCutoff,
-        workStartHour: workStartHour ?? this.workStartHour,
-        workEndHour:   workEndHour   ?? this.workEndHour,
-        timezone:      timezone      ?? this.timezone,
-        updatedAt:     updatedAt     ?? this.updatedAt,
-        updatedBy:     updatedBy     ?? this.updatedBy,
-      );
+    String? updatedBy,
+  }) => OfficeSettings(
+    checkInCutoff: checkInCutoff ?? this.checkInCutoff,
+    halfDayMark: halfDayMark ?? this.halfDayMark,
+    halfDayCutoff: halfDayCutoff ?? this.halfDayCutoff,
+    workStartHour: workStartHour ?? this.workStartHour,
+    workEndHour: workEndHour ?? this.workEndHour,
+    timezone: timezone ?? this.timezone,
+    updatedAt: updatedAt ?? this.updatedAt,
+    updatedBy: updatedBy ?? this.updatedBy,
+  );
 
   @override
   String toString() =>
       'OfficeSettings(cutoff:$checkInCutoff halfMark:$halfDayMark '
-          'halfCutoff:$halfDayCutoff start:$workStartHour end:$workEndHour tz:$timezone)';
+      'halfCutoff:$halfDayCutoff start:$workStartHour end:$workEndHour tz:$timezone)';
 }

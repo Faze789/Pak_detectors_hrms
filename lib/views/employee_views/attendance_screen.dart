@@ -73,17 +73,33 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     super.dispose();
   }
 
+  /// Returns the number of weekdays (Monday–Friday) between [start] and [end] inclusive.
+  int _countWeekdays(DateTime start, DateTime end) {
+    int count = 0;
+    DateTime current = start;
+    while (current.isBefore(end) || current.isAtSameMomentAs(end)) {
+      if (current.weekday != DateTime.saturday &&
+          current.weekday != DateTime.sunday) {
+        count++;
+      }
+      current = current.add(const Duration(days: 1));
+    }
+    return count;
+  }
+
   /// Opens Calendar for Leave Request (1 to 4 days)
+  /// Opens Calendar for Leave Request (1 to 4 working days)
   Future<void> _onRequestLeaveTap(
     BuildContext context,
     AttendanceViewModel vm,
   ) async {
     final now = DateTime.now();
+    final tomorrow = DateTime(now.year, now.month, now.day + 1);
     final picked = await showDateRangePicker(
       context: context,
-      firstDate: now,
+      firstDate: tomorrow, //
       lastDate: now.add(const Duration(days: 365)),
-      helpText: 'Select Leave Dates (Max 4 days)',
+      helpText: 'Select Leave Dates (Max 4 working days)',
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
@@ -100,15 +116,43 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
     if (picked == null) return;
 
-    final int days = picked.end.difference(picked.start).inDays + 1;
+    // ─── NEW: Calculate Working Days (Skip Weekends) ────────────────────────
+    int calculateWorkingDays(DateTime start, DateTime end) {
+      int count = 0;
+      // Strip time data to ensure accurate day comparison
+      DateTime current = DateTime(start.year, start.month, start.day);
+      final endDate = DateTime(end.year, end.month, end.day);
+
+      while (!current.isAfter(endDate)) {
+        if (current.weekday != DateTime.saturday &&
+            current.weekday != DateTime.sunday) {
+          count++;
+        }
+        current = current.add(const Duration(days: 1));
+      }
+      return count;
+    }
+
+    final int days = calculateWorkingDays(picked.start, picked.end);
 
     if (!mounted) return;
+
+    // ─── Edge Case: User selected ONLY Saturday/Sunday ──────────────────────
+    if (days == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Selected dates only fall on weekends.'),
+          backgroundColor: Color(0xFFDC2626),
+        ),
+      );
+      return;
+    }
 
     if (days > 4) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'You can only request up to 4 days of leave at a time.',
+            'You can only request up to 4 working days of leave at a time.',
           ),
           backgroundColor: Color(0xFFDC2626),
         ),
@@ -130,6 +174,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
       if (uid != null) {
         // Calls the new method in AttendanceViewModel
+        // Note: It passes the actual 'days' (excluding weekends)
         await vm.submitLeaveRequest(uid, picked.start, picked.end, days);
       }
 
@@ -138,7 +183,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Leave request for $days day(s) sent successfully.'),
+          content: Text(
+            'Leave request for $days working day(s) sent successfully.',
+          ),
           backgroundColor: const Color(0xFF10B981),
         ),
       );
@@ -1196,7 +1243,7 @@ class _OnLeaveCard extends StatelessWidget {
       iconColor: const Color(0xFF7C3AED),
       icon: Icons.beach_access_rounded,
       title: leave?.type.label ?? 'Approved Leave',
-      subtitle: 'Your leave has been approved by HR.\nEnjoy your time off!',
+      subtitle: 'Your leave request was accepted.\nEnjoy your day(s) off!',
       detailBox: detail,
     );
   }
@@ -1379,8 +1426,40 @@ class _MainCard extends StatelessWidget {
   }
 
   Widget _buildNotCheckedIn(bool isMobile) {
+    // Per spec, the Check-in button must be hidden in three cases:
+    //   1. Today's record already has a checkOutTime → the cycle is done.
+    //   2. Today's `dailyStatus` is `checkedOut`, even if the live doc was
+    //      cleaned up (the daily cleanup at 18:55 deletes the live doc;
+    //      the archive still has the record, but covering this branch
+    //      defensively closes the small window during which a refresh
+    //      may not have repopulated `todayAttendance` from the archive).
+    //   3. It is before 08:00 local — the daily check-in window opens at
+    //      08:00, so any time between midnight and 08:00 (which is also
+    //      the "after-checkout / before-tomorrow's 8 AM" gap from the
+    //      spec) must not offer the action.
+    final now = DateTime.now();
+    final hasCheckOutTime = vm.todayAttendance?.checkOutTime != null;
+    final statusCheckedOut =
+        vm.dailyStatus == AttendanceStatus.checkedOut;
+    final completedToday = hasCheckOutTime || statusCheckedOut;
+    final beforeOpening = now.hour < 8;
+    final hideCheckIn = completedToday || beforeOpening;
+    if (hideCheckIn) {
+      return _CheckInClosed(
+        isMobile: isMobile,
+        reason: completedToday
+            ? _CheckInClosedReason.completed
+            : _CheckInClosedReason.beforeWindow,
+        forDate: _attendanceDateForBadge(now),
+      );
+    }
     return Column(
       children: [
+        _AttendanceDateChip(
+          forDate: _attendanceDateForBadge(now),
+          prefix: 'Checking in for',
+        ),
+        SizedBox(height: isMobile ? 14 : 18),
         Container(
           width: isMobile ? 96 : 120,
           height: isMobile ? 96 : 120,
@@ -1465,8 +1544,18 @@ class _MainCard extends StatelessWidget {
   }
 
   Widget _buildCheckedIn(bool isMobile) {
+    // Anchor the date the user is currently checked in for at the top of
+    // the card. We use the actual checkInTime when available so a late
+    // check-in still reads correctly even if the screen is opened past
+    // midnight (rare, but cleaner than reading wall-clock now).
+    final dateAnchor = vm.todayAttendance?.checkInTime ?? DateTime.now();
     return Column(
       children: [
+        _AttendanceDateChip(
+          forDate: _attendanceDateForBadge(dateAnchor),
+          prefix: 'Checked in for',
+        ),
+        SizedBox(height: isMobile ? 12 : 16),
         // Static "Checked In" Box
         Container(
           width: double.infinity,
@@ -1532,14 +1621,33 @@ class _MainCard extends StatelessWidget {
         const SizedBox(height: 24),
 
         // Action Button: Check Out Only
-        SizedBox(
-          width: double.infinity,
-          child: _ActionButton(
-            label: 'Check Out',
-            icon: Icons.logout_rounded,
-            gradient: const [Color(0xFFDC2626), Color(0xFFB91C1C)],
-            onTap: onCheckOut,
-          ),
+        //
+        // Per the daily cycle spec, the check-out window closes at 6:30 PM
+        // local time. After that, the button is locked: employees who
+        // missed the window must coordinate with HR. The Cloud Function
+        // `checkOutReminders` already nudges them every 5 minutes between
+        // 6:05 PM and 6:30 PM (see functions/index.js).
+        Builder(
+          builder: (_) {
+            final now = DateTime.now();
+            final pastCheckoutCutoff =
+                now.hour > 18 || (now.hour == 18 && now.minute >= 30);
+            return SizedBox(
+              width: double.infinity,
+              child: _ActionButton(
+                label: pastCheckoutCutoff
+                    ? 'Check Out Closed (6:30 PM)'
+                    : 'Check Out',
+                icon: pastCheckoutCutoff
+                    ? Icons.lock_clock_rounded
+                    : Icons.logout_rounded,
+                gradient: pastCheckoutCutoff
+                    ? const [Color(0xFF94A3B8), Color(0xFF64748B)]
+                    : const [Color(0xFFDC2626), Color(0xFFB91C1C)],
+                onTap: pastCheckoutCutoff ? null : onCheckOut,
+              ),
+            );
+          },
         ),
 
         const SizedBox(height: 18),
@@ -1603,7 +1711,11 @@ class _ActionButton extends StatelessWidget {
   final String label;
   final IconData icon;
   final List<Color> gradient;
-  final VoidCallback onTap;
+  // Nullable so callers can disable the button (e.g. check-out past 6:30 PM).
+  // When null, the GestureDetector ignores taps and the button visually
+  // shows whatever the caller set on `gradient` / `label` for the disabled
+  // state.
+  final VoidCallback? onTap;
   const _ActionButton({
     required this.label,
     required this.icon,
@@ -1644,6 +1756,135 @@ class _ActionButton extends StatelessWidget {
       ),
     ),
   );
+}
+
+// ── Closed states for the Check-in card ──────────────────────────────────
+// `_CheckInClosed` replaces the Check-in button when the daily window is
+// not currently open: either the user has already completed today's cycle
+// (checkIn + checkOut both recorded) or it's before 08:00 local, which is
+// also the after-checkout / before-next-day-8AM gap from the spec.
+
+enum _CheckInClosedReason { completed, beforeWindow }
+
+/// Formats the in-effect attendance date (e.g. "Wed, 7 May 2026").
+/// We use [DateTime.now] directly so a single shared formatter keeps the
+/// label, the badge, and the closed-state subtitle in lockstep.
+String _attendanceDateForBadge(DateTime when) {
+  const months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  final wd = weekdays[when.weekday - 1];
+  final mo = months[when.month - 1];
+  return '$wd, ${when.day} $mo ${when.year}';
+}
+
+/// Inline chip used at the top of every attendance card to make the
+/// "which date is this check-in / check-out for?" question impossible to
+/// misread. Same visual across closed / not-checked-in / checked-in
+/// states so the date is always exactly where the user expects it.
+class _AttendanceDateChip extends StatelessWidget {
+  final String forDate;
+  final String? prefix;
+  const _AttendanceDateChip({required this.forDate, this.prefix});
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFBFDBFE)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.calendar_today_rounded,
+            size: 12,
+            color: Color(0xFF2563EB),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            '${prefix ?? "For"} $forDate',
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF1D4ED8),
+              letterSpacing: 0.2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CheckInClosed extends StatelessWidget {
+  final bool isMobile;
+  final _CheckInClosedReason reason;
+  final String forDate;
+  const _CheckInClosed({
+    required this.isMobile,
+    required this.reason,
+    required this.forDate,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final (IconData icon, Color iconColor, String title, String sub) =
+        switch (reason) {
+      _CheckInClosedReason.completed => (
+        Icons.task_alt_rounded,
+        const Color(0xFF059669),
+        'Day complete',
+        'You\'ve already checked in and checked out for this date.\n'
+            'Check-in re-opens tomorrow at 8:00 AM.',
+      ),
+      _CheckInClosedReason.beforeWindow => (
+        Icons.bedtime_outlined,
+        const Color(0xFF7C3AED),
+        'Check-in opens at 8:00 AM',
+        'You can check in once the daily window opens.',
+      ),
+    };
+    return Column(
+      children: [
+        _AttendanceDateChip(forDate: forDate),
+        SizedBox(height: isMobile ? 14 : 18),
+        Container(
+          width: isMobile ? 96 : 120,
+          height: isMobile ? 96 : 120,
+          decoration: BoxDecoration(
+            color: iconColor.withOpacity(0.10),
+            borderRadius: BorderRadius.circular(isMobile ? 48 : 60),
+          ),
+          child: Icon(icon, size: isMobile ? 44 : 56, color: iconColor),
+        ),
+        SizedBox(height: isMobile ? 14 : 18),
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: isMobile ? 16 : 18,
+            fontWeight: FontWeight.w700,
+            color: const Color(0xFF0F172A),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          sub,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontSize: 13,
+            color: Color(0xFF64748B),
+            height: 1.4,
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _EmptyState extends StatelessWidget {
