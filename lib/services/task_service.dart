@@ -220,7 +220,13 @@ class TaskService {
         .toList();
   }
 
-  /// Save a new task to Firestore
+  /// Save a new task to Firestore.
+  ///
+  /// `duration` is the human-readable label ("Weekly", "Monthly", "Custom",
+  /// etc.). For custom-day tasks HR passes the actual day count through
+  /// `customDurationDays`; that value wins over [_durationToDays] so a
+  /// 35-day task produces `ceil(35 / 7) = 5` weeks regardless of how the
+  /// duration label is written.
   Future<String> createTask({
     List<Map<String, dynamic>>? members,
     required String lead_id,
@@ -230,6 +236,7 @@ class TaskService {
     required String description,
     required bool unscheduled_task,
     required String duration,
+    int? customDurationDays,
     List<Map<String, dynamic>>? attachments,
     String? secondaryDescription,
     List<Map<String, dynamic>>? secondaryAttachments,
@@ -247,8 +254,14 @@ class TaskService {
       }
     }
 
-    final durationDays = _durationToDays(duration);
-    final cycleDays = _durationToCycleDays(duration);
+    // Resolve the total length: explicit custom day count if HR provided
+    // one, otherwise the duration label is parsed via the preset table.
+    // Cycle length is always 7 days so the lead's weekly breakdown UI
+    // gets a clean integer number of phases (ceil(days / 7)).
+    final durationDays = (customDurationDays != null && customDurationDays > 0)
+        ? customDurationDays
+        : _durationToDays(duration);
+    const cycleDays = 7;
     final now = DateTime.now();
     final deadline = now.add(Duration(days: durationDays));
 
@@ -277,6 +290,12 @@ class TaskService {
       'description': description,
       'unscheduled_task': unscheduled_task,
       'duration': duration,
+      // Persist the resolved day count so downstream readers don't need to
+      // re-parse the duration label (especially useful for custom-day
+      // tasks where the label is "Custom" and the real value is here).
+      'durationDays': durationDays,
+      if (customDurationDays != null && customDurationDays > 0)
+        'customDurationDays': customDurationDays,
       'status': 'pending',
       'createdAt': FieldValue.serverTimestamp(),
       'deadline': Timestamp.fromDate(deadline),
@@ -541,8 +560,25 @@ class TaskService {
     });
   }
 
+  /// Maps a duration label to its calendar-day length.
+  ///
+  /// Recognised presets:
+  ///   weekly      → 7
+  ///   bi-weekly   → 14
+  ///   monthly     → 28
+  ///   bi-monthly  → 56
+  ///   quarterly   → 84
+  ///
+  /// Anything else (e.g. "Custom(35 days)", "14 days", "21") is parsed as
+  /// a number — the first integer found in the string is taken to be the
+  /// total day count. Falls back to 28 only when nothing is parseable.
+  ///
+  /// Note: callers that already know the exact day count (e.g. HR picked a
+  /// custom value) should pass that integer through `customDurationDays`
+  /// on [createTask] rather than relying on the string parse.
   static int _durationToDays(String duration) {
-    switch (duration.toLowerCase()) {
+    final lower = duration.toLowerCase().trim();
+    switch (lower) {
       case 'weekly':
         return 7;
       case 'bi-weekly':
@@ -554,18 +590,23 @@ class TaskService {
       case 'quarterly':
         return 84;
       default:
+        // Handles "custom(14days)", "custom(14 days)", "14days", "35 days", etc.
+        final match = RegExp(r'(\d+)').firstMatch(lower);
+        if (match != null) {
+          final parsed = int.tryParse(match.group(1)!);
+          if (parsed != null && parsed > 0) return parsed;
+        }
         return 28;
     }
   }
 
+  /// Length of one phase / "week" in days. Per spec, the lead always
+  /// assigns work in 7-day chunks regardless of the overall duration, so
+  /// `totalWeeks = ceil(durationDays / 7)` for every task. The legacy
+  /// 14-day cycle for bi-monthly / quarterly tasks is intentionally
+  /// removed — both now break into 8 and 12 weekly phases respectively.
   static int _durationToCycleDays(String duration) {
-    switch (duration.toLowerCase()) {
-      case 'quarterly':
-      case 'bi-monthly':
-        return 14;
-      default:
-        return 7;
-    }
+    return 7;
   }
 
   Future<void> updateTask({

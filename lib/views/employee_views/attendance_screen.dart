@@ -87,7 +87,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     return count;
   }
 
-  /// Opens Calendar for Leave Request (1 to 4 days)
   /// Opens Calendar for Leave Request (1 to 4 working days)
   Future<void> _onRequestLeaveTap(
     BuildContext context,
@@ -490,8 +489,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                   ),
                                 ),
                               ),
-                              // Spacer between the two buttons
-                              // In your button row, after the existing "Request Leave" button:
                               const SizedBox(width: 12),
                               Expanded(
                                 child: ElevatedButton.icon(
@@ -549,9 +546,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                       ),
                                     ),
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(
-                                        0xFF0F172A,
-                                      ), // Dark slate color to differentiate it
+                                      backgroundColor: const Color(0xFF0F172A),
                                       foregroundColor: Colors.white,
                                       padding: const EdgeInsets.symmetric(
                                         vertical: 14,
@@ -569,40 +564,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         ),
                       ),
                     ),
-                    // New: Request to Leave Button placed above Time Clock
-                    // SliverToBoxAdapter(
-                    //   child: SafeArea(
-                    //     bottom: false,
-                    //     child: Padding(
-                    //       padding: EdgeInsets.fromLTRB(hPad, 16, hPad, 8),
-                    //       child: ElevatedButton.icon(
-                    //         onPressed: () => _onRequestLeaveTap(context, vm),
-                    //         icon: const Icon(
-                    //           Icons.edit_calendar_rounded,
-                    //           color: Colors.white,
-                    //           size: 20,
-                    //         ),
-                    //         label: const Text(
-                    //           'Request to Leave',
-                    //           style: TextStyle(
-                    //             fontWeight: FontWeight.bold,
-                    //             fontSize: 15,
-                    //           ),
-                    //         ),
-                    //         style: ElevatedButton.styleFrom(
-                    //           backgroundColor: const Color(0xFF2563EB),
-                    //           foregroundColor: Colors.white,
-                    //           padding: const EdgeInsets.symmetric(vertical: 14),
-                    //           shape: RoundedRectangleBorder(
-                    //             borderRadius: BorderRadius.circular(14),
-                    //           ),
-                    //           elevation: 2,
-                    //         ),
-                    //       ),
-                    //     ),
-                    //   ),
-                    // ),
-                    // _StickyHeader(now: _now),
                     SliverPadding(
                       padding: EdgeInsets.symmetric(
                         horizontal: hPad,
@@ -1426,21 +1387,9 @@ class _MainCard extends StatelessWidget {
   }
 
   Widget _buildNotCheckedIn(bool isMobile) {
-    // Per spec, the Check-in button must be hidden in three cases:
-    //   1. Today's record already has a checkOutTime → the cycle is done.
-    //   2. Today's `dailyStatus` is `checkedOut`, even if the live doc was
-    //      cleaned up (the daily cleanup at 18:55 deletes the live doc;
-    //      the archive still has the record, but covering this branch
-    //      defensively closes the small window during which a refresh
-    //      may not have repopulated `todayAttendance` from the archive).
-    //   3. It is before 08:00 local — the daily check-in window opens at
-    //      08:00, so any time between midnight and 08:00 (which is also
-    //      the "after-checkout / before-tomorrow's 8 AM" gap from the
-    //      spec) must not offer the action.
     final now = DateTime.now();
     final hasCheckOutTime = vm.todayAttendance?.checkOutTime != null;
-    final statusCheckedOut =
-        vm.dailyStatus == AttendanceStatus.checkedOut;
+    final statusCheckedOut = vm.dailyStatus == AttendanceStatus.checkedOut;
     final completedToday = hasCheckOutTime || statusCheckedOut;
     final beforeOpening = now.hour < 8;
     final hideCheckIn = completedToday || beforeOpening;
@@ -1544,10 +1493,6 @@ class _MainCard extends StatelessWidget {
   }
 
   Widget _buildCheckedIn(bool isMobile) {
-    // Anchor the date the user is currently checked in for at the top of
-    // the card. We use the actual checkInTime when available so a late
-    // check-in still reads correctly even if the screen is opened past
-    // midnight (rare, but cleaner than reading wall-clock now).
     final dateAnchor = vm.todayAttendance?.checkInTime ?? DateTime.now();
     return Column(
       children: [
@@ -1620,13 +1565,6 @@ class _MainCard extends StatelessWidget {
         ),
         const SizedBox(height: 24),
 
-        // Action Button: Check Out Only
-        //
-        // Per the daily cycle spec, the check-out window closes at 6:30 PM
-        // local time. After that, the button is locked: employees who
-        // missed the window must coordinate with HR. The Cloud Function
-        // `checkOutReminders` already nudges them every 5 minutes between
-        // 6:05 PM and 6:30 PM (see functions/index.js).
         Builder(
           builder: (_) {
             final now = DateTime.now();
@@ -1711,10 +1649,6 @@ class _ActionButton extends StatelessWidget {
   final String label;
   final IconData icon;
   final List<Color> gradient;
-  // Nullable so callers can disable the button (e.g. check-out past 6:30 PM).
-  // When null, the GestureDetector ignores taps and the button visually
-  // shows whatever the caller set on `gradient` / `label` for the disabled
-  // state.
   final VoidCallback? onTap;
   const _ActionButton({
     required this.label,
@@ -1758,21 +1692,22 @@ class _ActionButton extends StatelessWidget {
   );
 }
 
-// ── Closed states for the Check-in card ──────────────────────────────────
-// `_CheckInClosed` replaces the Check-in button when the daily window is
-// not currently open: either the user has already completed today's cycle
-// (checkIn + checkOut both recorded) or it's before 08:00 local, which is
-// also the after-checkout / before-next-day-8AM gap from the spec.
-
 enum _CheckInClosedReason { completed, beforeWindow }
 
-/// Formats the in-effect attendance date (e.g. "Wed, 7 May 2026").
-/// We use [DateTime.now] directly so a single shared formatter keeps the
-/// label, the badge, and the closed-state subtitle in lockstep.
 String _attendanceDateForBadge(DateTime when) {
   const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
   const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   final wd = weekdays[when.weekday - 1];
@@ -1780,10 +1715,6 @@ String _attendanceDateForBadge(DateTime when) {
   return '$wd, ${when.day} $mo ${when.year}';
 }
 
-/// Inline chip used at the top of every attendance card to make the
-/// "which date is this check-in / check-out for?" question impossible to
-/// misread. Same visual across closed / not-checked-in / checked-in
-/// states so the date is always exactly where the user expects it.
 class _AttendanceDateChip extends StatelessWidget {
   final String forDate;
   final String? prefix;
@@ -1833,8 +1764,12 @@ class _CheckInClosed extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (IconData icon, Color iconColor, String title, String sub) =
-        switch (reason) {
+    final (
+      IconData icon,
+      Color iconColor,
+      String title,
+      String sub,
+    ) = switch (reason) {
       _CheckInClosedReason.completed => (
         Icons.task_alt_rounded,
         const Color(0xFF059669),
@@ -2288,7 +2223,7 @@ class _MonthlyHistorySectionState extends State<_MonthlyHistorySection> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '',
+                          m.year.toString(),
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
@@ -2310,8 +2245,22 @@ class _MonthlyHistorySectionState extends State<_MonthlyHistorySection> {
               padding: EdgeInsets.all(20),
               child: Center(child: CircularProgressIndicator()),
             )
-          else
+          else ...[
             _MonthlyStatsPanel(month: _selectedMonth, archive: _archive),
+            if (_archive != null && _archive!.days.isNotEmpty) ...[
+              const SizedBox(height: 24),
+              const Text(
+                'Daily Records',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _MonthlyRecordsList(archive: _archive!),
+            ],
+          ],
         ],
       ),
     );
@@ -2473,6 +2422,217 @@ class _StatTile extends StatelessWidget {
               color: color,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Detailed Monthly Records List
+// ══════════════════════════════════════════════════════════════════════════════
+class _MonthlyRecordsList extends StatelessWidget {
+  final MonthlyArchive archive;
+  const _MonthlyRecordsList({required this.archive});
+
+  @override
+  Widget build(BuildContext context) {
+    // Sort days descending (newest at the top)
+    final days = archive.days.values.toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+
+    return ListView.separated(
+      shrinkWrap: true,
+      physics:
+          const NeverScrollableScrollPhysics(), // Let the main scroll view handle scrolling
+      itemCount: days.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (context, index) {
+        final record = days[index];
+        return _DailyRecordTile(record: record);
+      },
+    );
+  }
+}
+
+class _DailyRecordTile extends StatelessWidget {
+  final AttendanceModel record;
+  const _DailyRecordTile({required this.record});
+
+  Color _getStatusColor(AttendanceStatus status) {
+    switch (status) {
+      case AttendanceStatus.checkedIn:
+      case AttendanceStatus.checkedOut:
+        return const Color(0xFF10B981); // Green for present
+      case AttendanceStatus.late:
+        return const Color(0xFFF59E0B); // Amber for late
+      case AttendanceStatus.absent:
+        return const Color(0xFFEF4444); // Red for absent
+      case AttendanceStatus.onLeave:
+      case AttendanceStatus.firstHalfLeave:
+      case AttendanceStatus.secondHalfLeave:
+        return const Color(0xFF8B5CF6); // Purple for leave
+      default:
+        return const Color(0xFF64748B); // Slate for others
+    }
+  }
+
+  String _formatStatus(AttendanceStatus status) {
+    switch (status) {
+      case AttendanceStatus.checkedIn:
+        return 'Present';
+      case AttendanceStatus.checkedOut:
+        return 'Present';
+      case AttendanceStatus.firstHalfLeave:
+        return '½ AM Leave';
+      case AttendanceStatus.secondHalfLeave:
+        return '½ PM Leave';
+      case AttendanceStatus.onLeave:
+        return 'On Leave';
+      case AttendanceStatus.late:
+        return 'Late';
+      case AttendanceStatus.absent:
+        return 'Absent';
+      default:
+        return 'Unknown';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final statusColor = _getStatusColor(record.status);
+    final statusLabel = _formatStatus(record.status);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: [
+          // Date Box
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  DateFormat('dd').format(record.date),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+                Text(
+                  DateFormat('EEE').format(record.date),
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+
+          // Times & Info
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: statusColor,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      statusLabel,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: statusColor,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.login_rounded,
+                      size: 12,
+                      color: Color(0xFF94A3B8),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      record.checkInTime != null
+                          ? _fmtShortTime(record.checkInTime!)
+                          : '--:--',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF475569),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Icon(
+                      Icons.logout_rounded,
+                      size: 12,
+                      color: Color(0xFF94A3B8),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      record.checkOutTime != null
+                          ? _fmtShortTime(record.checkOutTime!)
+                          : '--:--',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF475569),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // Total Hours (if checked out)
+          if (record.checkInTime != null && record.checkOutTime != null)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                const Text(
+                  'Worked',
+                  style: TextStyle(fontSize: 10, color: Color(0xFF94A3B8)),
+                ),
+                Text(
+                  _shortDur(
+                    record.totalWorkSeconds ??
+                        record.checkOutTime!
+                            .difference(record.checkInTime!)
+                            .inSeconds,
+                  ),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+              ],
+            ),
         ],
       ),
     );

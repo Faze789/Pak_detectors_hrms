@@ -5,6 +5,7 @@ import 'package:hrms_app/viewmodels/auth_viewmodel.dart';
 import 'package:hrms_app/viewmodels/task_viewmodel.dart';
 import 'package:hrms_app/views/HR_views/CheckAssignedTasks.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 
 class AssignTaskToLeadForm extends StatefulWidget {
   const AssignTaskToLeadForm({super.key, required this.unscheduled_task});
@@ -34,6 +35,11 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
   final List<PlatformFile> _secondaryPickedFiles = [];
   bool _uploading = false;
 
+  // Custom Date Tracking
+  DateTimeRange? _selectedDateRange;
+  int? _customTotalDays;
+  int? _customAssignedDays; // This will hold the "divided by 7" result
+
   static const List<String> _departments = [
     'IT',
     'Marketing',
@@ -45,9 +51,6 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
     'Support',
   ];
 
-  // Spec: weekly / bi_weekly / monthly only. Legacy bi-monthly/quarterly tasks
-  // continue to render in the rest of the app, but new HR tasks are limited
-  // to these three durations.
   final Map<String, int> _durations = {
     'Weekly': 7,
     'Bi-Weekly': 14,
@@ -82,6 +85,49 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
     );
     if (result == null) return;
     setState(() => target.addAll(result.files));
+  }
+
+  // ─── Opens the Date Range Picker & Calculates Duration (Total Days / 7) ────
+  Future<void> _pickCustomDateRange() async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365 * 2)),
+      helpText: 'Select Task Date Range',
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF2563EB),
+              onPrimary: Colors.white,
+              onSurface: Color(0xFF0F172A),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      // 1. Get exact calendar days (inclusive)
+      final int totalDays = picked.end.difference(picked.start).inDays + 1;
+
+      // 2. Divide by 7 to get full weeks, then multiply by 7 to get exact assigned days
+      // E.g., 27 days ~/ 7 = 3.  3 * 7 = 21 assigned days.
+      final int assignedDays = (totalDays ~/ 7) * 7;
+
+      setState(() {
+        _selectedDateRange = picked;
+        _customTotalDays = totalDays;
+        _customAssignedDays = assignedDays;
+        _selectedDuration = 'Custom Dates';
+      });
+    } else {
+      if (_selectedDuration == 'Custom Dates' && _selectedDateRange == null) {
+        setState(() => _selectedDuration = null);
+      }
+    }
   }
 
   @override
@@ -122,7 +168,6 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                     )
                     .toList();
 
-          // Users matching current selected member emp_ids
           final selectedUsers = allUsers
               .where(
                 (u) => _selectedMemberEmpIds.contains(
@@ -261,7 +306,6 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                                             _selectedMemberEmpIds.add(empId);
                                           } else {
                                             _selectedMemberEmpIds.remove(empId);
-                                            // Clear lead if deselected
                                             if (_selectedLeadEmpId == empId) {
                                               _selectedLeadEmpId = null;
                                             }
@@ -314,7 +358,6 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                       const SizedBox(height: 10),
 
                       if (_selectedMemberEmpIds.isEmpty)
-                        // Placeholder when no members selected yet
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.symmetric(vertical: 20),
@@ -456,7 +499,7 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                           border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
                         child: DropdownButtonFormField<String>(
-                          initialValue: _selectedDuration,
+                          value: _selectedDuration,
                           isExpanded: true,
                           decoration: const InputDecoration(
                             border: InputBorder.none,
@@ -470,21 +513,111 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                               color: Color(0xFF94A3B8),
                             ),
                           ),
-                          items: _durations.keys
-                              .map(
-                                (key) => DropdownMenuItem<String>(
-                                  value: key,
-                                  child: Text(key),
+                          items: [
+                            ..._durations.keys.map(
+                              (key) => DropdownMenuItem<String>(
+                                value: key,
+                                child: Text(key),
+                              ),
+                            ),
+                            const DropdownMenuItem<String>(
+                              value: 'Custom Dates',
+                              child: Text(
+                                'Custom Dates (Select Range)',
+                                style: TextStyle(
+                                  color: Color(0xFF2563EB),
+                                  fontWeight: FontWeight.w600,
                                 ),
-                              )
-                              .toList(),
+                              ),
+                            ),
+                          ],
                           validator: (v) => (v == null || v.isEmpty)
                               ? 'Please select a duration'
                               : null,
-                          onChanged: (v) =>
-                              setState(() => _selectedDuration = v),
+                          onChanged: (v) {
+                            if (v == 'Custom Dates') {
+                              _pickCustomDateRange();
+                            } else {
+                              setState(() {
+                                _selectedDuration = v;
+                                _selectedDateRange = null;
+                                _customTotalDays = null;
+                                _customAssignedDays = null;
+                              });
+                            }
+                          },
                         ),
                       ),
+
+                      // ── Show Custom Date Info Box if selected ────────────
+                      if (_selectedDuration == 'Custom Dates' &&
+                          _selectedDateRange != null)
+                        Container(
+                          margin: const EdgeInsets.only(top: 12),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEFF6FF),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFFBFDBFE)),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: const Color(0xFFDBEAFE),
+                                  ),
+                                ),
+                                child: const Icon(
+                                  Icons.calendar_month_rounded,
+                                  color: Color(0xFF2563EB),
+                                  size: 18,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '${DateFormat('MMM d, yyyy').format(_selectedDateRange!.start)} - ${DateFormat('MMM d, yyyy').format(_selectedDateRange!.end)}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF1E293B),
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Calendar Range: $_customTotalDays days\nAssigned Task Duration: $_customAssignedDays days',
+                                      style: const TextStyle(
+                                        color: Color(0xFF2563EB),
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 12,
+                                        height: 1.3,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: _pickCustomDateRange,
+                                style: TextButton.styleFrom(
+                                  foregroundColor: const Color(0xFF2563EB),
+                                  textStyle: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                child: const Text('Change'),
+                              ),
+                            ],
+                          ),
+                        ),
+
                       const SizedBox(height: 20),
 
                       // ── Task Title ───────────────────────────────────────
@@ -587,6 +720,20 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                                     return;
                                   }
 
+                                  if (_selectedDuration == 'Custom Dates' &&
+                                      _selectedDateRange == null) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Please select the custom date range from the calendar.',
+                                        ),
+                                        backgroundColor: Color(0xFFEF4444),
+                                        behavior: SnackBarBehavior.floating,
+                                      ),
+                                    );
+                                    return;
+                                  }
+
                                   final leadUser = allUsers.firstWhere(
                                     (u) =>
                                         (u['emp_id'] ?? '') ==
@@ -598,7 +745,6 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                                   final leadDept =
                                       (leadUser['department'] ?? '').toString();
 
-                                  // All selected members (including the lead)
                                   final selectedMembers = allUsers
                                       .where(
                                         (u) => _selectedMemberEmpIds.contains(
@@ -617,18 +763,16 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                                   List<Map<String, dynamic>>? attachments;
                                   List<Map<String, dynamic>>?
                                   secondaryAttachments;
+
                                   if (_pickedFiles.isNotEmpty ||
                                       _secondaryPickedFiles.isNotEmpty) {
                                     setState(() => _uploading = true);
                                     try {
-                                      // We don't have the taskId yet at upload
-                                      // time, so use a creation-timestamp +
-                                      // lead prefix. Files are reorganised
-                                      // logically via the attachment metadata.
                                       final ts =
                                           DateTime.now().millisecondsSinceEpoch;
                                       final basePrefix =
                                           'task_attachments/${ts}_${_selectedLeadEmpId ?? 'lead'}';
+
                                       if (_pickedFiles.isNotEmpty) {
                                         attachments = await _storage
                                             .uploadManyPdfs(
@@ -668,13 +812,30 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                                     setState(() => _uploading = false);
                                   }
 
+                                  // Set up correct duration label based on calculations.
+                                  // For Custom Dates we ALSO pass the explicit
+                                  // day count (`customDurationDays`) so the
+                                  // service doesn't have to re-parse the
+                                  // label — this guarantees a 14-day custom
+                                  // task lands as `totalWeeks = 2`, a 35-day
+                                  // task as `totalWeeks = 5`, etc.
+                                  final isCustom =
+                                      _selectedDuration == 'Custom Dates';
+                                  final String finalDurationStr = isCustom
+                                      ? 'Custom ($_customAssignedDays Days)'
+                                      : _selectedDuration!;
+                                  final int? customDays = isCustom
+                                      ? _customAssignedDays
+                                      : null;
+
                                   final success = await taskVm.assignTask(
                                     lead_id: _selectedLeadEmpId!,
                                     leadName: leadName,
                                     department: leadDept,
                                     title: _titleCtrl.text.trim(),
                                     description: _descCtrl.text.trim(),
-                                    duration: _selectedDuration!,
+                                    duration: finalDurationStr,
+                                    customDurationDays: customDays,
                                     members: selectedMembers,
                                     unscheduled_task: widget.unscheduled_task,
                                     attachments: attachments,
@@ -761,7 +922,6 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
     );
   }
 
-  // ── Step header widget ───────────────────────────────────────────────────────
   Widget _buildStepHeader({
     required String step,
     required String title,

@@ -47,8 +47,8 @@ class AttendanceService {
   static const double _officeLat = 33.599232;
   static const double _officeLng = 73.154599;
   static const double _officeAlt = 508.0;
-  static const double _allowedRadius = 2000.0;
-  static const double _maxAccuracy = 50.0;
+  static const double _allowedRadius = 300.0; // radius_check
+  static const double _maxAccuracy = 300.0;
   static const double _maxIdleSpeed = 5.0;
   static const double _altTolerance = 100.0;
   static const int _sampleCount = 3;
@@ -310,18 +310,23 @@ class AttendanceService {
   /// Exact office coordinates. Check-in is allowed only if the user is
   /// within `_officeRadiusMeters` of one of these points.
   static const Map<String, Map<String, double>> _allowedOffices = {
-    'Lahore': {'lat': 31.376609, 'lng': 74.1747195},
-    'Islamabad': {'lat': 33.593685, 'lng': 73.161049},
-    'Karachi': {'lat': 25.042857, 'lng': 67.337571},
-    'UAE': {'lat': 24.341222, 'lng': 54.532972},
+    'Lahore': {'lat': 31.3766365, 'lng': 74.1745807},
+    'Islamabad': {'lat': 33.5992083, 'lng': 73.154657},
+    'Islamabad site office': {'lat': 33.6048609, 'lng': 73.1956127},
+    'Karachi': {'lat': 25.0297457, 'lng': 67.3077112},
+    'UAE': {'lat': 24.341405248663627, 'lng': 54.533140184353535},
     'Hanif Medical Complex': {'lat': 33.6088744, 'lng': 72.8658331},
   };
 
   /// 200 m — allows check-in from inside the office building or its
-  /// immediate perimeter (parking, lobby, adjacent block).
-  static const double _officeRadiusMeters = 2000.0;
+  /// immediate perimeter (parking, lobby, adjacent block). Per spec the
+  /// user is "still able to check in / check out even when they are
+  /// 200 metres away from the listed locations", so `distance <= 200 m`
+  /// is the accept threshold.
+  static const double _officeRadiusMeters = 200.0;
 
-  /// Returns the user's GPS position if they are within 40 m of ANY office.
+  /// Returns the user's GPS position if they are within
+  /// [_officeRadiusMeters] of ANY office in [_allowedOffices].
   /// Throws GeofenceException otherwise. Anti-cheat checks
   /// (mock GPS, accuracy, speed) are still applied.
   Future<Position> getValidatedPositionFromCities() async {
@@ -375,8 +380,10 @@ class AttendanceService {
     if (!insideAny) {
       throw GeofenceException(
         'You are not at any office location. '
-        'Closest office is ${closest.toStringAsFixed(0)} m away. '
-        'Check-in is allowed only at Lahore, Islamabad, Karachi, or UAE office.',
+        'Closest office is ${closest.toStringAsFixed(0)} m away — '
+        'must be within ${_officeRadiusMeters.toStringAsFixed(0)} m. '
+        'Allowed offices: Lahore, Islamabad, Islamabad site office, '
+        'Karachi, UAE, Hanif Medical Complex.',
       );
     }
     return pos;

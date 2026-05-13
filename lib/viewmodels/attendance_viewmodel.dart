@@ -592,8 +592,25 @@ class AttendanceViewModel extends ChangeNotifier {
       _startUITimer();
     } on GeofenceException catch (e) {
       _setError(e.message);
+    } on TimeoutException catch (_) {
+      // Most common silent failure: indoor / weak signal causes the GPS
+      // sampler in [AttendanceService.getMedianPosition] to time out after
+      // 15s. Surface a clearer message instead of the generic catch-all.
+      _setError(
+        'Could not get your location in time. '
+        'Move closer to a window or step outside, then try again.',
+      );
+    } on FirebaseException catch (e) {
+      _setError(
+        'Check-in could not be saved (${e.code}). '
+        '${e.message ?? 'Network or permission issue — please try again.'}',
+      );
     } catch (e) {
-      _setError('Check-in failed. Please try again.');
+      // Surface the underlying error type/message so the actual cause is
+      // visible on-screen and in debugPrint, instead of swallowing it
+      // behind the previous "Check-in failed. Please try again." string.
+      debugPrint('[AttendanceVM] checkIn failed: $e');
+      _setError('Check-in failed: $e');
     } finally {
       _setIdle();
     }
@@ -618,8 +635,19 @@ class AttendanceViewModel extends ChangeNotifier {
       }
     } on GeofenceException catch (e) {
       _setError(e.message);
+    } on TimeoutException catch (_) {
+      _setError(
+        'Could not get your location in time. '
+        'Move closer to a window or step outside, then try again.',
+      );
+    } on FirebaseException catch (e) {
+      _setError(
+        'Check-out could not be saved (${e.code}). '
+        '${e.message ?? 'Network or permission issue — please try again.'}',
+      );
     } catch (e) {
-      _setError('Check-out failed. Please try again.');
+      debugPrint('[AttendanceVM] checkOut failed: $e');
+      _setError('Check-out failed: $e');
     } finally {
       _setIdle();
     }
