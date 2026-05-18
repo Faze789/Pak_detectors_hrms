@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/attendance_model.dart';
 import '../../viewmodels/attendance_viewmodel.dart';
 import '../../viewmodels/employee_viewmodel.dart';
+import 'hr_monthly_attendance_screen.dart';
 
 // ─── Responsive breakpoints ───────────────────────────────────────────────────
 abstract class _BP {
@@ -1921,90 +1922,154 @@ class _HRAttendanceAppBar extends StatelessWidget {
       automaticallyImplyLeading: false,
       backgroundColor: Colors.white,
       elevation: 1,
-      toolbarHeight: isMobile ? 60 : 70,
+      toolbarHeight: isMobile ? 56 : 70,
       flexibleSpace: SafeArea(
         child: Padding(
           padding: EdgeInsets.symmetric(
-            horizontal: isMobile ? 12 : 20,
-            vertical: isMobile ? 8 : 12,
+            horizontal: isMobile ? 10 : 20,
+            vertical: isMobile ? 6 : 12,
           ),
           child: Row(
             children: [
+              // Icon
               Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
                   ),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(
                   Icons.people_alt_rounded,
                   color: Colors.white,
-                  size: 20,
+                  size: 18,
                 ),
               ),
-              const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+
+              const SizedBox(width: 8),
+
+              // Titles (more compact + flexible)
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (!isMobile)
+                      const Text(
+                        'HR MANAGEMENT',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 8,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF64748B),
+                          letterSpacing: 1.1,
+                        ),
+                      ),
+
+                    const Text(
+                      'Attendance',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Right actions (wrap + shrink on mobile)
+              Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (!isMobile)
-                    const Text(
-                      'HR MANAGEMENT',
+                    Text(
+                      'Tracking',
                       style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF64748B),
-                        letterSpacing: 1.2,
+                        fontSize: 11,
+                        color: Colors.grey.shade500,
                       ),
                     ),
-                  const Text(
-                    'Attendance Tracking',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF0F172A),
+
+                  const SizedBox(width: 8),
+
+                  // Monthly button (icon only on mobile)
+                  Tooltip(
+                    message: 'Monthly attendance',
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const HRMonthlyAttendanceScreen(),
+                          ),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFDBEAFE),
+                        foregroundColor: const Color(0xFF1D4ED8),
+                        elevation: 0,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isMobile ? 10 : 14,
+                          vertical: 8,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.calendar_month_rounded, size: 18),
+                          if (!isMobile) ...[
+                            const SizedBox(width: 6),
+                            const Text('Monthly'),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(width: 6),
+
+                  // Policy button (icon only on mobile)
+                  Tooltip(
+                    message: 'Attendance Policy',
+                    child: ElevatedButton(
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (_) => const _AttendancePolicyDialog(),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFF1F5F9),
+                        foregroundColor: const Color(0xFF334155),
+                        elevation: 0,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isMobile ? 10 : 14,
+                          vertical: 8,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.fact_check_rounded, size: 18),
+                          if (!isMobile) ...[
+                            const SizedBox(width: 6),
+                            const Text('Policy'),
+                          ],
+                        ],
+                      ),
                     ),
                   ),
                 ],
-              ),
-              const Spacer(),
-              if (!isMobile)
-                Text(
-                  'Monitor employee presence & working hours',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-                ),
-
-              const SizedBox(width: 16),
-
-              Tooltip(
-                message: 'Attendance & Leave Policy',
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    showDialog(
-                      context: context,
-                      builder: (context) => const _AttendancePolicyDialog(),
-                    );
-                  },
-                  icon: const Icon(Icons.fact_check_rounded, size: 20),
-                  label: const Text(
-                    'Policy',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFF1F5F9),
-                    foregroundColor: const Color(0xFF334155),
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                ),
               ),
             ],
           ),
