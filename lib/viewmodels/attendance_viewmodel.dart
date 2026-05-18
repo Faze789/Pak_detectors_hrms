@@ -94,8 +94,10 @@ class AttendanceViewModel extends ChangeNotifier {
   bool get wasLate {
     final checkIn = todayAttendance?.checkInTime;
     if (checkIn == null) return false;
+
+    // Check if check-in was after the 15-minute grace period
     return checkIn.hour > _officeSettings.workStartHour ||
-        (checkIn.hour == _officeSettings.workStartHour && checkIn.minute > 0);
+        (checkIn.hour == _officeSettings.workStartHour && checkIn.minute > 15);
   }
 
   // Employee's own submitted requests

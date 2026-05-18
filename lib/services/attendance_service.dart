@@ -520,14 +520,16 @@ class AttendanceService {
       leaveType = leave.duration.value;
     } else {
       // Late is now strictly after 11:00 AM
-      final isLate = now.hour > 11 || (now.hour == 11 && now.minute > 0);
+      final isLate =
+          now.hour > settings.workStartHour ||
+          (now.hour == settings.workStartHour && now.minute > 15);
 
       if (isLate) {
         status = AttendanceStatus.late;
         debugPrint(
           '[Attendance] Late check-in at '
           '${now.hour}:${now.minute.toString().padLeft(2, '0')} '
-          '(Late threshold: 11:00)',
+          '(Grace period ends at ${settings.workStartHour}:15)',
         );
       }
     }

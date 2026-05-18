@@ -502,6 +502,7 @@ class _AttendanceScreenState extends State<AttendanceScreen>
               ? const Center(child: CircularProgressIndicator())
               : CustomScrollView(
                   slivers: [
+                    _StickyHeader(now: _now),
                     SliverToBoxAdapter(
                       child: SafeArea(
                         bottom: false,
@@ -946,54 +947,85 @@ class _StickyHeader extends StatelessWidget {
         ),
         child: Row(
           children: [
-            const Icon(
-              Icons.access_time_rounded,
-              color: Color(0xFF2563EB),
-              size: 24,
-            ),
+            // const Icon(
+            //   Icons.access_time_rounded,
+            //   color: Color(0xFF2563EB),
+            //   size: 24,
+            // ),
+            // const SizedBox(width: 8),
+            // Column(
+            //   crossAxisAlignment: CrossAxisAlignment.start,
+            //   mainAxisAlignment: MainAxisAlignment.center,
+            //   children: [
+            //     const Text(
+            //       'Time Clock',
+            //       style: TextStyle(
+            //         fontSize: 18,
+            //         fontWeight: FontWeight.bold,
+            //         color: Color(0xFF0F172A),
+            //       ),
+            //     ),
+            //     if (!isMobile)
+            //       const Text(
+            //         'Track your work hours',
+            //         style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+            //       ),
+            //   ],
+            // ),
+
+            // const Spacer(),
+            // Column(
+            //   crossAxisAlignment: CrossAxisAlignment.end,
+            //   mainAxisAlignment: MainAxisAlignment.center,
+            //   children: [
+            //     // if (!isMobile)
+            //     //   Text(
+            //     //     _fmtDate(now),
+            //     //     style: const TextStyle(
+            //     //       fontSize: 10,
+            //     //       color: Color(0xFF64748B),
+            //     //     ),
+            //     //   ),
+            //     Text(
+            //       _fmtClock(now),
+            //       style: TextStyle(
+            //         fontSize: isMobile ? 15 : 18,
+            //         fontWeight: FontWeight.bold,
+            //         color: const Color(0xFF2563EB),
+            //         fontFeatures: const [FontFeature.tabularFigures()],
+            //       ),
+            //     ),
+            //   ],
+            // ),
             const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text(
-                  'Time Clock',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF0F172A),
+
+            Tooltip(
+              message: 'Attendance & Leave Policy',
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) => const _AttendancePolicyDialog(),
+                  );
+                },
+                icon: const Icon(Icons.fact_check_rounded, size: 20),
+                label: const Text(
+                  'Policy',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFF1F5F9),
+                  foregroundColor: const Color(0xFF334155),
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-                if (!isMobile)
-                  const Text(
-                    'Track your work hours',
-                    style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                  ),
-              ],
-            ),
-            const Spacer(),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (!isMobile)
-                  Text(
-                    _fmtDate(now),
-                    style: const TextStyle(
-                      fontSize: 10,
-                      color: Color(0xFF64748B),
-                    ),
-                  ),
-                Text(
-                  _fmtClock(now),
-                  style: TextStyle(
-                    fontSize: isMobile ? 15 : 18,
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF2563EB),
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
-                ),
-              ],
+              ),
             ),
           ],
         ),
@@ -2706,6 +2738,139 @@ class _DailyRecordTile extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+// Drop this class anywhere in your attendance_screen.dart file
+class _AttendancePolicyDialog extends StatelessWidget {
+  const _AttendancePolicyDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      backgroundColor: Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.rule_rounded,
+                    color: Color(0xFFDC2626),
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Attendance Policy',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            _buildPolicySection(
+              title: 'Late Check-In',
+              icon: Icons.login_rounded,
+              rules: [
+                'Up to 9:15 AM: 15% daily salary deduction',
+                'After 10:00 AM: 50% daily salary deduction',
+              ],
+            ),
+            const SizedBox(height: 16),
+            _buildPolicySection(
+              title: 'Early Check-Out',
+              icon: Icons.logout_rounded,
+              rules: [
+                'Between 5:00 PM & shift end: 25% daily salary deduction',
+                'Before 5:00 PM: 50% daily salary deduction',
+              ],
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFF1F5F9),
+                  foregroundColor: const Color(0xFF0F172A),
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'Understood',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPolicySection({
+    required String title,
+    required IconData icon,
+    required List<String> rules,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 16, color: const Color(0xFF64748B)),
+            const SizedBox(width: 6),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF475569),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ...rules.map(
+          (rule) => Padding(
+            padding: const EdgeInsets.only(bottom: 4, left: 22),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('• ', style: TextStyle(color: Color(0xFF94A3B8))),
+                Expanded(
+                  child: Text(
+                    rule,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF64748B),
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
