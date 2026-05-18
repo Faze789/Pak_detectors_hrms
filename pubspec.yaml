@@ -31,6 +31,7 @@ dependencies:
   geolocator: ^14.0.2
   geocoding: ^2.0.5
   url_launcher: ^6.3.2
+  flutter_launcher_icons: ^0.14.4
   http: ^1.2.0
   flutter_web_plugins:        # ← ADDED: enables usePathUrlStrategy()
     sdk: flutter
@@ -42,3 +43,15 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  assets:
+    - assets/app_icon/pak_detectors.jpg
+
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/app_icon/pak_detectors.jpg"
+  adaptive_icon_background: "#ffffff"
+  adaptive_icon_foreground: "assets/app_icon/pak_detectors.jpg"
+

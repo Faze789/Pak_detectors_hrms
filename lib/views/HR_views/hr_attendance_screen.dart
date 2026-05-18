@@ -476,7 +476,7 @@ class _MonthlyStatusSheetState extends State<_MonthlyStatusSheet> {
   int _presentCount = 0;
   int _absentCount = 0;
   int _leaveCount = 0;
-  int _lateCount = 0;
+  // Note: _lateCount has been removed logically to combine with present
 
   Map<int, _Status> _dayStatuses = {};
 
@@ -500,7 +500,7 @@ class _MonthlyStatusSheetState extends State<_MonthlyStatusSheet> {
         _selectedMonth.month,
       );
 
-      int present = 0, absent = 0, leave = 0, late = 0;
+      int present = 0, absent = 0, leave = 0;
       Map<int, _Status> mappedStatuses = {};
 
       if (archive != null && archive.days.isNotEmpty) {
@@ -509,14 +509,13 @@ class _MonthlyStatusSheetState extends State<_MonthlyStatusSheet> {
           final status = _deriveStatus(record);
           mappedStatuses[day] = status;
 
-          if (status == _Status.present) {
+          // Merge Late into Present
+          if (status == _Status.present || status == _Status.late) {
             present++;
           } else if (status == _Status.absent) {
             absent++;
           } else if (status == _Status.leave) {
             leave++;
-          } else if (status == _Status.late) {
-            late++;
           }
         }
       }
@@ -527,7 +526,6 @@ class _MonthlyStatusSheetState extends State<_MonthlyStatusSheet> {
           _presentCount = present;
           _absentCount = absent;
           _leaveCount = leave;
-          _lateCount = late;
         });
       }
     } catch (e) {
@@ -592,8 +590,8 @@ class _MonthlyStatusSheetState extends State<_MonthlyStatusSheet> {
   }
 
   Widget _buildCircularGraph() {
-    final total = _presentCount + _absentCount + _leaveCount + _lateCount;
-    final double rate = total == 0 ? 0 : ((_presentCount + _lateCount) / total);
+    final total = _presentCount + _absentCount + _leaveCount;
+    final double rate = total == 0 ? 0 : (_presentCount / total);
 
     return Container(
       width: 120,
@@ -790,46 +788,30 @@ class _MonthlyStatusSheetState extends State<_MonthlyStatusSheet> {
                   _buildCircularGraph(),
                   const SizedBox(width: 24),
                   Expanded(
-                    child: Column(
+                    child: Row(
                       children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _SummaryCount(
-                                label: 'Present',
-                                count: _presentCount,
-                                color: const Color(0xFF10B981),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _SummaryCount(
-                                label: 'Absent',
-                                count: _absentCount,
-                                color: const Color(0xFFEF4444),
-                              ),
-                            ),
-                          ],
+                        Expanded(
+                          child: _SummaryCount(
+                            label: 'Present',
+                            count: _presentCount,
+                            color: const Color(0xFF10B981),
+                          ),
                         ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _SummaryCount(
-                                label: 'Late',
-                                count: _lateCount,
-                                color: const Color(0xFF475569),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _SummaryCount(
-                                label: 'Leave',
-                                count: _leaveCount,
-                                color: const Color(0xFFF59E0B),
-                              ),
-                            ),
-                          ],
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _SummaryCount(
+                            label: 'Absent',
+                            count: _absentCount,
+                            color: const Color(0xFFEF4444),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _SummaryCount(
+                            label: 'Leave',
+                            count: _leaveCount,
+                            color: const Color(0xFFF59E0B),
+                          ),
                         ),
                       ],
                     ),
@@ -849,7 +831,6 @@ class _MonthlyStatusSheetState extends State<_MonthlyStatusSheet> {
                   _buildLegendItem(const Color(0xFF10B981), 'Present'),
                   _buildLegendItem(const Color(0xFFEF4444), 'Absent'),
                   _buildLegendItem(const Color(0xFFF59E0B), 'Leave'),
-                  _buildLegendItem(const Color(0xFF475569), 'Late'),
                 ],
               ),
             ),
@@ -871,7 +852,8 @@ class _MonthlyStatusSheetState extends State<_MonthlyStatusSheet> {
                       Color textColor = const Color(0xFF94A3B8);
                       Color borderColor = const Color(0xFFE2E8F0);
 
-                      if (status == _Status.present) {
+                      // Merge Late and Present Visuals
+                      if (status == _Status.present || status == _Status.late) {
                         bgColor = const Color(0xFF10B981);
                         textColor = Colors.white;
                         borderColor = Colors.transparent;
@@ -883,36 +865,104 @@ class _MonthlyStatusSheetState extends State<_MonthlyStatusSheet> {
                         bgColor = const Color(0xFFF59E0B);
                         textColor = Colors.white;
                         borderColor = Colors.transparent;
-                      } else if (status == _Status.late) {
-                        bgColor = const Color(0xFF475569);
-                        textColor = Colors.white;
-                        borderColor = Colors.transparent;
                       }
 
-                      return Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: bgColor,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: borderColor),
-                          boxShadow: status != null
-                              ? [
-                                  BoxShadow(
-                                    color: bgColor.withOpacity(0.3),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 2),
+                      return GestureDetector(
+                        onTap: status != null
+                            ? () {
+                                String title;
+                                String desc;
+                                IconData icon;
+                                Color color;
+
+                                if (status == _Status.late) {
+                                  title = 'Late';
+                                  desc = 'Employee arrived late on this day.';
+                                  icon = Icons.schedule_rounded;
+                                  color = const Color(0xFFF59E0B);
+                                } else if (status == _Status.present) {
+                                  title = 'On Time';
+                                  desc = 'Employee arrived on time.';
+                                  icon = Icons.check_circle_outline_rounded;
+                                  color = const Color(0xFF10B981);
+                                } else if (status == _Status.absent) {
+                                  title = 'Absent';
+                                  desc = 'Employee was absent.';
+                                  icon = Icons.cancel_outlined;
+                                  color = const Color(0xFFEF4444);
+                                } else {
+                                  title = 'Leave';
+                                  desc = 'Employee was on leave.';
+                                  icon = Icons.calendar_today_rounded;
+                                  color = const Color(0xFF1E40AF);
+                                }
+
+                                final specificDate = DateFormat('MMM d, yyyy')
+                                    .format(
+                                      DateTime(
+                                        _selectedMonth.year,
+                                        _selectedMonth.month,
+                                        day,
+                                      ),
+                                    );
+
+                                showDialog(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    title: Row(
+                                      children: [
+                                        Icon(icon, color: color),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          title,
+                                          style: TextStyle(
+                                            color: color,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    content: Text(
+                                      '$desc\n\nDate: $specificDate',
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(ctx),
+                                        child: const Text('OK'),
+                                      ),
+                                    ],
                                   ),
-                                ]
-                              : [],
-                        ),
-                        child: Center(
-                          child: Text(
-                            '$day',
-                            style: TextStyle(
-                              color: textColor,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
+                                );
+                              }
+                            : null,
+                        child: Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: bgColor,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: borderColor),
+                            boxShadow: status != null
+                                ? [
+                                    BoxShadow(
+                                      color: bgColor.withOpacity(0.3),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ]
+                                : [],
+                          ),
+                          child: Center(
+                            child: Text(
+                              '$day',
+                              style: TextStyle(
+                                color: textColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
                             ),
                           ),
                         ),

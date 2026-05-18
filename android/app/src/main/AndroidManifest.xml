@@ -11,7 +11,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <application
-        android:label="hrms_app"
+        android:label="Pakistan Detectors Technologies"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 

@@ -48,9 +48,11 @@ class AttendanceScreen extends StatefulWidget {
   State<AttendanceScreen> createState() => _AttendanceScreenState();
 }
 
-class _AttendanceScreenState extends State<AttendanceScreen> {
+class _AttendanceScreenState extends State<AttendanceScreen>
+    with WidgetsBindingObserver {
   late final Timer _clockTimer;
   DateTime _now = DateTime.now();
+  DateTime _lastReloadDay = DateTime.now();
   // Hides the attendance card behind a "Mark My Attendance" CTA until
   // the user taps. Auto-reveals if there's already a record for today.
   bool _attendanceRevealed = false;
@@ -58,8 +60,28 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() => _now = DateTime.now());
+      if (!mounted) return;
+      final newNow = DateTime.now();
+      // Daily rollover: if the calendar day flipped while the screen was
+      // open (e.g. user kept the app on overnight), force a fresh
+      // loadToday so vm.todayAttendance is repopulated for the new day
+      // instead of carrying yesterday's record forward and tripping
+      // "Day complete" the moment they open it.
+      // ── AFTER ────────────────────────────────────────────────────────────
+      if (!DateTimeUtils.isSameDay(_lastReloadDay, newNow)) {
+        _lastReloadDay = newNow;
+        // Clear revealed flag so tomorrow starts from the CTA, not
+        // a stale card left over from yesterday's session.
+        setState(() => _attendanceRevealed = false);
+        final uid = context.read<AuthViewModel>().currentUser?.uid;
+        if (uid != null && uid.isNotEmpty) {
+          context.read<AttendanceViewModel>().loadToday(uid);
+        }
+      }
+      // ── END AFTER ────────────────────────────────────────────────────────
+      setState(() => _now = newNow);
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final uid = context.read<AuthViewModel>().currentUser?.uid;
@@ -68,7 +90,23 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // Re-pull today's attendance when the user comes back to the app —
+    // this catches the overnight-open case AND any scenario where the
+    // backend changed the record while the app was backgrounded.
+    if (state == AppLifecycleState.resumed && mounted) {
+      final uid = context.read<AuthViewModel>().currentUser?.uid;
+      if (uid != null && uid.isNotEmpty) {
+        _lastReloadDay = DateTime.now();
+        context.read<AttendanceViewModel>().loadToday(uid);
+      }
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _clockTimer.cancel();
     super.dispose();
   }
@@ -206,6 +244,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     if (!mounted) return;
     if (!granted) return;
     setState(() => _attendanceRevealed = true);
+  }
+
+  Future<void> _onCheckOut(AttendanceViewModel vm, String uid) async {
+    await vm.checkOut(uid);
+    if (mounted && vm.errorMessage == null) {
+      setState(() => _attendanceRevealed = false);
+    }
   }
 
   /// Returns true if GPS is on AND permission is granted
@@ -380,7 +425,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         vm: vm,
         cfg: _statusCfg(vm),
         onCheckIn: () => vm.checkIn(uid),
-        onCheckOut: () => vm.checkOut(uid),
+        onCheckOut: () => _onCheckOut(vm, uid),
       );
     }
 
@@ -397,7 +442,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             vm: vm,
             cfg: _statusCfg(vm),
             onCheckIn: () => vm.checkIn(uid),
-            onCheckOut: () => vm.checkOut(uid),
+            onCheckOut: () => _onCheckOut(vm, uid), // ← and this line
           );
         }
         return _HalfDayLeaveCard(
@@ -412,7 +457,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             vm: vm,
             cfg: _statusCfg(vm),
             onCheckIn: () => vm.checkIn(uid),
-            onCheckOut: () => vm.checkOut(uid),
+            onCheckOut: () => _onCheckOut(vm, uid),
           );
         }
         return _HalfDayLeaveCard(
@@ -426,7 +471,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           vm: vm,
           cfg: _statusCfg(vm),
           onCheckIn: () => vm.checkIn(uid),
-          onCheckOut: () => vm.checkOut(uid),
+          onCheckOut: () => _onCheckOut(vm, uid),
         );
     }
   }
@@ -434,7 +479,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   @override
   Widget build(BuildContext context) {
     final uid = context.watch<AuthViewModel>().currentUser?.uid;
-    if (uid == null) {
+    // Treat empty uid the same as null. A stale UserModel or a doc loaded
+    // by id where the id field was missing can leave uid == ''. Without
+    // this guard the screen renders, the Check-In button calls
+    // vm.checkIn('') and the service crashes inside Firestore with the
+    // unhelpful "a document path must be a non-empty string" error.
+    if (uid == null || uid.isEmpty) {
       return const Scaffold(
         body: Center(child: Text('Please log in to view attendance.')),
       );
@@ -1388,9 +1438,30 @@ class _MainCard extends StatelessWidget {
 
   Widget _buildNotCheckedIn(bool isMobile) {
     final now = DateTime.now();
-    final hasCheckOutTime = vm.todayAttendance?.checkOutTime != null;
-    final statusCheckedOut = vm.dailyStatus == AttendanceStatus.checkedOut;
-    final completedToday = hasCheckOutTime || statusCheckedOut;
+    final att = vm.todayAttendance;
+
+    // (1) Same-day filter — yesterday's stale record never blocks today.
+    final attIsForToday = att != null && DateTimeUtils.isSameDay(att.date, now);
+
+    // (2) Validity filter — a "completed" record where checkInTime and
+    //     checkOutTime are within 60 s is almost certainly a glitch
+    //     (accidental double-tap, immediate-cleanup race, malformed
+    //     archive row). Such records should NOT lock the user out:
+    //     treat them as no-op and offer the Check-In button so they
+    //     can start a clean cycle today.
+    bool isValidCompletedCycle(AttendanceModel a) {
+      final ci = a.checkInTime;
+      final co = a.checkOutTime;
+      if (ci == null || co == null) return false;
+      return co.difference(ci).inSeconds > 60;
+    }
+
+    final hasValidCheckOut = attIsForToday && isValidCompletedCycle(att);
+    final statusCheckedOut =
+        attIsForToday &&
+        vm.dailyStatus == AttendanceStatus.checkedOut &&
+        isValidCompletedCycle(att);
+    final completedToday = hasValidCheckOut || statusCheckedOut;
     final beforeOpening = now.hour < 8;
     final hideCheckIn = completedToday || beforeOpening;
     if (hideCheckIn) {

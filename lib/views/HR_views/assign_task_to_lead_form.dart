@@ -499,7 +499,7 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                           border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
                         child: DropdownButtonFormField<String>(
-                          value: _selectedDuration,
+                          initialValue: _selectedDuration,
                           isExpanded: true,
                           decoration: const InputDecoration(
                             border: InputBorder.none,

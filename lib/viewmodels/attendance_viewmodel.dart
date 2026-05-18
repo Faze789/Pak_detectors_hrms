@@ -149,8 +149,9 @@ class AttendanceViewModel extends ChangeNotifier {
       // 1. If their main role is HR, Admin, or Lead, they have access
       if (role == 'hr' || role == 'admin' || role.contains('lead')) {
         isCurrentUserLead = true;
-        if (role == 'hr' || role == 'admin')
+        if (role == 'hr' || role == 'admin') {
           isCurrentUserHR = true; // Set HR flag
+        }
         notifyListeners();
         return;
       }
@@ -496,6 +497,13 @@ class AttendanceViewModel extends ChangeNotifier {
   /// (Lahore / Islamabad / Karachi / UAE). Used by the EmployeeDashboardScreen.
   Future<void> checkInFromCity(String userId) async {
     if (checkedIn) return;
+
+    if (hasCompletedTodayCycle) {
+      _setError(
+        'You have already checked in and out for today. Check-in resets tomorrow.',
+      );
+      return;
+    }
     _setLoading();
     try {
       final pos = await _service.getValidatedPositionFromCities();
@@ -572,6 +580,20 @@ class AttendanceViewModel extends ChangeNotifier {
 
   Future<void> checkIn(String userId) async {
     if (checkedIn) return;
+
+    if (hasCompletedTodayCycle) {
+      _setError(
+        'You have already checked in and out for today. Check-in resets tomorrow.',
+      );
+      return;
+    }
+    // Fail loud and clear if we arrived here without a signed-in user.
+    // Without this, the next line throws the cryptic Firestore error
+    // "a document path must be a non-empty string" from _live.doc('').
+    if (userId.trim().isEmpty) {
+      _setError('Cannot check in: you are not signed in. Please log in again.');
+      return;
+    }
     _setLoading();
     try {
       final pos = await _service.getValidatedPositionFromCities();
@@ -618,6 +640,12 @@ class AttendanceViewModel extends ChangeNotifier {
 
   Future<void> checkOut(String userId) async {
     if (!checkedIn || todayAttendance == null) return;
+    if (userId.trim().isEmpty) {
+      _setError(
+        'Cannot check out: you are not signed in. Please log in again.',
+      );
+      return;
+    }
     _setLoading();
     try {
       final pos = await _service.getValidatedPositionFromCities();
@@ -787,6 +815,20 @@ class AttendanceViewModel extends ChangeNotifier {
       debugPrint('[AttendanceViewModel] getEmployeeLiveRecord error: $e');
       return null;
     }
+  }
+
+  /// True when the employee has a valid completed check-in → check-out cycle
+  /// for today (i.e. the day is done and no re-check-in should be allowed).
+  bool get hasCompletedTodayCycle {
+    final att = todayAttendance;
+    if (att == null) return false;
+    // Only counts for today — stale records from yesterday don't block.
+    if (!DateTimeUtils.isSameDay(att.date, DateTime.now())) return false;
+    final ci = att.checkInTime;
+    final co = att.checkOutTime;
+    if (ci == null || co == null) return false;
+    // Ignore glitch cycles shorter than 60 s (accidental double-tap etc.)
+    return co.difference(ci).inSeconds > 60;
   }
 
   Future<AttendanceModel?> getLiveAttendance(String userId) async {

@@ -462,8 +462,50 @@ class AttendanceService {
     required double lat,
     required double lng,
   }) async {
+    if (userId.trim().isEmpty) {
+      // Belt-and-braces: refuse to call _live.doc('') which produces the
+      // generic "a document path must be a non-empty string" error from
+      // Firestore. The viewmodel guards this too, but other call sites
+      // (tests, future code paths) get the same protection here.
+      throw ArgumentError(
+        'AttendanceService.checkIn requires a non-empty userId.',
+      );
+    }
+
+    final today = DateTimeUtils.startOfDay(DateTime.now());
+    final dayKey = DateTimeUtils.toDateKey(today);
+
+    // Check live doc first (fastest path — live doc still present pre-cleanup).
+    final existingLive = await getTodayAttendance(userId);
+    if (existingLive != null) {
+      final ci = existingLive.checkInTime;
+      final co = existingLive.checkOutTime;
+      if (ci != null && co != null && co.difference(ci).inSeconds > 60) {
+        throw Exception(
+          'Attendance already recorded for today. '
+          'Check-in resets tomorrow at 8:00 AM.',
+        );
+      }
+    }
+
+    // Fallback: check archive in case the live doc was cleaned up already
+    // (cleanStaleLiveRecords or deleteCheckedOutForToday deleted it).
+    if (existingLive == null) {
+      final archive = await getMonthlyArchive(userId, today.year, today.month);
+      final archivedToday = archive?.days[dayKey];
+      if (archivedToday != null) {
+        final ci = archivedToday.checkInTime;
+        final co = archivedToday.checkOutTime;
+        if (ci != null && co != null && co.difference(ci).inSeconds > 60) {
+          throw Exception(
+            'Attendance already recorded for today. '
+            'Check-in resets tomorrow at 8:00 AM.',
+          );
+        }
+      }
+    }
+
     final now = DateTime.now();
-    final today = DateTimeUtils.startOfDay(now);
     final address = await reverseGeocode(lat, lng);
     final settings = await getOfficeSettings();
     final leave = await fetchApprovedLeaveModel(userId, today);
@@ -567,6 +609,11 @@ class AttendanceService {
     required double lat,
     required double lng,
   }) async {
+    if (userId.trim().isEmpty) {
+      throw ArgumentError(
+        'AttendanceService.checkOut requires a non-empty userId.',
+      );
+    }
     final now = DateTime.now();
     final address = await reverseGeocode(lat, lng);
     final closedBreaks = current.breaks
@@ -758,7 +805,7 @@ class AttendanceService {
       'userId': record.userId,
       'year': record.date.year,
       'month': record.date.month,
-      'days': {dayKey: record.toMap()},
+      'days': {dayKey: record.toMap()}, // full overwrite of this day's map
     }, SetOptions(merge: true));
   }
 
@@ -785,7 +832,9 @@ class AttendanceService {
     String userId,
     AttendanceModel record,
   ) async {
-    await archiveAttendance(record);
+    if (record.checkInTime != null) {
+      await archiveAttendance(record);
+    }
     await _live.doc(userId).delete();
   }
 

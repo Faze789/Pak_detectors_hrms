@@ -24,7 +24,7 @@ setGlobalOptions({
 
   maxInstances: 1,
   memory: "128MiB", // Lower memory (default is usually higher)
-  cpu: 0.08         // Use a fraction of a CPU instead of a full one
+  cpu: 1      // Use a fraction of a CPU instead of a full one
 
 });
 
@@ -164,7 +164,13 @@ exports.markAbsentHalfDay = onSchedule(
 // BARRIER NOTIFICATION — triggers when a new barrier doc is created
 // ─────────────────────────────────────────────────────────────────────────────
 exports.onBarrierCreated = onDocumentCreated(
-  "barriers/{barrierId}",
+  {
+    document: "barriers/{barrierId}",
+    memory: "128MiB",
+    cpu: "gcf_gen1",     // ≈ 0.083 vCPU @ 128MiB — opts out of setGlobalOptions cpu:1
+    maxInstances: 1,
+    concurrency: 1,
+  },
   async (event) => {
     const barrier = event.data.data();
     const barrierId = event.params.barrierId;
@@ -315,7 +321,13 @@ exports.onBarrierCreated = onDocumentCreated(
 // Sends FCM push to the lead when their task is modified.
 // ─────────────────────────────────────────────────────────────────────────────
 exports.onTaskNotificationCreated = onDocumentCreated(
-  "task_notifications/{notifId}",
+  {
+    document: "task_notifications/{notifId}",
+    memory: "128MiB",
+    cpu: "gcf_gen1",
+    maxInstances: 1,
+    concurrency: 1,
+  },
   async (event) => {
     const notif = event.data.data();
     const notifId = event.params.notifId;
@@ -481,119 +493,11 @@ exports.sendDailyTaskReminders = onSchedule(
   }
 );
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Check-in reminder schedule (Mon–Fri, Asia/Karachi):
-//   • 8:50 AM  — pre-shift heads-up
-//   • 9:00 AM  — shift start
-//   • 9:20 AM  — first late nudge
-//   • 9:40 AM  — second late nudge
-//   • 10:00 AM — final late nudge
-// All five fire only if the employee hasn't checked in for today.
-// ─────────────────────────────────────────────────────────────────────────────
-async function _sendCheckInReminders(label, title, body) {
-  const dateKey = new Date().toLocaleDateString("en-CA", {
-    timeZone: "Asia/Karachi",
-  });
-
-  const usersSnap = await db.collection("users")
-    .where("role", "in", ["employee", "project lead"])
-    .get();
-
-  let count = 0;
-  for (const userDoc of usersSnap.docs) {
-    const u = userDoc.data();
-    const empId = (u.emp_id || "").toString();
-    if (!empId) continue;
-
-    const liveDoc = await db.collection("attendance_live").doc(userDoc.id).get();
-    const live = liveDoc.data();
-    if (live && live.dateString === dateKey && live.checkInTime) continue;
-
-    await db.collection("task_notifications").add({
-      lead_id: empId,
-      title: title,
-      body: body,
-      type: "task",
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      read: false,
-    });
-    count++;
-  }
-  logger.info(`[${label}] Sent ${count} reminders.`);
-}
-
-// 8:50 AM — pre-shift
-exports.checkInReminder0850 = onSchedule(
-  { schedule: "50 8 * * 1-5", timeZone: "Asia/Karachi", maxInstances: 1 },
-  async () => _sendCheckInReminders(
-    "checkInReminder0850",
-    "Heads up — work starts in 10 min",
-    "Get ready to mark your attendance. Office hours start at 9:00 AM.",
-  ),
-);
-
-// 9:00, 9:20, 9:40 AM — start + first two late nudges in a single cron
-exports.checkInReminderShiftStart = onSchedule(
-  { schedule: "0,20,40 9 * * 1-5", timeZone: "Asia/Karachi", maxInstances: 1 },
-  async () => _sendCheckInReminders(
-    "checkInReminderShiftStart",
-    "Time to check in",
-    "Don't forget to mark your attendance for today.",
-  ),
-);
-
-// 10:00 AM — final late nudge
-exports.checkInReminder1000 = onSchedule(
-  { schedule: "0 17 * * 1-5", timeZone: "Asia/Karachi", maxInstances: 1 },
-  async () => _sendCheckInReminders(
-    "checkInReminder1000",
-    "Last reminder to check in",
-    "It's 10:00 AM and you still haven't checked in. Mark your attendance now.",
-  ),
-);
-
-// ─────────────────────────────────────────────────────────────────────────────
-// sendCheckOutReminder — 5:50 PM Mon–Fri, Asia/Karachi
-// Notifies employees who checked in but haven't checked out yet.
-// ─────────────────────────────────────────────────────────────────────────────
-exports.sendCheckOutReminder = onSchedule(
-  {
-    schedule: "50 17 * * 1-5",
-    timeZone: "Asia/Karachi",
-    maxInstances: 1,
-  },
-  async (_event) => {
-    const dateKey = new Date().toLocaleDateString("en-CA", {
-      timeZone: "Asia/Karachi",
-    });
-
-    const liveSnap = await db.collection("attendance_live").get();
-    let count = 0;
-
-    for (const doc of liveSnap.docs) {
-      const live = doc.data();
-      if (live.dateString !== dateKey) continue;
-      if (!live.checkInTime) continue;
-      if (live.checkOutTime) continue;
-
-      // Look up emp_id
-      const userDoc = await db.collection("users").doc(doc.id).get();
-      const empId = (userDoc.data()?.emp_id || "").toString();
-      if (!empId) continue;
-
-      await db.collection("task_notifications").add({
-        lead_id: empId,
-        title: "Don't forget to check out",
-        body: "Work ends at 6 PM. Check out before midnight or the day won't count.",
-        type: "task",
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        read: false,
-      });
-      count++;
-    }
-    logger.info(`[sendCheckOutReminder] Sent ${count} reminders.`);
-  }
-);
+// (Legacy 8:50/9:00/9:20/9:40/10:00 check-in reminders and the 5:50 PM
+// check-out reminder were removed — superseded by `checkInReminders` and
+// `checkOutReminders` further down. Removing the duplicates also drops their
+// per-service CPU allocation, which is required to stay within the regional
+// `CpuAllocPerProjectRegion` quota on the free tier.)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // markAbsentAtSixPM — 6:01 PM Mon–Fri, Asia/Karachi
@@ -639,6 +543,61 @@ exports.markAbsentAtSixPM = onSchedule(
       count++;
     }
     logger.info(`[markAbsentAtSixPM] Marked ${count} employees absent.`);
+  }
+);
+
+exports.cleanStaleLiveRecords = onSchedule(
+  {
+    schedule: "59 23 * * *",
+    timeZone: "Asia/Karachi",
+    memory: "128MiB",
+    cpu: "gcf_gen1",     // ≈ 0.083 vCPU @ 128MiB — opts out of setGlobalOptions cpu:1
+    maxInstances: 1,
+    concurrency: 1,
+  },
+  async () => {
+    const todayKey = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Karachi" });
+
+    // Stream the live collection one doc at a time so we don't materialize
+    // every employee's live record in memory at once. Archive + delete are
+    // grouped into batches of BATCH_SIZE (each batch counts each (archive
+    // set + live delete) pair as 2 writes, so we keep BATCH_SIZE * 2 ≤ 500).
+    const BATCH_SIZE = 200;
+    let writeBatch = db.batch();
+    let pending = 0;
+    let cleaned = 0;
+
+    const flush = async () => {
+      if (pending > 0) {
+        await writeBatch.commit();
+        writeBatch = db.batch();
+        pending = 0;
+      }
+    };
+
+    const autoClosedAt = new Date().toISOString();
+
+    for await (const doc of db.collection("attendance_live").stream()) {
+      const data = doc.data();
+      if (data.dateString !== todayKey) continue;
+      if (data.checkOutTime != null) continue;
+
+      const userId = doc.id;
+      const archiveRef = db.collection("attendance_archive").doc(
+        `${userId}_${todayKey.slice(0, 4)}_${todayKey.slice(5, 7)}`
+      );
+      writeBatch.set(
+        archiveRef,
+        { userId, days: { [todayKey]: { ...data, autoClosedAt } } },
+        { merge: true }
+      );
+      writeBatch.delete(doc.ref);
+      pending += 2;
+      cleaned++;
+      if (pending >= BATCH_SIZE * 2) await flush();
+    }
+    await flush();
+    logger.info(`[cleanStaleLiveRecords] Archived & cleared ${cleaned} stale live record(s).`);
   }
 );
 
@@ -1035,7 +994,10 @@ exports.checkInReminders = onSchedule(
   {
     schedule: '0,5,20,35,50 8,9,10,11 * * 1-5',
     timeZone: 'Asia/Karachi',
+    memory: '128MiB',
+    cpu: 'gcf_gen1',   // ≈ 0.083 vCPU — opts out of setGlobalOptions cpu:1
     maxInstances: 1,
+    concurrency: 1,
   },
   async () => {
     const { hour, minute } = _karachiHourMinute();
@@ -1051,11 +1013,26 @@ exports.checkInReminders = onSchedule(
     const todayKey = _todayKeyKarachi();
     logger.info(`[checkInReminders] Running for ${todayKey} at ${hour}:${minute}`);
 
-    // Eligible recipients: every active user whose role is NOT 'hr' and who
-    // has not yet checked in today.
-    const usersSnap = await db.collection('users').get();
+    // Memory-budget note: we stay under the 128 MiB function limit by
+    // streaming the `users` collection one doc at a time (never holding the
+    // full snapshot in RAM) and flushing notification writes in batches of
+    // BATCH_SIZE instead of awaiting one .add() per user.
+    const BATCH_SIZE = 100;
     let queued = 0;
-    for (const userDoc of usersSnap.docs) {
+    let writeBatch = db.batch();
+    let pending = 0;
+
+    const flush = async () => {
+      if (pending > 0) {
+        await writeBatch.commit();
+        writeBatch = db.batch();
+        pending = 0;
+      }
+    };
+
+    const body = `It's ${hour}:${String(minute).padStart(2, '0')} — please check in for today.`;
+
+    for await (const userDoc of db.collection('users').stream()) {
       const u = userDoc.data();
       const role = (u.role || '').toString().toLowerCase();
       const empId = (u.emp_id || '').toString();
@@ -1070,16 +1047,20 @@ exports.checkInReminders = onSchedule(
         if ((live.dateString || '') === todayKey && live.checkInTime) continue;
       }
 
-      await db.collection('task_notifications').add({
+      const notifRef = db.collection('task_notifications').doc();
+      writeBatch.set(notifRef, {
         lead_id: empId,
         title: '⏰ Check-in Reminder',
-        body: `It's ${hour}:${String(minute).padStart(2, '0')} — please check in for today.`,
+        body,
         type: 'attendance',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         read: false,
       });
+      pending++;
       queued++;
+      if (pending >= BATCH_SIZE) await flush();
     }
+    await flush();
     logger.info(`[checkInReminders] Queued ${queued} reminder(s).`);
   },
 );
@@ -1097,16 +1078,38 @@ exports.checkOutReminders = onSchedule(
   {
     schedule: '5,10,15,20,25,30 18 * * 1-5',
     timeZone: 'Asia/Karachi',
+    memory: '128MiB',
+    cpu: 'gcf_gen1',
     maxInstances: 1,
+    concurrency: 1,
   },
   async () => {
     const { hour, minute } = _karachiHourMinute();
     const todayKey = _todayKeyKarachi();
     logger.info(`[checkOutReminders] Running for ${todayKey} at ${hour}:${minute}`);
 
-    const usersSnap = await db.collection('users').get();
+    // See checkInReminders for the memory-budget rationale: stream users +
+    // batch writes to stay inside the 128 MiB function limit.
+    const BATCH_SIZE = 100;
+    const isFinal = (minute === 30);
+    const title = isFinal ? '🚪 Final Check-out Reminder' : '🕕 Check-out Reminder';
+    const body = isFinal
+      ? 'Last reminder — please check out now. After 6:30 PM the check-out button will be disabled.'
+      : `It's ${hour}:${String(minute).padStart(2, '0')} — please check out for the day.`;
+
     let queued = 0;
-    for (const userDoc of usersSnap.docs) {
+    let writeBatch = db.batch();
+    let pending = 0;
+
+    const flush = async () => {
+      if (pending > 0) {
+        await writeBatch.commit();
+        writeBatch = db.batch();
+        pending = 0;
+      }
+    };
+
+    for await (const userDoc of db.collection('users').stream()) {
       const u = userDoc.data();
       const role = (u.role || '').toString().toLowerCase();
       const empId = (u.emp_id || '').toString();
@@ -1121,19 +1124,20 @@ exports.checkOutReminders = onSchedule(
       if (!live.checkInTime) continue;      // never checked in → no checkout
       if (live.checkOutTime) continue;      // already checked out → done
 
-      const isFinal = (minute === 30);
-      await db.collection('task_notifications').add({
+      const notifRef = db.collection('task_notifications').doc();
+      writeBatch.set(notifRef, {
         lead_id: empId,
-        title: isFinal ? '🚪 Final Check-out Reminder' : '🕕 Check-out Reminder',
-        body: isFinal
-          ? 'Last reminder — please check out now. After 6:30 PM the check-out button will be disabled.'
-          : `It's ${hour}:${String(minute).padStart(2, '0')} — please check out for the day.`,
+        title,
+        body,
         type: 'attendance',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         read: false,
       });
+      pending++;
       queued++;
+      if (pending >= BATCH_SIZE) await flush();
     }
+    await flush();
     logger.info(`[checkOutReminders] Queued ${queued} reminder(s).`);
   },
 );

@@ -1,0 +1,151 @@
+[33mcommit 83bea43468fe1924bdb6f1417d1fbfdc7b134c7e[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m
+Author: Fazal Rehman <fzaal987645l@gmail.com>
+Date:   Wed May 13 17:01:24 2026 +0500
+
+    attendance changes and live attendance done
+
+[1mdiff --git a/lib/services/attendance_service.dart b/lib/services/attendance_service.dart[m
+[1mindex 90864f2..5c1a483 100644[m
+[1m--- a/lib/services/attendance_service.dart[m
+[1m+++ b/lib/services/attendance_service.dart[m
+[36m@@ -47,8 +47,8 @@[m [mclass AttendanceService {[m
+   static const double _officeLat = 33.599232;[m
+   static const double _officeLng = 73.154599;[m
+   static const double _officeAlt = 508.0;[m
+[31m-  static const double _allowedRadius = 2000.0;[m
+[31m-  static const double _maxAccuracy = 50.0;[m
+[32m+[m[32m  static const double _allowedRadius = 300.0; // radius_check[m
+[32m+[m[32m  static const double _maxAccuracy = 300.0;[m
+   static const double _maxIdleSpeed = 5.0;[m
+   static const double _altTolerance = 100.0;[m
+   static const int _sampleCount = 3;[m
+[36m@@ -310,18 +310,23 @@[m [mclass AttendanceService {[m
+   /// Exact office coordinates. Check-in is allowed only if the user is[m
+   /// within `_officeRadiusMeters` of one of these points.[m
+   static const Map<String, Map<String, double>> _allowedOffices = {[m
+[31m-    'Lahore': {'lat': 31.376609, 'lng': 74.1747195},[m
+[31m-    'Islamabad': {'lat': 33.593685, 'lng': 73.161049},[m
+[31m-    'Karachi': {'lat': 25.042857, 'lng': 67.337571},[m
+[31m-    'UAE': {'lat': 24.341222, 'lng': 54.532972},[m
+[32m+[m[32m    'Lahore': {'lat': 31.3766365, 'lng': 74.1745807},[m
+[32m+[m[32m    'Islamabad': {'lat': 33.5992083, 'lng': 73.154657},[m
+[32m+[m[32m    'Islamabad site office': {'lat': 33.6048609, 'lng': 73.1956127},[m
+[32m+[m[32m    'Karachi': {'lat': 25.0297457, 'lng': 67.3077112},[m
+[32m+[m[32m    'UAE': {'lat': 24.341405248663627, 'lng': 54.533140184353535},[m
+     'Hanif Medical Complex': {'lat': 33.6088744, 'lng': 72.8658331},[m
+   };[m
+ [m
+   /// 200 m — allows check-in from inside the office building or its[m
+[31m-  /// immediate perimeter (parking, lobby, adjacent block).[m
+[31m-  static const double _officeRadiusMeters = 2000.0;[m
+[31m-[m
+[31m-  /// Returns the user's GPS position if they are within 40 m of ANY office.[m
+[32m+[m[32m  /// immediate perimeter (parking, lobby, adjacent block). Per spec the[m
+[32m+[m[32m  /// user is "still able to check in / check out even when they are[m
+[32m+[m[32m  /// 200 metres away from the listed locations", so `distance <= 200 m`[m
+[32m+[m[32m  /// is the accept threshold.[m
+[32m+[m[32m  static const double _officeRadiusMeters = 200.0;[m
+[32m+[m
+[32m+[m[32m  /// Returns the user's GPS position if they are within[m
+[32m+[m[32m  /// [_officeRadiusMeters] of ANY office in [_allowedOffices].[m
+   /// Throws GeofenceException otherwise. Anti-cheat checks[m
+   /// (mock GPS, accuracy, speed) are still applied.[m
+   Future<Position> getValidatedPositionFromCities() async {[m
+[36m@@ -375,8 +380,10 @@[m [mclass AttendanceService {[m
+     if (!insideAny) {[m
+       throw GeofenceException([m
+         'You are not at any office location. '[m
+[31m-        'Closest office is ${closest.toStringAsFixed(0)} m away. '[m
+[31m-        'Check-in is allowed only at Lahore, Islamabad, Karachi, or UAE office.',[m
+[32m+[m[32m        'Closest office is ${closest.toStringAsFixed(0)} m away — '[m
+[32m+[m[32m        'must be within ${_officeRadiusMeters.toStringAsFixed(0)} m. '[m
+[32m+[m[32m        'Allowed offices: Lahore, Islamabad, Islamabad site office, '[m
+[32m+[m[32m        'Karachi, UAE, Hanif Medical Complex.',[m
+       );[m
+     }[m
+     return pos;[m
+[1mdiff --git a/lib/services/task_service.dart b/lib/services/task_service.dart[m
+[1mindex 6e581a9..65ede7b 100644[m
+[1m--- a/lib/services/task_service.dart[m
+[1m+++ b/lib/services/task_service.dart[m
+[36m@@ -220,7 +220,13 @@[m [mclass TaskService {[m
+         .toList();[m
+   }[m
+ [m
+[31m-  /// Save a new task to Firestore[m
+[32m+[m[32m  /// Save a new task to Firestore.[m
+[32m+[m[32m  ///[m
+[32m+[m[32m  /// `duration` is the human-readable label ("Weekly", "Monthly", "Custom",[m
+[32m+[m[32m  /// etc.). For custom-day tasks HR passes the actual day count through[m
+[32m+[m[32m  /// `customDurationDays`; that value wins over [_durationToDays] so a[m
+[32m+[m[32m  /// 35-day task produces `ceil(35 / 7) = 5` weeks regardless of how the[m
+[32m+[m[32m  /// duration label is written.[m
+   Future<String> createTask({[m
+     List<Map<String, dynamic>>? members,[m
+     required String lead_id,[m
+[36m@@ -230,6 +236,7 @@[m [mclass TaskService {[m
+     required String description,[m
+     required bool unscheduled_task,[m
+     required String duration,[m
+[32m+[m[32m    int? customDurationDays,[m
+     List<Map<String, dynamic>>? attachments,[m
+     String? secondaryDescription,[m
+     List<Map<String, dynamic>>? secondaryAttachments,[m
+[36m@@ -247,8 +254,14 @@[m [mclass TaskService {[m
+       }[m
+     }[m
+ [m
+[31m-    final durationDays = _durationToDays(duration);[m
+[31m-    final cycleDays = _durationToCycleDays(duration);[m
+[32m+[m[32m    // Resolve the total length: explicit custom day count if HR provided[m
+[32m+[m[32m    // one, otherwise the duration label is parsed via the preset table.[m
+[32m+[m[32m    // Cycle length is always 7 days so the lead's weekly breakdown UI[m
+[32m+[m[32m    // gets a clean integer number of phases (ceil(days / 7)).[m
+[32m+[m[32m    final durationDays = (customDurationDays != null && customDurationDays > 0)[m
+[32m+[m[32m        ? customDurationDays[m
+[32m+[m[32m        : _durationToDays(duration);[m
+[32m+[m[32m    const cycleDays = 7;[m
+     final now = DateTime.now();[m
+     final deadline = now.add(Duration(days: durationDays));[m
+ [m
+[36m@@ -277,6 +290,12 @@[m [mclass TaskService {[m
+       'description': description,[m
+       'unscheduled_task': unscheduled_task,[m
+       'duration': duration,[m
+[32m+[m[32m      // Persist the resolved day count so downstream readers don't need to[m
+[32m+[m[32m      // re-parse the duration label (especially useful for custom-day[m
+[32m+[m[32m      // tasks where the label is "Custom" and the real value is here).[m
+[32m+[m[32m      'durationDays': durationDays,[m
+[32m+[m[32m      if (customDurationDays != null && customDurationDays > 0)[m
+[32m+[m[32m        'customDurationDays': customDurationDays,[m
+       'status': 'pending',[m
+       'createdAt': FieldValue.serverTimestamp(),[m
+       'deadline': Timestamp.fromDate(deadline),[m
+[36m@@ -541,8 +560,25 @@[m [mclass TaskService {[m
+     });[m
+   }[m
+ [m
+[32m+[m[32m  /// Maps a duration label to its calendar-day length.[m
+[32m+[m[32m  ///[m
+[32m+[m[32m  /// Recognised presets:[m
+[32m+[m[32m  ///   weekly      → 7[m
+[32m+[m[32m  ///   bi-weekly   → 14[m
+[32m+[m[32m  ///   monthly     → 28[m
+[32m+[m[32m  ///   bi-monthly  → 56[m
+[32m+[m[32m  ///   quarterly   → 84[m
+[32m+[m[32m  ///[m
+[32m+[m[32m  /// Anything else (e.g. "Custom(35 days)", "14 days", "21") is parsed as[m
+[32m+[m[32m  /// a number — the first integer found in the string is taken to be the[m
+[32m+[m[32m  /// total day count. Falls back to 28 only when nothing is parseable.[m
+[32m+[m[32m  ///[m
+[32m+[m[32m  /// Note: callers that already know the exact day count (e.g. HR picked a[m
+[32m+[m[32m  /// custom value) should pass that integer through `customDurationDays`[m
+[32m+[m[32m  /// on [createTask] rather than relying on the string parse.[m
+   static int _durationToDays(String duration) {[m
+[31m-    switch (duration.toLowerCase()) {[m
+[32m+[m[32m    final lower = duration.toLowerCase().trim();[m
+[32m+[m[32m    switch (lower) {[m
+       case 'weekly':[m
+         return 7;[m
+       case 'bi-weekly':[m
+[36m@@ -554,18 +590,23 @@[m [mclass Tas
