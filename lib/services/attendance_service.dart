@@ -519,15 +519,15 @@ class AttendanceService {
       leaveRequestId = leave.id;
       leaveType = leave.duration.value;
     } else {
-      final isLate =
-          now.hour > settings.workStartHour ||
-          (now.hour == settings.workStartHour && now.minute > 0);
+      // Late is now strictly after 11:00 AM
+      final isLate = now.hour > 11 || (now.hour == 11 && now.minute > 0);
+
       if (isLate) {
         status = AttendanceStatus.late;
         debugPrint(
           '[Attendance] Late check-in at '
           '${now.hour}:${now.minute.toString().padLeft(2, '0')} '
-          '(workStart: ${settings.workStartHour}:00)',
+          '(Late threshold: 11:00)',
         );
       }
     }
