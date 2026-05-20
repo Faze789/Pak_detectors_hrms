@@ -7,7 +7,9 @@ import 'package:flutter/foundation.dart';
 import '../models/attendance_model.dart';
 import '../models/leave_model.dart';
 import '../models/office_settings_model.dart';
+import '../models/work_hour_override_model.dart';
 import '../services/attendance_service.dart';
+import '../services/work_hour_override_service.dart';
 
 enum ViewState { idle, loading, error }
 
@@ -29,6 +31,21 @@ class AttendanceViewModel extends ChangeNotifier {
   String? errorMessage;
 
   AttendanceModel? todayAttendance;
+
+  // Cached HR-defined work-hour override for the signed-in user + today,
+  // refreshed by loadToday(). Used by the UI to compute cutoff/late
+  // boundaries synchronously without async calls in build().
+  WorkHourOverride? todayOverride;
+  WorkHourOverride? get activeOverride => todayOverride;
+  final WorkHourOverrideService _overrideService = WorkHourOverrideService();
+
+  /// Sync helper for the UI — checks the in-memory `todayOverride`. If
+  /// none is cached, falls back to the global default cutoff (6:30 PM).
+  bool isPastDailyCutoffSync(DateTime now) {
+    final o = todayOverride;
+    if (o != null && o.coversDate(now)) return o.isPastDailyCutoff(now);
+    return AttendanceService.isPastDailyCutoff(now);
+  }
   LeaveModel? _todayLeave;
   bool _isWeekend = false;
   String? _holidayName;
@@ -291,6 +308,11 @@ class AttendanceViewModel extends ChangeNotifier {
     return AttendanceStatus.checkedIn;
   }
 
+  /// Maximum approved+pending leave days an employee may take in one
+  /// calendar year. Spec: 4 days/year. Enforced client-side at submit
+  /// time; the cap is also reflected by `Employee.annualLeaveQuota`.
+  static const int annualLeaveCap = 4;
+
   Future<bool> submitLeaveRequest(
     String uid,
     DateTime start,
@@ -298,6 +320,36 @@ class AttendanceViewModel extends ChangeNotifier {
     int days,
   ) async {
     try {
+      // ── Annual cap pre-check ──────────────────────────────────────────
+      // Sum approved + pending leave days this calendar year. If the new
+      // request would push the total past `annualLeaveCap`, refuse with a
+      // clear, actionable message instead of silently letting the request
+      // through to be approved beyond the limit.
+      final now = DateTime.now();
+      final existingSnap = await FirebaseFirestore.instance
+          .collection('request_for_leave')
+          .where('uid', isEqualTo: uid)
+          .get();
+      int usedThisYear = 0;
+      for (final doc in existingSnap.docs) {
+        final data = doc.data();
+        final status = (data['status'] ?? '').toString();
+        if (status != 'approved' && status != 'pending') continue;
+        final startTs = data['startDate'];
+        if (startTs is! Timestamp) continue;
+        final startDt = startTs.toDate();
+        if (startDt.year != now.year) continue;
+        usedThisYear += (data['totalDays'] as num? ?? 0).toInt();
+      }
+      if (usedThisYear + days > annualLeaveCap) {
+        final remaining = (annualLeaveCap - usedThisYear).clamp(0, annualLeaveCap);
+        throw Exception(
+          'Annual leave cap is $annualLeaveCap days. '
+          'You have already used $usedThisYear day(s) this year '
+          'and have $remaining left — requesting $days more would exceed the limit.',
+        );
+      }
+
       final Set<String> leadIdsToNotify = {};
       String actualEmpId = uid;
       String userName = 'Employee';
@@ -453,6 +505,16 @@ class AttendanceViewModel extends ChangeNotifier {
 
       _officeSettings = await _service.getOfficeSettings();
 
+      // Refresh HR-defined work-hour override for this user + today.
+      // Used by isPastDailyCutoffSync to slide the lockout boundary in
+      // the UI without any async work in build().
+      try {
+        todayOverride =
+            await _overrideService.activeFor(userId, DateTime.now());
+      } catch (_) {
+        todayOverride = null;
+      }
+
       _isWeekend = _service.isWeekend(today);
       if (_isWeekend) {
         todayAttendance = null;
@@ -503,6 +565,12 @@ class AttendanceViewModel extends ChangeNotifier {
     if (hasCompletedTodayCycle) {
       _setError(
         'You have already checked in and out for today. Check-in resets tomorrow.',
+      );
+      return;
+    }
+    if (await _service.isPastDailyCutoffFor(userId, DateTime.now())) {
+      _setError(
+        'Check-in window closed for today. Try again tomorrow at 8:00 AM.',
       );
       return;
     }
@@ -594,6 +662,15 @@ class AttendanceViewModel extends ChangeNotifier {
     // "a document path must be a non-empty string" from _live.doc('').
     if (userId.trim().isEmpty) {
       _setError('Cannot check in: you are not signed in. Please log in again.');
+      return;
+    }
+    // Hard daily cutoff. Surface the message immediately so we don't waste
+    // GPS sampling time when the call would be rejected anyway. Honors any
+    // per-employee work-hour override set by HR.
+    if (await _service.isPastDailyCutoffFor(userId, DateTime.now())) {
+      _setError(
+        'Check-in window closed for today. Try again tomorrow at 8:00 AM.',
+      );
       return;
     }
     _setLoading();

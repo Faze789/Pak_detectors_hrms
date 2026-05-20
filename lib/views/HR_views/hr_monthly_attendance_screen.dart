@@ -12,6 +12,9 @@ import 'package:provider/provider.dart';
 
 import '../../models/attendance_model.dart';
 import '../../models/attendance_policy.dart';
+import '../../models/work_hour_override_model.dart';
+import '../../services/attendance_service.dart';
+import '../../services/work_hour_override_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/employee_viewmodel.dart';
 
@@ -30,6 +33,16 @@ class _HRMonthlyAttendanceScreenState extends State<HRMonthlyAttendanceScreen> {
   bool _loading = false;
   String? _error;
   MonthlyArchive? _archive;
+  final _overrideService = WorkHourOverrideService();
+  List<WorkHourOverride> _overrides = const [];
+
+  // Per-employee monthly salary loaded from users/{uid}.salary. When 0 or
+  // null, the policy falls back to AttendancePolicy.monthlySalary (35,000).
+  double? _employeeSalary;
+  bool get _hasCustomSalary =>
+      _employeeSalary != null && _employeeSalary! > 0;
+  double get _effectiveMonthlySalary =>
+      _hasCustomSalary ? _employeeSalary! : AttendancePolicy.monthlySalary;
 
   @override
   void initState() {
@@ -57,18 +70,32 @@ class _HRMonthlyAttendanceScreenState extends State<HRMonthlyAttendanceScreen> {
       _loading = true;
       _error = null;
       _archive = null;
+      _overrides = const [];
+      _employeeSalary = null;
     });
     try {
-      final docId =
-          MonthlyArchive.docId(_selectedEmployeeUid!, _year, _month);
-      final snap = await FirebaseFirestore.instance
-          .collection('attendance_archive')
-          .doc(docId)
-          .get();
+      final docId = MonthlyArchive.docId(_selectedEmployeeUid!, _year, _month);
+      // 3 parallel reads: archive doc, override list, user doc (for salary).
+      final results = await Future.wait([
+        FirebaseFirestore.instance
+            .collection('attendance_archive')
+            .doc(docId)
+            .get(),
+        _overrideService.listForUser(_selectedEmployeeUid!),
+        FirebaseFirestore.instance
+            .collection('users')
+            .doc(_selectedEmployeeUid!)
+            .get(),
+      ]);
       if (!mounted) return;
-      _archive = (snap.exists && snap.data() != null)
-          ? MonthlyArchive.fromMap(snap.data()!)
+      final archiveSnap = results[0] as DocumentSnapshot<Map<String, dynamic>>;
+      _archive = (archiveSnap.exists && archiveSnap.data() != null)
+          ? MonthlyArchive.fromMap(archiveSnap.data()!)
           : null;
+      _overrides = results[1] as List<WorkHourOverride>;
+      final userSnap = results[2] as DocumentSnapshot<Map<String, dynamic>>;
+      final raw = userSnap.data()?['salary'];
+      _employeeSalary = (raw is num) ? raw.toDouble() : null;
     } catch (e) {
       _error = e.toString();
     } finally {
@@ -99,17 +126,45 @@ class _HRMonthlyAttendanceScreenState extends State<HRMonthlyAttendanceScreen> {
     final empVM = context.watch<EmployeeViewModel>();
     final employees = empVM.employees;
 
-    final daysSorted = _archive == null
+    // Archive-driven: every row shown comes from a real entry in
+    // attendance_archive. The auto-absent crons (markAbsentAtCutoff at noon,
+    // markAbsentAtSixPM at 6:30 PM) write absent records into the archive,
+    // so an employee who never showed up still has the absent day on file —
+    // no client-side synthesis needed.
+    //
+    // We do filter out weekend entries here: if a cron accidentally writes
+    // a Saturday/Sunday row, we don't want to deduct salary for it (weekend
+    // is not a working day). Fix that at the cron if it keeps happening.
+    final allEntries = _archive == null
         ? const <MapEntry<String, AttendanceModel>>[]
-        : (_archive!.days.entries.toList()
-          ..sort((a, b) => a.key.compareTo(b.key)));
+        : _archive!.days.entries.toList();
+    final daysSorted = allEntries.where((e) {
+      final d = e.value.date;
+      return d.weekday != DateTime.saturday && d.weekday != DateTime.sunday;
+    }).toList()..sort((a, b) => a.key.compareTo(b.key));
 
-    final deductions =
-        daysSorted.map((e) => AttendancePolicy.compute(e.value)).toList();
-    final totalDeduction =
-        deductions.fold<double>(0, (s, d) => s + d.totalDeduction);
-    final netPay = AttendancePolicy.monthlySalary - totalDeduction;
-    final daysRecorded = daysSorted.length;
+    // For each day, pick the active HR override (if any) and feed it
+    // plus the per-employee salary into the policy. Deduction tiers slide
+    // with the custom shift hours; deduction amounts anchor on the
+    // employee's actual salary (defaults to AttendancePolicy.monthlySalary
+    // when users/{uid}.salary is unset / 0).
+    final deductions = daysSorted.map((e) {
+      final ov = WorkHourOverrideService.pickActive(_overrides, e.value.date);
+      return AttendancePolicy.compute(
+        e.value,
+        override: ov,
+        employeeMonthlySalary: _employeeSalary,
+      );
+    }).toList();
+    final totalDeduction = deductions.fold<double>(
+      0,
+      (s, d) => s + d.totalDeduction,
+    );
+    final netPay = _effectiveMonthlySalary - totalDeduction;
+    final daysCounted = daysSorted.length;
+    final daysAbsent = daysSorted
+        .where((e) => e.value.status == AttendanceStatus.absent)
+        .length;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -135,8 +190,9 @@ class _HRMonthlyAttendanceScreenState extends State<HRMonthlyAttendanceScreen> {
                   setState(() => _selectedEmployeeUid = uid);
                   _loadArchive();
                 },
-                monthLabel:
-                    DateFormat('MMMM yyyy').format(DateTime(_year, _month)),
+                monthLabel: DateFormat(
+                  'MMMM yyyy',
+                ).format(DateTime(_year, _month)),
                 onPrev: () => _shiftMonth(-1),
                 onNext: () => _shiftMonth(1),
               ),
@@ -145,8 +201,8 @@ class _HRMonthlyAttendanceScreenState extends State<HRMonthlyAttendanceScreen> {
                 children: [
                   Expanded(
                     child: _SummaryCard(
-                      label: 'Gross',
-                      value: 'Rs ${_fmtMoney(AttendancePolicy.monthlySalary)}',
+                      label: _hasCustomSalary ? 'Gross (saved)' : 'Gross (default)',
+                      value: 'Rs ${_fmtMoney(_effectiveMonthlySalary)}',
                       color: const Color(0xFF2563EB),
                       icon: Icons.account_balance_wallet_rounded,
                     ),
@@ -176,9 +232,24 @@ class _HRMonthlyAttendanceScreenState extends State<HRMonthlyAttendanceScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: _SummaryCard(
-                      label: 'Days recorded',
+                      label: 'Days absent',
+                      value: daysAbsent == 0
+                          ? '0'
+                          : '$daysAbsent  ·  -Rs ${_fmtMoney(daysAbsent * AttendancePolicy.perDayWageFor(_employeeSalary))}',
+                      color: const Color(0xFFDC2626),
+                      icon: Icons.person_off_rounded,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _SummaryCard(
+                      label: 'Working days counted',
                       value:
-                          '$daysRecorded / ${AttendancePolicy.standardWorkingDays}',
+                          '$daysCounted weekdays  ·  basis ${AttendancePolicy.standardWorkingDays}',
                       color: const Color(0xFF7C3AED),
                       icon: Icons.event_available_rounded,
                     ),
@@ -186,7 +257,7 @@ class _HRMonthlyAttendanceScreenState extends State<HRMonthlyAttendanceScreen> {
                 ],
               ),
               const SizedBox(height: 16),
-              const _PolicyBanner(),
+              _PolicyBanner(perDayWage: AttendancePolicy.perDayWageFor(_employeeSalary)),
               const SizedBox(height: 16),
               if (_loading)
                 const Padding(
@@ -200,7 +271,7 @@ class _HRMonthlyAttendanceScreenState extends State<HRMonthlyAttendanceScreen> {
               else if (daysSorted.isEmpty)
                 _EmptyBlock(
                   text:
-                      'No attendance recorded for this employee in ${DateFormat('MMMM yyyy').format(DateTime(_year, _month))}.',
+                      'No weekdays to report yet for ${DateFormat('MMMM yyyy').format(DateTime(_year, _month))} — either the month is in the future or it hasn\'t reached its first completed weekday.',
                 )
               else
                 ...daysSorted.asMap().entries.map((e) {
@@ -222,7 +293,8 @@ class _HRMonthlyAttendanceScreenState extends State<HRMonthlyAttendanceScreen> {
 
 // ─── Filter card ──────────────────────────────────────────────────────────────
 class _FilterCard extends StatelessWidget {
-  final List<dynamic> employees; // Employee — kept dynamic to avoid import churn
+  final List<dynamic>
+  employees; // Employee — kept dynamic to avoid import churn
   final String? selectedUid;
   final ValueChanged<String?> onEmployeeChanged;
   final String monthLabel;
@@ -261,15 +333,17 @@ class _FilterCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            value: selectedUid,
+            initialValue: selectedUid,
             isExpanded: true,
             decoration: InputDecoration(
               labelText: 'Employee',
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
               ),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 12,
+              ),
             ),
             items: employees.map<DropdownMenuItem<String>>((e) {
               final uid = e.uid as String;
@@ -391,7 +465,11 @@ class _SummaryCard extends StatelessWidget {
 
 // ─── Policy banner ───────────────────────────────────────────────────────────
 class _PolicyBanner extends StatelessWidget {
-  const _PolicyBanner();
+  /// Per-day wage to display in the banner — anchors on the currently
+  /// selected employee's saved salary, falling back to the company default
+  /// (35,000 / 22) when no salary is on file.
+  final double perDayWage;
+  const _PolicyBanner({required this.perDayWage});
 
   @override
   Widget build(BuildContext context) {
@@ -405,16 +483,15 @@ class _PolicyBanner extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.rule_rounded,
-              size: 16, color: Color(0xFF1D4ED8)),
+          const Icon(Icons.rule_rounded, size: 16, color: Color(0xFF1D4ED8)),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               'Late: 15% up to 10:00 AM • 50% after 10:00 AM     '
               'Early-out: 25% (5–6 PM) • 50% before 5:00 PM     '
-              'Absent: 100%     Approved leave: 0%     '
-              'Per-day deduction capped at 100% of '
-              'Rs ${AttendancePolicy.perDayWage.toStringAsFixed(0)}.',
+              'Absent: 100% (= Rs ${perDayWage.toStringAsFixed(0)} / day, salary ÷ 22). '
+              'Weekdays missing from the archive are treated as absent.   '
+              'Approved leave: 0%.   Per-day cap: 100%.',
               style: const TextStyle(
                 fontSize: 11.5,
                 color: Color(0xFF1D4ED8),
@@ -433,11 +510,7 @@ class _DayRow extends StatelessWidget {
   final String dayKey;
   final AttendanceModel att;
   final DayDeduction ded;
-  const _DayRow({
-    required this.dayKey,
-    required this.att,
-    required this.ded,
-  });
+  const _DayRow({required this.dayKey, required this.att, required this.ded});
 
   @override
   Widget build(BuildContext context) {
@@ -458,7 +531,9 @@ class _DayRow extends StatelessWidget {
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 5),
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF1F5F9),
                   borderRadius: BorderRadius.circular(8),
@@ -501,9 +576,7 @@ class _DayRow extends StatelessWidget {
               Expanded(
                 child: _TimeCell(
                   label: 'Check-in',
-                  value: ci != null
-                      ? DateFormat('HH:mm').format(ci)
-                      : '—',
+                  value: ci != null ? DateFormat('HH:mm').format(ci) : '—',
                   color: const Color(0xFF2563EB),
                 ),
               ),
@@ -511,9 +584,7 @@ class _DayRow extends StatelessWidget {
               Expanded(
                 child: _TimeCell(
                   label: 'Check-out',
-                  value: co != null
-                      ? DateFormat('HH:mm').format(co)
-                      : '—',
+                  value: co != null ? DateFormat('HH:mm').format(co) : '—',
                   color: const Color(0xFFDC2626),
                 ),
               ),
@@ -539,34 +610,39 @@ class _DayRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: ded.infractions
-                    .map((i) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 2),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.remove_circle_outline_rounded,
-                                  size: 14, color: Color(0xFFB91C1C)),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  i.label,
-                                  style: const TextStyle(
-                                    fontSize: 12.5,
-                                    color: Color(0xFF7F1D1D),
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                              Text(
-                                '${(i.pct * 100).toStringAsFixed(0)}%  ·  -Rs ${i.amount.toStringAsFixed(0)}',
+                    .map(
+                      (i) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.remove_circle_outline_rounded,
+                              size: 14,
+                              color: Color(0xFFB91C1C),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                i.label,
                                 style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Color(0xFFB91C1C),
-                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12.5,
+                                  color: Color(0xFF7F1D1D),
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
-                            ],
-                          ),
-                        ))
+                            ),
+                            Text(
+                              '${(i.pct * 100).toStringAsFixed(0)}%  ·  -Rs ${i.amount.toStringAsFixed(0)}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFFB91C1C),
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
                     .toList(),
               ),
             ),
@@ -652,8 +728,10 @@ class _StatusBadge extends StatelessWidget {
       ),
       AttendanceStatus.onLeave ||
       AttendanceStatus.firstHalfLeave ||
-      AttendanceStatus.secondHalfLeave =>
-        (const Color(0xFFEDE9FE), const Color(0xFF6D28D9)),
+      AttendanceStatus.secondHalfLeave => (
+        const Color(0xFFEDE9FE),
+        const Color(0xFF6D28D9),
+      ),
       AttendanceStatus.halfDay => (
         const Color(0xFFFFE4E6),
         const Color(0xFFBE123C),
@@ -668,11 +746,7 @@ class _StatusBadge extends StatelessWidget {
       ),
       child: Text(
         status.shortLabel,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w800,
-          color: fg,
-        ),
+        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: fg),
       ),
     );
   }
@@ -694,16 +768,16 @@ class _EmptyBlock extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const Icon(Icons.event_busy_rounded,
-              size: 44, color: Color(0xFF94A3B8)),
+          const Icon(
+            Icons.event_busy_rounded,
+            size: 44,
+            color: Color(0xFF94A3B8),
+          ),
           const SizedBox(height: 8),
           Text(
             text,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Color(0xFF64748B),
-              fontSize: 13,
-            ),
+            style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
           ),
         ],
       ),
@@ -727,8 +801,11 @@ class _ErrorBlock extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.error_outline_rounded,
-              size: 18, color: Color(0xFFB91C1C)),
+          const Icon(
+            Icons.error_outline_rounded,
+            size: 18,
+            color: Color(0xFFB91C1C),
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -764,4 +841,74 @@ String _hms(int secs) {
   final m = (secs % 3600) ~/ 60;
   if (h > 0) return '${h}h ${m}m';
   return '${m}m';
+}
+
+/// Walks every weekday (Mon–Fri) in [year]/[month] up to "now" and returns
+/// one entry per day. For dates that exist in the archive the real record
+/// is used; for dates that are missing we synthesize an [AttendanceModel]
+/// with `status: absent` so [AttendancePolicy.compute] deducts the full
+/// `perDayWage` (= salary / 22) for each missing day — that's how a day
+/// the employee never showed up for ends up in the deduction total.
+///
+/// Bounds:
+///   • Past month  → iterate the entire month.
+///   • Current month → iterate up to yesterday, OR up to today if the
+///                     6:30 PM hard cutoff has already passed.
+///   • Future month → return empty (nothing has happened yet).
+List<MapEntry<String, AttendanceModel>> _buildMonthWeekdays({
+  required int year,
+  required int month,
+  required MonthlyArchive? archive,
+  required String? userId,
+}) {
+  if (userId == null || userId.isEmpty) return const [];
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final firstDay = DateTime(year, month, 1);
+
+  final isFutureMonth = firstDay.isAfter(DateTime(now.year, now.month, 1));
+  if (isFutureMonth) return const [];
+
+  final lastDayOfMonth = DateTime(year, month + 1, 0);
+  final isCurrentMonth = year == now.year && month == now.month;
+
+  final DateTime endDate;
+  if (isCurrentMonth) {
+    if (AttendanceService.isPastDailyCutoff(now)) {
+      endDate = today;
+    } else {
+      // Before 6:30 PM today: today is still in progress — don't pre-judge.
+      endDate = today.subtract(const Duration(days: 1));
+    }
+  } else {
+    endDate = lastDayOfMonth;
+  }
+
+  if (endDate.isBefore(firstDay)) return const [];
+
+  final entries = <MapEntry<String, AttendanceModel>>[];
+  for (
+    var cursor = firstDay;
+    !cursor.isAfter(endDate);
+    cursor = cursor.add(const Duration(days: 1))
+  ) {
+    if (cursor.weekday == DateTime.saturday ||
+        cursor.weekday == DateTime.sunday) {
+      continue;
+    }
+    final key =
+        '${cursor.year}-'
+        '${cursor.month.toString().padLeft(2, '0')}-'
+        '${cursor.day.toString().padLeft(2, '0')}';
+    final archived = archive?.days[key];
+    final att =
+        archived ??
+        AttendanceModel(
+          userId: userId,
+          date: cursor,
+          status: AttendanceStatus.absent,
+        );
+    entries.add(MapEntry(key, att));
+  }
+  return entries;
 }

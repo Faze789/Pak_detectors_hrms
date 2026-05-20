@@ -10,6 +10,7 @@ import 'package:intl/intl.dart';
 
 import '../../models/attendance_model.dart';
 import '../../models/leave_model.dart';
+import '../../services/attendance_service.dart';
 import '../../viewmodels/attendance_viewmodel.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 
@@ -1494,15 +1495,50 @@ class _MainCard extends StatelessWidget {
         vm.dailyStatus == AttendanceStatus.checkedOut &&
         isValidCompletedCycle(att);
     final completedToday = hasValidCheckOut || statusCheckedOut;
-    final beforeOpening = now.hour < 8;
-    final hideCheckIn = completedToday || beforeOpening;
+
+    // Honor HR-defined work-hour override for the check-in window's lower
+    // bound. With no override, check-in opens at 8 AM (1 hour before the
+    // default 9 AM start). With an override, check-in opens STRICTLY at
+    // override.workStart — HR set a specific time, we enforce it (no
+    // 1-hour grace). The upper bound (pastWindowClose) is already
+    // override-aware via vm.isPastDailyCutoffSync.
+    final ov = vm.activeOverride;
+    final beforeOpening = ov != null
+        ? (now.hour < ov.workStartHour ||
+              (now.hour == ov.workStartHour && now.minute < ov.workStartMinute))
+        : now.hour < 8;
+
+    // Approved leave for today blocks check-in entirely (full-day leave
+    // is the most common case; first/second-half are handled inline by
+    // the regular check-in flow because the user still works half the day).
+    final onLeaveToday = attIsForToday &&
+        att.status.isAnyLeave &&
+        att.status != AttendanceStatus.firstHalfLeave &&
+        att.status != AttendanceStatus.secondHalfLeave;
+
+    final pastWindowClose = vm.isPastDailyCutoffSync(now);
+    final hideCheckIn =
+        onLeaveToday || completedToday || beforeOpening || pastWindowClose;
     if (hideCheckIn) {
+      final reason = onLeaveToday
+          ? _CheckInClosedReason.onLeave
+          : completedToday
+              ? _CheckInClosedReason.completed
+              : pastWindowClose
+                  ? _CheckInClosedReason.windowClosed
+                  : _CheckInClosedReason.beforeWindow;
+      final opensAtLabel = ov != null
+          ? _fmtAmPm(ov.workStartHour, ov.workStartMinute)
+          : '8:00 AM';
+      final closesAtLabel = ov != null
+          ? _fmtAmPm(ov.workEndHour, ov.workEndMinute + 30)
+          : '6:30 PM';
       return _CheckInClosed(
         isMobile: isMobile,
-        reason: completedToday
-            ? _CheckInClosedReason.completed
-            : _CheckInClosedReason.beforeWindow,
+        reason: reason,
         forDate: _attendanceDateForBadge(now),
+        opensAtLabel: opensAtLabel,
+        closesAtLabel: closesAtLabel,
       );
     }
     return Column(
@@ -1671,14 +1707,15 @@ class _MainCard extends StatelessWidget {
         Builder(
           builder: (_) {
             final now = DateTime.now();
-            final pastCheckoutCutoff =
-                now.hour > 18 || (now.hour == 18 && now.minute >= 30);
+            // Honors HR-defined work-hour override for the signed-in user.
+            final pastCheckoutCutoff = vm.isPastDailyCutoffSync(now);
+            final closedLabel = vm.activeOverride != null
+                ? 'Check Out Closed (${_fmtAmPm(vm.activeOverride!.workEndHour, vm.activeOverride!.workEndMinute + 30)})'
+                : 'Check Out Closed (6:30 PM)';
             return SizedBox(
               width: double.infinity,
               child: _ActionButton(
-                label: pastCheckoutCutoff
-                    ? 'Check Out Closed (6:30 PM)'
-                    : 'Check Out',
+                label: pastCheckoutCutoff ? closedLabel : 'Check Out',
                 icon: pastCheckoutCutoff
                     ? Icons.lock_clock_rounded
                     : Icons.logout_rounded,
@@ -1795,7 +1832,18 @@ class _ActionButton extends StatelessWidget {
   );
 }
 
-enum _CheckInClosedReason { completed, beforeWindow }
+enum _CheckInClosedReason { completed, beforeWindow, windowClosed, onLeave }
+
+String _fmtAmPm(int hour, int minute) {
+  int h = hour;
+  int m = minute;
+  // Normalize a possibly-overflowed minute (e.g. 18 + 30 = 48 m means +1 h, 18 → 19)
+  h += m ~/ 60;
+  m = m % 60;
+  final period = h >= 12 ? 'PM' : 'AM';
+  final displayHour = h == 0 ? 12 : (h > 12 ? h - 12 : h);
+  return '$displayHour:${m.toString().padLeft(2, '0')} $period';
+}
 
 String _attendanceDateForBadge(DateTime when) {
   const months = [
@@ -1859,10 +1907,14 @@ class _CheckInClosed extends StatelessWidget {
   final bool isMobile;
   final _CheckInClosedReason reason;
   final String forDate;
+  final String opensAtLabel;
+  final String closesAtLabel;
   const _CheckInClosed({
     required this.isMobile,
     required this.reason,
     required this.forDate,
+    this.opensAtLabel = '8:00 AM', // fallback = global default
+    this.closesAtLabel = '6:30 PM',
   });
 
   @override
@@ -1878,13 +1930,27 @@ class _CheckInClosed extends StatelessWidget {
         const Color(0xFF059669),
         'Day complete',
         'You\'ve already checked in and checked out for this date.\n'
-            'Check-in re-opens tomorrow at 8:00 AM.',
+            'Check-in re-opens tomorrow at $opensAtLabel.', // ← dynamic
       ),
       _CheckInClosedReason.beforeWindow => (
         Icons.bedtime_outlined,
         const Color(0xFF7C3AED),
-        'Check-in opens at 8:00 AM',
+        'Check-in opens at $opensAtLabel', // ← dynamic
         'You can check in once the daily window opens.',
+      ),
+      _CheckInClosedReason.windowClosed => (
+        Icons.lock_clock_rounded,
+        const Color(0xFFDC2626),
+        'Check-in window closed',
+        'Daily check-in closes at $closesAtLabel. Today has been recorded.\n' // ← dynamic
+            'Check-in re-opens tomorrow at $opensAtLabel.', // ← dynamic
+      ),
+      _CheckInClosedReason.onLeave => (
+        Icons.beach_access_rounded,
+        const Color(0xFF7C3AED),
+        'On approved leave',
+        "Today is on your approved leave. Check-in / check-out are\n"
+            "disabled and no penalty applies. Enjoy your day off.",
       ),
     };
     return Column(

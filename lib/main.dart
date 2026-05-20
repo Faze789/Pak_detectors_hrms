@@ -57,6 +57,39 @@ const AndroidNotificationChannel _taskChannel = AndroidNotificationChannel(
   playSound: true,
 );
 
+// ─── HR system-alert channel ─────────────────────────────────────────────────
+//
+// Exclusive channel for genuine backend failures (uncaught cron errors,
+// real FCM delivery failures, data-integrity issues). Routine FCM token
+// hygiene NO LONGER routes through this channel after the spam-suppression
+// fix — so anything that lands here is something HR should actually look at.
+//
+// Properties:
+//   • Importance.max — heads-up notification, bypasses ambient-only DND
+//     where the OS allows it.
+//   • enableVibration + enableLights — extra perception channels.
+//   • Custom sound: tries `hr_alert` (drop a file at
+//     android/app/src/main/res/raw/hr_alert.mp3 if you want a distinct
+//     tone; otherwise the device's default channel sound plays).
+const AndroidNotificationChannel _hrSystemAlertChannel =
+    AndroidNotificationChannel(
+  'hr_system_alerts',
+  'System Alerts (HR)',
+  description:
+      'Genuine backend failures — cron crashes, FCM delivery failures, '
+      'data-integrity issues. HR-only.',
+  importance: Importance.max,
+  playSound: true,
+  // RawResourceAndroidNotificationSound looks for
+  // `android/app/src/main/res/raw/hr_alert.mp3`. If the file is missing
+  // the Android system falls back to the channel default sound — no
+  // crash, just less distinct.
+  sound: RawResourceAndroidNotificationSound('hr_alert'),
+  enableVibration: true,
+  enableLights: true,
+  ledColor: Color(0xFFDC2626), // red LED
+);
+
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
@@ -106,6 +139,39 @@ void _showLocalNotification({required String title, required String body}) {
   );
 }
 
+/// Foreground display for HR system alerts on the dedicated channel.
+/// Background-delivered alerts use the same `hr_system_alerts` channelId
+/// passed by the FCM payload, so background and foreground stay consistent.
+void _showHrSystemAlertNotification({
+  required String title,
+  required String body,
+}) {
+  _localNotifications.show(
+    id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    title: title,
+    body: body,
+    notificationDetails: NotificationDetails(
+      android: AndroidNotificationDetails(
+        _hrSystemAlertChannel.id,
+        _hrSystemAlertChannel.name,
+        channelDescription: _hrSystemAlertChannel.description,
+        importance: Importance.max,
+        priority: Priority.max,
+        playSound: true,
+        sound: const RawResourceAndroidNotificationSound('hr_alert'),
+        enableVibration: true,
+        enableLights: true,
+        ledColor: const Color(0xFFDC2626),
+        ledOnMs: 1000,
+        ledOffMs: 500,
+        icon: '@mipmap/ic_launcher',
+        // Full-screen-intent or fullScreenIntent: true could be added for
+        // truly critical alerts — leave off by default, it's quite invasive.
+      ),
+    ),
+  );
+}
+
 // ─────────────────────────────────────────────────────────────
 // MAIN
 // ─────────────────────────────────────────────────────────────
@@ -127,6 +193,13 @@ void main() async {
         AndroidFlutterLocalNotificationsPlugin
       >()
       ?.createNotificationChannel(_taskChannel);
+  // Dedicated HR system-alert channel — see the channel declaration
+  // comment above for why this exists.
+  await _localNotifications
+      .resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin
+      >()
+      ?.createNotificationChannel(_hrSystemAlertChannel);
 
   await _localNotifications.initialize(
     settings: const InitializationSettings(
@@ -574,7 +647,20 @@ class _AppInitState extends State<_AppInit> {
       final title = notification?.title ?? data['title'] ?? 'HRMS';
       final body = notification?.body ?? data['body'] ?? '';
       if (title.isNotEmpty && body.isNotEmpty) {
-        _showLocalNotification(title: title, body: body);
+        // Route by `type`:
+        //   • hr_alert  → dedicated HR system-alert channel (max
+        //                  importance, distinct sound)
+        //   • barrier_* → barrier reports channel
+        //   • everything else (task / attendance / leave / schedule)
+        //                → standard task-notifications channel
+        final type = (data['type'] ?? '').toString();
+        if (type == 'hr_alert') {
+          _showHrSystemAlertNotification(title: title, body: body);
+        } else if (type.startsWith('barrier')) {
+          _showLocalNotification(title: title, body: body);
+        } else {
+          _showTaskNotification(title: title, body: body);
+        }
       }
     });
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage msg) {

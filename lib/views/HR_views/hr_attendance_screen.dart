@@ -7,6 +7,7 @@ import '../../models/attendance_model.dart';
 import '../../viewmodels/attendance_viewmodel.dart';
 import '../../viewmodels/employee_viewmodel.dart';
 import 'hr_monthly_attendance_screen.dart';
+import 'hr_work_hour_overrides_screen.dart';
 
 // ─── Responsive breakpoints ───────────────────────────────────────────────────
 abstract class _BP {
@@ -2027,6 +2028,45 @@ class _HRAttendanceAppBar extends StatelessWidget {
                           if (!isMobile) ...[
                             const SizedBox(width: 6),
                             const Text('Monthly'),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(width: 6),
+
+                  // Schedules button (icon only on mobile)
+                  Tooltip(
+                    message: 'Custom work hours per employee',
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                const HRWorkHourOverridesScreen(),
+                          ),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFEDE9FE),
+                        foregroundColor: const Color(0xFF6D28D9),
+                        elevation: 0,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isMobile ? 10 : 14,
+                          vertical: 8,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.schedule_rounded, size: 18),
+                          if (!isMobile) ...[
+                            const SizedBox(width: 6),
+                            const Text('Schedules'),
                           ],
                         ],
                       ),

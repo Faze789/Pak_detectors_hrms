@@ -12,6 +12,7 @@ import '../models/office_settings_model.dart';
 import '../models/branch_model.dart';
 import 'branch_service.dart';
 import 'office_settings_service.dart';
+import 'work_hour_override_service.dart';
 
 class GeofenceException implements Exception {
   final String message;
@@ -457,6 +458,37 @@ class AttendanceService {
 
   // ── CHECK-IN ──────────────────────────────────────────────────────────────
 
+  /// Hard daily cutoff after which check-in (and check-out) are blocked at
+  /// every layer. Mirrors the existing check-out button cutoff on the
+  /// attendance screen and the `markAbsentAtSixPM` Cloud Function so the
+  /// three stay locked together.
+  static const int dailyCutoffHour = 18;
+  static const int dailyCutoffMinute = 30;
+
+  /// True when [now] is at or after the **default** daily cutoff (6:30 PM).
+  /// Use [isPastDailyCutoffFor] instead when you know the employee — it
+  /// honours per-employee work-hour overrides set by HR.
+  static bool isPastDailyCutoff(DateTime now) =>
+      now.hour > dailyCutoffHour ||
+      (now.hour == dailyCutoffHour && now.minute >= dailyCutoffMinute);
+
+  /// Per-employee cutoff helper. Looks up the active work-hour override
+  /// for ([userId], [now])'s date; if one exists, the cutoff slides to
+  /// `override.endHour:endMinute + 30 min`. Otherwise falls back to the
+  /// global 6:30 PM cutoff.
+  Future<bool> isPastDailyCutoffFor(String userId, DateTime now) async {
+    if (userId.trim().isEmpty) return isPastDailyCutoff(now);
+    try {
+      final override = await _overrideService.activeFor(userId, now);
+      if (override != null) return override.isPastDailyCutoff(now);
+    } catch (_) {
+      // fall through to default on any lookup failure
+    }
+    return isPastDailyCutoff(now);
+  }
+
+  final WorkHourOverrideService _overrideService = WorkHourOverrideService();
+
   Future<AttendanceModel> checkIn(
     String userId, {
     required double lat,
@@ -470,6 +502,44 @@ class AttendanceService {
       throw ArgumentError(
         'AttendanceService.checkIn requires a non-empty userId.',
       );
+    }
+
+    // Hard cutoff at 6:30 PM. After this point the `markAbsentAtSixPM`
+    // cron will record today as absent; allowing a check-in here would
+    // overwrite that record on the next archive write.
+    // AFTER
+    final _now = DateTime.now();
+
+    // ── Per-employee window check ──────────────────────────────────────────
+    // Fetch the active override first so both bounds use the same object.
+    final activeOv = await _overrideService.activeFor(userId, _now);
+
+    // 1. Too early? (before override.workStart OR before 8:00 AM default)
+    final bool tooEarly;
+    if (activeOv != null) {
+      tooEarly =
+          _now.hour < activeOv.workStartHour ||
+          (_now.hour == activeOv.workStartHour &&
+              _now.minute < activeOv.workStartMinute);
+    } else {
+      tooEarly = _now.hour < 8; // global default: window opens at 8 AM
+    }
+    if (tooEarly) {
+      final opensAt = activeOv != null
+          ? '${activeOv.workStartHour}:${activeOv.workStartMinute.toString().padLeft(2, '0')}'
+          : '8:00';
+      throw StateError(
+        'Check-in window has not opened yet. '
+        'Your shift starts at $opensAt. Try again then.',
+      );
+    }
+
+    // 2. Too late? (past override cutoff OR past global 6:30 PM)
+    final bool tooLate = activeOv != null
+        ? activeOv.isPastDailyCutoff(_now)
+        : isPastDailyCutoff(_now);
+    if (tooLate) {
+      throw StateError('Check-in window closed for today. Try again tomorrow.');
     }
 
     final today = DateTimeUtils.startOfDay(DateTime.now());
@@ -510,6 +580,17 @@ class AttendanceService {
     final settings = await getOfficeSettings();
     final leave = await fetchApprovedLeaveModel(userId, today);
 
+    // Block check-in entirely for full-day approved leave. The day already
+    // belongs to the leave — overwriting it with a "checkedIn" record
+    // would corrupt the archive. First-half (afternoon check-in) and
+    // second-half (morning check-in then 1 PM departure) leaves still
+    // allow a check-in, handled below.
+    if (leave != null && !leave.isFirstHalf && !leave.isSecondHalf) {
+      throw StateError(
+        'You are on approved leave today. Check-in is not allowed.',
+      );
+    }
+
     AttendanceStatus status = AttendanceStatus.checkedIn;
     String? leaveRequestId;
     String? leaveType;
@@ -519,17 +600,24 @@ class AttendanceService {
       leaveRequestId = leave.id;
       leaveType = leave.duration.value;
     } else {
-      // Late is now strictly after 11:00 AM
+      // Honor any HR-defined work-hour override for this employee + date.
+      // When an override is active, the late boundary becomes
+      // override.workStart + 15 min grace; otherwise it's the office
+      // default (settings.workStartHour + 15 min).
+      final override = await _overrideService.activeFor(userId, now);
+      final startHour = override?.workStartHour ?? settings.workStartHour;
+      final startMinute = override?.workStartMinute ?? 0;
       final isLate =
-          now.hour > settings.workStartHour ||
-          (now.hour == settings.workStartHour && now.minute > 15);
+          now.hour > startHour ||
+          (now.hour == startHour && now.minute > startMinute + 15);
 
       if (isLate) {
         status = AttendanceStatus.late;
         debugPrint(
           '[Attendance] Late check-in at '
           '${now.hour}:${now.minute.toString().padLeft(2, '0')} '
-          '(Grace period ends at ${settings.workStartHour}:15)',
+          '(Grace ends at $startHour:${(startMinute + 15).toString().padLeft(2, '0')}'
+          '${override != null ? ', custom shift' : ''})',
         );
       }
     }
@@ -637,9 +725,16 @@ class AttendanceService {
       final settings = await getOfficeSettings();
       final checkInHour = current.checkInTime!.hour;
       final checkInMin = current.checkInTime!.minute;
+      // Use the override active on the check-in date if any.
+      final override = await _overrideService.activeFor(
+        userId,
+        current.checkInTime!,
+      );
+      final startHour = override?.workStartHour ?? settings.workStartHour;
+      final startMinute = override?.workStartMinute ?? 0;
       final wasLate =
-          checkInHour > settings.workStartHour ||
-          (checkInHour == settings.workStartHour && checkInMin > 0);
+          checkInHour > startHour ||
+          (checkInHour == startHour && checkInMin > startMinute);
       finalStatus = wasLate
           ? AttendanceStatus.late
           : AttendanceStatus.checkedOut;
@@ -690,6 +785,30 @@ class AttendanceService {
     String userId,
     DateTime date,
   ) async {
+    // The active leave-request flow (submit + lead/HR review) writes to
+    // `request_for_leave` with field `uid` (not `userId`). The older
+    // `leaves` collection is queried as a fallback for any leftover docs
+    // from the legacy path. First match wins.
+    try {
+      final reqSnap = await _db
+          .collection('request_for_leave')
+          .where('uid', isEqualTo: userId)
+          .where('status', isEqualTo: 'approved')
+          .where('startDate', isLessThanOrEqualTo: Timestamp.fromDate(date))
+          .where('endDate', isGreaterThanOrEqualTo: Timestamp.fromDate(date))
+          .limit(1)
+          .get();
+      if (reqSnap.docs.isNotEmpty) {
+        final data = Map<String, dynamic>.from(reqSnap.docs.first.data());
+        // Normalize uid → userId so LeaveModel.fromMap reads the right field.
+        if (data['userId'] == null && data['uid'] != null) {
+          data['userId'] = data['uid'];
+        }
+        return LeaveModel.fromMap(data, id: reqSnap.docs.first.id);
+      }
+    } catch (e) {
+      debugPrint('[AttendanceService] request_for_leave query error: $e');
+    }
     try {
       final snap = await _leaves
           .where('userId', isEqualTo: userId)

@@ -41,14 +41,18 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
   int? _customAssignedDays; // This will hold the "divided by 7" result
 
   static const List<String> _departments = [
-    'IT',
+    'Sales',
     'Marketing',
+    'Digital marketing',
+    'Technology',
+    'Assembly and production',
+    'IT (Information Technologies)',
+    'Engineering',
     'Finance',
     'HR',
-    'Sales',
-    'Operations',
-    'Design',
     'Support',
+    'R&D',
+    'Design',
   ];
 
   final Map<String, int> _durations = {
