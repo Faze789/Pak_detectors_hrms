@@ -8,6 +8,7 @@ import 'package:hrms_app/views/HR_views/hr_attendance_screen.dart';
 import 'package:hrms_app/views/HR_views/hr_branch_management.dart';
 import 'package:hrms_app/views/HR_views/HRLeaveApprovalsScreen.dart';
 import 'package:hrms_app/views/HR_views/company_letters_screen.dart';
+import 'package:hrms_app/views/HR_views/hr_documents_screen.dart';
 import 'package:hrms_app/views/HR_views/hr_report_screen.dart';
 import 'package:hrms_app/views/HR_views/payroll_screen.dart';
 import 'package:hrms_app/views/HR_views/recruitment_screen.dart';
@@ -138,7 +139,6 @@ class _HRDashboardWithSidebarState extends State<HRDashboardWithSidebar> {
 
     const comingSoon = {
       'reports': 'Reports',
-      'documents': 'Documents',
       'help': 'Help Center',
     };
 
@@ -195,6 +195,8 @@ class _HRDashboardWithSidebarState extends State<HRDashboardWithSidebar> {
         return HRMeetingsScreen(hrUserId: _hrUserId, hrUserName: _hrUserName);
       case 'company-letters':
         return const CompanyLettersScreen();
+      case 'documents':
+        return const HRDocumentsScreen();
       default:
         return Center(
           child: Text(

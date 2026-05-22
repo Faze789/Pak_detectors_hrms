@@ -6,10 +6,12 @@ import '../../models/attendance_model.dart';
 import '../../models/employee_model.dart';
 import '../../models/payroll_model.dart';
 import '../../viewmodels/attendance_viewmodel.dart';
+import '../../viewmodels/document_viewmodel.dart';
 import '../../viewmodels/employee_viewmodel.dart';
 import '../../viewmodels/leave_viewmodel.dart';
 import '../../viewmodels/performance_viewmodel.dart';
 import '../../models/performance_models.dart';
+import '../employee_tabs/documents_tab.dart';
 import '../employee_tabs/leaves_tab.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -37,7 +39,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 6, vsync: this);
 
     final now = DateTime.now();
     _selectedYear = now.year;
@@ -46,7 +48,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<LeaveViewModel>().initForEmployee(widget.userId);
       context.read<EmployeeViewModel>().loadEmployees(widget.userId);
-      // _loadAttendance();
+      context.read<DocumentViewModel>().loadDocuments(employeeId: widget.userId);
     });
   }
 
@@ -240,6 +242,10 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                         icon: Icon(Icons.attach_money_outlined, size: 18),
                         text: 'Salary',
                       ),
+                      Tab(
+                        icon: Icon(Icons.folder_outlined, size: 18),
+                        text: 'Documents',
+                      ),
                     ],
                   ),
                 ),
@@ -269,8 +275,17 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                   isHR: (employee?.role ?? '').toLowerCase() == 'hr',
                 ),
                 _PerformanceTab(userId: widget.userId),
-                // ✅ Real payslip data
                 _SalaryTab(userId: widget.userId),
+                if (employee != null)
+                  DocumentsTab(
+                    employee: employee,
+                    documentVM: context.read<DocumentViewModel>(),
+                    allowManage: false,
+                  )
+                else
+                  const Center(
+                    child: Text('Loading profile…'),
+                  ),
               ],
             ),
           );

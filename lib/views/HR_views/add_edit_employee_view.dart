@@ -4,7 +4,9 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/employee_model.dart';
+import '../../viewmodels/document_viewmodel.dart';
 import '../../viewmodels/employee_viewmodel.dart';
+import '../../widgets/employee_attachment_section.dart';
 
 enum EmployeeFormMode { add, edit }
 
@@ -109,6 +111,15 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
     status = widget.employee?.status ?? EmployeeStatus.active;
     _selectedStation = widget.employee?.station ?? 'in_station';
     _selectedGender = widget.employee?.gender;
+
+    if (isEdit && widget.employee != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        context
+            .read<DocumentViewModel>()
+            .loadDocuments(employeeId: widget.employee!.uid);
+      });
+    }
   }
 
   @override
@@ -731,6 +742,29 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
                   ],
 
                   const SizedBox(height: 24),
+
+                  if (isEdit && widget.employee != null) ...[
+                    EmployeeAttachmentSection(employee: widget.employee!),
+                    const SizedBox(height: 24),
+                  ] else if (!isEdit) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text(
+                        'Save the employee first, then edit their profile to '
+                        'upload offer letters and attachments.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
 
                   // ── Save Button ──────────────────────────────────────────
                   SizedBox(

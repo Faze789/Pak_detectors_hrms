@@ -7,16 +7,23 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../models/document_model.dart';
 import '../../models/employee_model.dart';
 import '../../viewmodels/document_viewmodel.dart';
+import '../../widgets/document_file_icon.dart';
 import '../../widgets/stat_card.dart';
 
 class DocumentsTab extends StatefulWidget {
   final Employee employee;
   final DocumentViewModel documentVM;
 
+  /// HR can upload/delete; employees can only view their own files.
+  final bool allowManage;
+  final DocumentCategory defaultCategory;
+
   const DocumentsTab({
     super.key,
     required this.employee,
     required this.documentVM,
+    this.allowManage = true,
+    this.defaultCategory = DocumentCategory.offerLetter,
   });
 
   @override
@@ -37,7 +44,7 @@ class _DocumentsTabState extends State<DocumentsTab> {
   // ── Upload sheet ───────────────────────────────────────────────────────────
   Future<void> _showUploadSheet() async {
     final titleController = TextEditingController();
-    DocumentCategory selectedCategory = DocumentCategory.contract;
+    DocumentCategory selectedCategory = widget.defaultCategory;
 
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
@@ -73,7 +80,12 @@ class _DocumentsTabState extends State<DocumentsTab> {
                 'Upload Document',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 6),
+              const Text(
+                'PDF, DOCX, JPG, or PNG — e.g. offer letter',
+                style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+              ),
+              const SizedBox(height: 16),
 
               // Title field
               TextField(
@@ -160,6 +172,7 @@ class _DocumentsTabState extends State<DocumentsTab> {
 
     final success = await widget.documentVM.uploadDocument(
       employeeId: widget.employee.uid,
+      employeeName: widget.employee.name,
       title: titleController.text,
       category: selectedCategory,
     );
@@ -199,7 +212,10 @@ class _DocumentsTabState extends State<DocumentsTab> {
     );
     if (ok != true) return;
 
-    final success = await widget.documentVM.deleteDocument(doc.id);
+    final success = await widget.documentVM.deleteDocument(
+      doc.id,
+      employeeId: widget.employee.uid,
+    );
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -283,51 +299,83 @@ class _DocumentsTabState extends State<DocumentsTab> {
               const SizedBox(height: 12),
             ],
 
-            // ── Upload card ────────────────────────────────────────────────
-            Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFFF0F9FF),
-                border: Border.all(color: const Color(0xFF0EA5E9)),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  const Icon(
-                    Icons.cloud_upload,
-                    color: Color(0xFF0284C7),
-                    size: 40,
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Add Documents',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF0F172A),
+            if (widget.allowManage) ...[
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0F9FF),
+                  border: Border.all(color: const Color(0xFF0EA5E9)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    const Icon(
+                      Icons.cloud_upload,
+                      color: Color(0xFF0284C7),
+                      size: 40,
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Upload contracts, certificates, and ID documents',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                  ),
-                  const SizedBox(height: 14),
-                  ElevatedButton.icon(
-                    onPressed: vm.isUploading ? null : _showUploadSheet,
-                    icon: const Icon(Icons.upload_file),
-                    label: Text(vm.isUploading ? 'Uploading…' : 'Upload File'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0284C7),
-                      foregroundColor: Colors.white,
-                      disabledBackgroundColor: const Color(0xFF7DD3FC),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Add Documents',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF0F172A),
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Offer letters, contracts, ID — PDF, DOCX, JPG, PNG',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                    ),
+                    const SizedBox(height: 14),
+                    ElevatedButton.icon(
+                      onPressed: vm.isUploading ? null : _showUploadSheet,
+                      icon: const Icon(Icons.upload_file),
+                      label: Text(
+                        vm.isUploading ? 'Uploading…' : 'Upload File',
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0284C7),
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: const Color(0xFF7DD3FC),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
+            ] else
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      size: 18,
+                      color: Color(0xFF64748B),
+                    ),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Documents uploaded by HR appear here. Tap Open to view.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
 
             // ── Documents list ─────────────────────────────────────────────
             Container(
@@ -404,6 +452,7 @@ class _DocumentsTabState extends State<DocumentsTab> {
                       itemCount: vm.documents.length,
                       itemBuilder: (_, i) => _DocumentCard(
                         document: vm.documents[i],
+                        allowDelete: widget.allowManage,
                         onDelete: () => _confirmDelete(vm.documents[i]),
                       ),
                     ),
@@ -424,16 +473,13 @@ class _DocumentsTabState extends State<DocumentsTab> {
 class _DocumentCard extends StatelessWidget {
   final OfficialDocument document;
   final VoidCallback onDelete;
+  final bool allowDelete;
 
-  const _DocumentCard({required this.document, required this.onDelete});
-
-  IconData _categoryIcon(DocumentCategory cat) => switch (cat) {
-    DocumentCategory.contract => Icons.description,
-    DocumentCategory.identity => Icons.badge,
-    DocumentCategory.certificate => Icons.school,
-    DocumentCategory.policy => Icons.policy,
-    DocumentCategory.other => Icons.file_present,
-  };
+  const _DocumentCard({
+    required this.document,
+    required this.onDelete,
+    this.allowDelete = true,
+  });
 
   Color _statusColor(DocumentStatus s) => switch (s) {
     DocumentStatus.verified => const Color(0xFF10B981),
@@ -441,9 +487,29 @@ class _DocumentCard extends StatelessWidget {
     DocumentStatus.expired => const Color(0xFFEF4444),
   };
 
-  Future<void> _openUrl(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) await launchUrl(uri);
+  // Pass BuildContext so we can show a Snackbar if it fails
+  Future<void> _openUrl(BuildContext context, String url) async {
+    try {
+      final uri = Uri.parse(url);
+
+      // Force it to open in the OS browser/PDF viewer rather than an in-app webview
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+
+      if (!launched && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open document link.')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Invalid document URL: $url')));
+      }
+    }
   }
 
   @override
@@ -476,7 +542,7 @@ class _DocumentCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
-                  _categoryIcon(document.category),
+                  documentFileIcon(document),
                   color: const Color(0xFF2563EB),
                 ),
               ),
@@ -492,20 +558,22 @@ class _DocumentCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const PopupMenuItem(
-                    value: 'delete',
-                    child: Row(
-                      children: [
-                        Icon(Icons.delete, size: 18, color: Colors.red),
-                        SizedBox(width: 8),
-                        Text('Delete', style: TextStyle(color: Colors.red)),
-                      ],
+                  if (allowDelete)
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete, size: 18, color: Colors.red),
+                          SizedBox(width: 8),
+                          Text('Delete', style: TextStyle(color: Colors.red)),
+                        ],
+                      ),
                     ),
-                  ),
                 ],
+                // inside PopupMenuButton onSelected:
                 onSelected: (val) {
-                  if (val == 'open') _openUrl(document.fileUrl);
-                  if (val == 'delete') onDelete();
+                  if (val == 'open') _openUrl(context, document.fileUrl);
+                  if (val == 'delete' && allowDelete) onDelete();
                 },
               ),
             ],
@@ -529,7 +597,7 @@ class _DocumentCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  document.category.displayName,
+                  '${document.category.displayName} · ${documentTypeLabel(document)}',
                   style: const TextStyle(
                     fontSize: 11,
                     color: Color(0xFF64748B),
