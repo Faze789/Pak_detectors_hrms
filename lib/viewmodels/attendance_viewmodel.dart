@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 
 import '../models/attendance_model.dart';
 import '../models/leave_model.dart';
+import '../models/leave_policy.dart';
+import '../models/leave_request_model.dart';
 import '../models/office_settings_model.dart';
 import '../models/work_hour_override_model.dart';
 import '../services/attendance_service.dart';
@@ -46,6 +48,7 @@ class AttendanceViewModel extends ChangeNotifier {
     if (o != null && o.coversDate(now)) return o.isPastDailyCutoff(now);
     return AttendanceService.isPastDailyCutoff(now);
   }
+
   LeaveModel? _todayLeave;
   bool _isWeekend = false;
   String? _holidayName;
@@ -308,53 +311,25 @@ class AttendanceViewModel extends ChangeNotifier {
     return AttendanceStatus.checkedIn;
   }
 
-  /// Maximum approved+pending leave days an employee may take in one
-  /// calendar year. Spec: 4 days/year. Enforced client-side at submit
-  /// time; the cap is also reflected by `Employee.annualLeaveQuota`.
-  static const int annualLeaveCap = 4;
-
   Future<bool> submitLeaveRequest(
     String uid,
     DateTime start,
     DateTime end,
-    int days,
-  ) async {
+    int days, {
+    // Categorical leave-type tag picked from the request UI dropdown.
+    // Optional and informational only — does not change the per-quarter
+    // cap (the regular bucket from LeavePolicy still applies).
+    String? leaveType,
+    String? leaveTypeLabel,
+    String? reason,
+  }) async {
     try {
-      // ── Annual cap pre-check ──────────────────────────────────────────
-      // Sum approved + pending leave days this calendar year. If the new
-      // request would push the total past `annualLeaveCap`, refuse with a
-      // clear, actionable message instead of silently letting the request
-      // through to be approved beyond the limit.
-      final now = DateTime.now();
-      final existingSnap = await FirebaseFirestore.instance
-          .collection('request_for_leave')
-          .where('uid', isEqualTo: uid)
-          .get();
-      int usedThisYear = 0;
-      for (final doc in existingSnap.docs) {
-        final data = doc.data();
-        final status = (data['status'] ?? '').toString();
-        if (status != 'approved' && status != 'pending') continue;
-        final startTs = data['startDate'];
-        if (startTs is! Timestamp) continue;
-        final startDt = startTs.toDate();
-        if (startDt.year != now.year) continue;
-        usedThisYear += (data['totalDays'] as num? ?? 0).toInt();
-      }
-      if (usedThisYear + days > annualLeaveCap) {
-        final remaining = (annualLeaveCap - usedThisYear).clamp(0, annualLeaveCap);
-        throw Exception(
-          'Annual leave cap is $annualLeaveCap days. '
-          'You have already used $usedThisYear day(s) this year '
-          'and have $remaining left — requesting $days more would exceed the limit.',
-        );
-      }
-
       final Set<String> leadIdsToNotify = {};
       String actualEmpId = uid;
       String userName = 'Employee';
+      bool isInStation = true; // default per policy
 
-      // 1. Get Employee Details (Name, EMP_ID, Primary Lead if any)
+      // 1. Get Employee Details (Name, EMP_ID, Primary Lead, Station)
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(uid)
@@ -365,6 +340,53 @@ class AttendanceViewModel extends ChangeNotifier {
         userName = (userData['name'] ?? 'Employee').toString();
         final primaryLead = (userData['lead_id'] ?? '').toString();
         if (primaryLead.isNotEmpty) leadIdsToNotify.add(primaryLead);
+        // station defaults to in_station when unset.
+        final stationRaw = (userData['station'] ?? 'in_station').toString();
+        isInStation = stationRaw != 'out_station';
+      }
+
+      // ── Per-quarter / per-station cap pre-check ───────────────────────
+      // Policy:
+      //   • In-station employees:    3 days per QUARTER
+      //   • Out-of-station employees: 4 days per QUARTER
+      // (Marriage / bereavement / medical / maternity / paternity have
+      // separate quotas — wire those in alongside a leave-type picker.)
+      //
+      // The "quarter" is the calendar quarter that contains [start]. If
+      // a request spans two quarters, we charge it to the starting one.
+      final quotaPerQuarter = LeavePolicy.regularQuotaPerQuarter(
+        isInStation: isInStation,
+      );
+      final qBounds = LeavePolicy.quarterBounds(start);
+      final existingSnap = await FirebaseFirestore.instance
+          .collection('request_for_leave')
+          .where('uid', isEqualTo: uid)
+          .get();
+      int usedThisQuarter = 0;
+      for (final doc in existingSnap.docs) {
+        final data = doc.data();
+        final status = (data['status'] ?? '').toString();
+        if (status != 'approved' && status != 'pending') continue;
+        final startTs = data['startDate'];
+        if (startTs is! Timestamp) continue;
+        final startDt = startTs.toDate();
+        if (startDt.isBefore(qBounds.start) || startDt.isAfter(qBounds.end)) {
+          continue;
+        }
+        usedThisQuarter += (data['totalDays'] as num? ?? 0).toInt();
+      }
+      if (usedThisQuarter + days > quotaPerQuarter) {
+        final stationLabel = isInStation ? 'in-station' : 'out-of-station';
+        final remaining = (quotaPerQuarter - usedThisQuarter).clamp(
+          0,
+          quotaPerQuarter,
+        );
+        throw Exception(
+          'Quarterly leave cap for $stationLabel employees is '
+          '$quotaPerQuarter days. You have already used $usedThisQuarter '
+          'day(s) this quarter and have $remaining left — requesting '
+          '$days more would exceed the limit.',
+        );
       }
 
       // 2. Query ALL Active Tasks to check for multi-leads.
@@ -423,6 +445,10 @@ class AttendanceViewModel extends ChangeNotifier {
             'leadsNotified': notificationTargets,
             'sentToHR': leadIdsToNotify.isEmpty,
             'createdAt': FieldValue.serverTimestamp(),
+            if (leaveType != null) 'leaveType': leaveType,
+            if (leaveTypeLabel != null) 'leaveTypeLabel': leaveTypeLabel,
+            if (reason != null && reason.trim().isNotEmpty)
+              'reason': reason.trim(),
           });
 
       // 5. Send Notification(s) using your existing task_notifications structure
@@ -509,8 +535,10 @@ class AttendanceViewModel extends ChangeNotifier {
       // Used by isPastDailyCutoffSync to slide the lockout boundary in
       // the UI without any async work in build().
       try {
-        todayOverride =
-            await _overrideService.activeFor(userId, DateTime.now());
+        todayOverride = await _overrideService.activeFor(
+          userId,
+          DateTime.now(),
+        );
       } catch (_) {
         todayOverride = null;
       }
@@ -958,10 +986,238 @@ class AttendanceViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // HR-side leave-review API
+  //
+  // - streamAllLeaveRequests   →  real-time list for HRLeaveApprovalsScreen
+  // - streamPendingLeaveCount  →  badge count
+  // - hrReviewLeaveRequest     →  approve / decline a request, push FCM,
+  //                               and backfill `attendance_archive` for the
+  //                               approved range so HR Monthly reflects the
+  //                               leave instantly.
+  // ══════════════════════════════════════════════════════════════════════════
+
+  Stream<List<LeaveRequestModel>> streamAllLeaveRequests() {
+    return FirebaseFirestore.instance
+        .collection('request_for_leave')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map(
+          (snap) => snap.docs.map(LeaveRequestModel.fromDoc).toList(),
+        );
+  }
+
+  Stream<int> streamPendingLeaveCount() {
+    return FirebaseFirestore.instance
+        .collection('request_for_leave')
+        .where('status', isEqualTo: 'pending')
+        .snapshots()
+        .map((s) => s.docs.length);
+  }
+
+  /// HR approves or declines a leave request.
+  /// • Updates `request_for_leave/{id}`.
+  /// • Writes a live in-app card to `notifications/{employeeUid}/items`.
+  /// • Pushes an FCM notification to the employee via `task_notifications`.
+  /// • On approval, backfills `attendance_archive` so every weekday in
+  ///   the leave range shows `onLeave` immediately (no waiting for the
+  ///   6:30 PM cron).
+  Future<bool> hrReviewLeaveRequest({
+    required String requestId,
+    required String employeeUid,
+    required String employeeName,
+    required String hrEmpId,
+    required String hrName,
+    required String newStatus, // 'approved' | 'declined'
+    String? rejectionReason,
+  }) async {
+    try {
+      final now = FieldValue.serverTimestamp();
+      final batch = FirebaseFirestore.instance.batch();
+
+      // 1. Update the leave request.
+      final reqRef = FirebaseFirestore.instance
+          .collection('request_for_leave')
+          .doc(requestId);
+      final update = <String, dynamic>{
+        'status': newStatus,
+        'hrReviewed': true,
+        'reviewedBy': hrEmpId,
+        'reviewedByName': hrName,
+        'reviewedAt': now,
+        'notified': true,
+      };
+      if (newStatus == 'declined' && rejectionReason != null) {
+        update['rejectionReason'] = rejectionReason;
+      }
+      batch.update(reqRef, update);
+
+      // 2. In-app notification card (LeaveNotificationsWidget reads this).
+      final notifRef = FirebaseFirestore.instance
+          .collection('notifications')
+          .doc(employeeUid)
+          .collection('items')
+          .doc();
+      final title = newStatus == 'approved'
+          ? '✅ Leave Approved'
+          : '❌ Leave Declined';
+      final body = newStatus == 'approved'
+          ? 'Your leave request has been approved by HR ($hrName).'
+          : 'Your leave request was declined by HR ($hrName).'
+                '${rejectionReason != null ? ' Reason: $rejectionReason' : ''}';
+      batch.set(notifRef, {
+        'title': title,
+        'body': body,
+        'type': 'leave_review',
+        'requestId': requestId,
+        'status': newStatus,
+        'reviewedByName': hrName,
+        if (rejectionReason != null) 'rejectionReason': rejectionReason,
+        'read': false,
+        'createdAt': now,
+      });
+
+      await batch.commit();
+
+      // 3. FCM push via task_notifications (lead_id routed by emp_id).
+      try {
+        final empDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(employeeUid)
+            .get();
+        final empId = (empDoc.data()?['emp_id'] ?? '').toString();
+        if (empId.isNotEmpty) {
+          await FirebaseFirestore.instance.collection('task_notifications').add({
+            'lead_id': empId,
+            'title': title,
+            'body': body,
+            'type': 'leave_review',
+            'referenceId': requestId,
+            'createdAt': FieldValue.serverTimestamp(),
+            'read': false,
+          });
+        }
+      } catch (e) {
+        debugPrint('hrReviewLeaveRequest task_notifications push failed: $e');
+      }
+
+      // 4. On approval: backfill attendance_archive for each weekday.
+      if (newStatus == 'approved') {
+        try {
+          final reqSnap = await reqRef.get();
+          final reqData = reqSnap.data();
+          if (reqData != null) {
+            final startTs = reqData['startDate'];
+            final endTs = reqData['endDate'];
+            final leaveType =
+                (reqData['leaveType'] ?? 'fullDay').toString();
+            if (startTs is Timestamp && endTs is Timestamp) {
+              await _backfillLeaveDays(
+                userId: employeeUid,
+                start: startTs.toDate(),
+                end: endTs.toDate(),
+                leaveType: leaveType,
+                leaveRequestId: requestId,
+              );
+            }
+          }
+        } catch (e) {
+          debugPrint('hrReviewLeaveRequest archive backfill failed: $e');
+        }
+      }
+
+      return true;
+    } catch (e) {
+      debugPrint('hrReviewLeaveRequest error: $e');
+      return false;
+    }
+  }
+
+  /// Writes a status=onLeave entry into attendance_archive/{uid}_{YYYY}_{MM}
+  /// for every weekday between [start] and [end] inclusive. Lets HR's
+  /// Monthly view reflect the approval immediately.
+  Future<void> _backfillLeaveDays({
+    required String userId,
+    required DateTime start,
+    required DateTime end,
+    required String leaveType, // 'fullDay' | 'firstHalf' | 'secondHalf'
+    required String leaveRequestId,
+  }) async {
+    String statusForDuration(String d) {
+      switch (d) {
+        case 'firstHalf':
+          return 'firstHalfLeave';
+        case 'secondHalf':
+          return 'secondHalfLeave';
+        default:
+          return 'onLeave';
+      }
+    }
+
+    final status = statusForDuration(leaveType);
+    final now = DateTime.now();
+    final firstDay = DateTime(start.year, start.month, start.day);
+    final lastDay = DateTime(end.year, end.month, end.day);
+
+    WriteBatch batch = FirebaseFirestore.instance.batch();
+    var batchCount = 0;
+    for (var cur = firstDay;
+        !cur.isAfter(lastDay);
+        cur = cur.add(const Duration(days: 1))) {
+      if (cur.weekday == DateTime.saturday ||
+          cur.weekday == DateTime.sunday) {
+        continue;
+      }
+      final monthPad = cur.month.toString().padLeft(2, '0');
+      final docId = '${userId}_${cur.year}_$monthPad';
+      final dayKey =
+          '${cur.year}-$monthPad-${cur.day.toString().padLeft(2, '0')}';
+      final ref = FirebaseFirestore.instance
+          .collection('attendance_archive')
+          .doc(docId);
+      batch.set(
+        ref,
+        {
+          'userId': userId,
+          'year': cur.year,
+          'month': cur.month,
+          'days': {
+            dayKey: {
+              'userId': userId,
+              'date': Timestamp.fromDate(cur),
+              'dateString': dayKey,
+              'status': status,
+              'leaveType': leaveType,
+              'leaveRequestId': leaveRequestId,
+              'checkInTime': null,
+              'checkOutTime': null,
+              'breaks': [],
+              'totalWorkSeconds': 0,
+              'totalBreakSeconds': 0,
+              'autoMarkedAt': now.toIso8601String(),
+              'autoMarkedBy': 'hrReviewLeaveRequest',
+            },
+          },
+        },
+        SetOptions(merge: true),
+      );
+      batchCount++;
+      // Firestore caps batches at 500. WriteBatch is single-use after
+      // commit, so we re-create it on each flush.
+      if (batchCount >= 400) {
+        await batch.commit();
+        batch = FirebaseFirestore.instance.batch();
+        batchCount = 0;
+      }
+    }
+    if (batchCount > 0) await batch.commit();
+  }
+
   @override
   void dispose() {
     _uiTimer?.cancel();
     _cleanupTimer?.cancel();
     super.dispose();
   }
+
 }

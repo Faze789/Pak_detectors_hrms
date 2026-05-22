@@ -10,9 +10,11 @@ import 'package:intl/intl.dart';
 
 import '../../models/attendance_model.dart';
 import '../../models/leave_model.dart';
-import '../../services/attendance_service.dart';
+import '../../models/leave_policy.dart';
 import '../../viewmodels/attendance_viewmodel.dart';
 import '../../viewmodels/auth_viewmodel.dart';
+import '../../widgets/request_leave_sheet.dart';
+import 'my_leave_requests_screen.dart';
 
 // ─── Responsive breakpoints ───────────────────────────────────────────────────
 abstract class _BP {
@@ -126,67 +128,37 @@ class _AttendanceScreenState extends State<AttendanceScreen>
     return count;
   }
 
-  /// Opens Calendar for Leave Request (1 to 4 working days)
+  /// Opens the leave-request bottom sheet. The sheet handles
+  /// leave-type selection (gender-aware), date range, optional reason,
+  /// and a "Read policy" button. We only run the submission flow here.
   Future<void> _onRequestLeaveTap(
     BuildContext context,
     AttendanceViewModel vm,
   ) async {
-    final now = DateTime.now();
-    final tomorrow = DateTime(now.year, now.month, now.day + 1);
-    final picked = await showDateRangePicker(
-      context: context,
-      firstDate: tomorrow, //
-      lastDate: now.add(const Duration(days: 365)),
-      helpText: 'Select Leave Dates (Max 4 working days)',
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Color(0xFF2563EB),
-              onPrimary: Colors.white,
-              onSurface: Color(0xFF0F172A),
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
+    final auth = context.read<AuthViewModel>();
+    final uid = auth.currentUser?.uid;
+    if (uid == null || uid.isEmpty) return;
 
-    if (picked == null) return;
-
-    // ─── NEW: Calculate Working Days (Skip Weekends) ────────────────────────
-    int calculateWorkingDays(DateTime start, DateTime end) {
-      int count = 0;
-      // Strip time data to ensure accurate day comparison
-      DateTime current = DateTime(start.year, start.month, start.day);
-      final endDate = DateTime(end.year, end.month, end.day);
-
-      while (!current.isAfter(endDate)) {
-        if (current.weekday != DateTime.saturday &&
-            current.weekday != DateTime.sunday) {
-          count++;
-        }
-        current = current.add(const Duration(days: 1));
+    // Fetch the employee's gender so the leave-type dropdown can show /
+    // hide Maternity / Paternity correctly. Falls back to null on any
+    // error (Maternity/Paternity then hidden, Custom still available).
+    String? gender;
+    try {
+      final userSnap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
+      final raw = userSnap.data()?['gender'];
+      if (raw is String && raw.trim().isNotEmpty) {
+        gender = raw.trim().toLowerCase();
       }
-      return count;
-    }
-
-    final int days = calculateWorkingDays(picked.start, picked.end);
+    } catch (_) {/* ignore — gender stays null */}
 
     if (!mounted) return;
+    final result = await showRequestLeaveSheet(context, gender: gender);
+    if (result == null || !mounted) return;
 
-    // ─── Edge Case: User selected ONLY Saturday/Sunday ──────────────────────
-    if (days == 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Selected dates only fall on weekends.'),
-          backgroundColor: Color(0xFFDC2626),
-        ),
-      );
-      return;
-    }
-
-    if (days > 4) {
+    if (result.workingDays > 4) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -198,7 +170,6 @@ class _AttendanceScreenState extends State<AttendanceScreen>
       return;
     }
 
-    // Show loading indicator during submission
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -207,14 +178,15 @@ class _AttendanceScreenState extends State<AttendanceScreen>
     );
 
     try {
-      final auth = context.read<AuthViewModel>();
-      final uid = auth.currentUser?.uid;
-
-      if (uid != null) {
-        // Calls the new method in AttendanceViewModel
-        // Note: It passes the actual 'days' (excluding weekends)
-        await vm.submitLeaveRequest(uid, picked.start, picked.end, days);
-      }
+      await vm.submitLeaveRequest(
+        uid,
+        result.dateRange.start,
+        result.dateRange.end,
+        result.workingDays,
+        leaveType: result.type.value,
+        leaveTypeLabel: result.type.label,
+        reason: result.reason,
+      );
 
       if (!mounted) return;
       Navigator.pop(context); // Close loading dialog
@@ -222,7 +194,8 @@ class _AttendanceScreenState extends State<AttendanceScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Leave request for $days working day(s) sent successfully.',
+            '${result.type.label} request for ${result.workingDays} '
+            'working day(s) sent successfully.',
           ),
           backgroundColor: const Color(0xFF10B981),
         ),
@@ -651,15 +624,12 @@ class _AttendanceScreenState extends State<AttendanceScreen>
   }
 
   Future<void> _showMyLeaveRequests(BuildContext context, String uid) async {
-    final vm = context.read<AttendanceViewModel>();
-    await vm.fetchMyLeaveRequests(uid);
-    if (!mounted) return;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _MyLeaveRequestsSheet(vm: vm),
+    // Push the live-streaming MyLeaveRequestsScreen instead of the older
+    // one-shot bottom sheet. The new screen subscribes to
+    // request_for_leave for this uid so HR decisions appear instantly,
+    // and renders pending / approved / declined with proper status chips.
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const MyLeaveRequestsScreen()),
     );
   }
 }

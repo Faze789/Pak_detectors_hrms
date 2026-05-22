@@ -100,6 +100,11 @@ class SidebarProvider {
           badge: '3',
           badgeColor: 'amber',
         ),
+        SidebarItem(
+          id: 'company-letters',
+          label: 'Company Letter',
+          icon: Icons.description_outlined,
+        ),
       ],
     ),
     // Reports & Documents
@@ -190,6 +195,11 @@ class SidebarProvider {
             id: 'my-payslips',
             label: 'My Payslips',
             icon: Icons.credit_card_outlined,
+          ),
+          const SidebarItem(
+            id: 'my-letters',
+            label: 'My Letters',
+            icon: Icons.description_outlined,
           ),
         ],
       ),

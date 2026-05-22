@@ -82,8 +82,9 @@ class WorkHourOverrideService {
       WorkHourOverride? winner;
       for (final d in snap.docs) {
         final o = WorkHourOverride.fromMap(d.data(), id: d.id);
-        if (o.startDateKey.compareTo(dateKey) > 0)
+        if (o.startDateKey.compareTo(dateKey) > 0) {
           continue; // starts after today
+        }
         if (o.endDateKey.compareTo(dateKey) < 0) continue; // ended before today
         if (!o.coversDate(date)) continue;
         if (winner == null || o.createdAt.isAfter(winner.createdAt)) {

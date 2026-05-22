@@ -109,8 +109,7 @@ class _HRWorkHourOverridesScreenState extends State<HRWorkHourOverridesScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         title: const Text('Delete override?'),
         content: Text(
           '${DateFormat('d MMM yyyy').format(o.startDate)} – '
@@ -141,9 +140,9 @@ class _HRWorkHourOverridesScreenState extends State<HRWorkHourOverridesScreen> {
       await _refresh();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to delete: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to delete: $e')));
     }
   }
 
@@ -190,7 +189,7 @@ class _HRWorkHourOverridesScreenState extends State<HRWorkHourOverridesScreen> {
                     ),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
-                      value: _selectedUid,
+                      initialValue: _selectedUid,
                       isExpanded: true,
                       decoration: InputDecoration(
                         border: OutlineInputBorder(
@@ -203,8 +202,7 @@ class _HRWorkHourOverridesScreenState extends State<HRWorkHourOverridesScreen> {
                       ),
                       items: employees.map<DropdownMenuItem<String>>((e) {
                         final uid = e.uid;
-                        final name =
-                            e.name.isNotEmpty ? e.name : e.email;
+                        final name = e.name.isNotEmpty ? e.name : e.email;
                         return DropdownMenuItem<String>(
                           value: uid,
                           child: Text(name, overflow: TextOverflow.ellipsis),
@@ -271,8 +269,7 @@ class _HRWorkHourOverridesScreenState extends State<HRWorkHourOverridesScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: const [
-              Icon(Icons.schedule_rounded,
-                  size: 48, color: Color(0xFF94A3B8)),
+              Icon(Icons.schedule_rounded, size: 48, color: Color(0xFF94A3B8)),
               SizedBox(height: 10),
               Text(
                 'No custom hours set.\nThis employee follows the default 9 AM – 6 PM schedule.',
@@ -293,10 +290,7 @@ class _HRWorkHourOverridesScreenState extends State<HRWorkHourOverridesScreen> {
       separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (_, i) {
         final o = _overrides[i];
-        return _OverrideTile(
-          entry: o,
-          onDelete: () => _onDeleteTap(o),
-        );
+        return _OverrideTile(entry: o, onDelete: () => _onDeleteTap(o));
       },
     );
   }
@@ -318,8 +312,8 @@ class _OverrideTile extends StatelessWidget {
     final dateLabel = sameDay
         ? DateFormat('EEE d MMM yyyy').format(entry.startDate)
         : '${DateFormat('d MMM').format(entry.startDate)}'
-            ' → '
-            '${DateFormat('d MMM yyyy').format(entry.endDate)}';
+              ' → '
+              '${DateFormat('d MMM yyyy').format(entry.endDate)}';
     final timeLabel =
         '${_fmtTime(entry.workStartHour, entry.workStartMinute)}'
         '  →  '
@@ -432,7 +426,8 @@ class _AddOverrideSheetState extends State<_AddOverrideSheet> {
       context: context,
       firstDate: DateTime(now.year - 1),
       lastDate: DateTime(now.year + 2),
-      initialDateRange: _range ??
+      initialDateRange:
+          _range ??
           DateTimeRange(
             start: DateTime(now.year, now.month, now.day),
             end: DateTime(now.year, now.month, now.day),
@@ -493,7 +488,9 @@ class _AddOverrideSheetState extends State<_AddOverrideSheet> {
         endDate: _range!.end,
         startTime: _startTime,
         endTime: _endTime,
-        reason: _reasonCtrl.text.trim().isEmpty ? null : _reasonCtrl.text.trim(),
+        reason: _reasonCtrl.text.trim().isEmpty
+            ? null
+            : _reasonCtrl.text.trim(),
       ),
     );
   }
@@ -504,8 +501,8 @@ class _AddOverrideSheetState extends State<_AddOverrideSheet> {
     final rangeLabel = _range == null
         ? 'Pick dates'
         : (_range!.start == _range!.end
-            ? DateFormat('EEE d MMM yyyy').format(_range!.start)
-            : '${DateFormat('d MMM').format(_range!.start)} → ${DateFormat('d MMM yyyy').format(_range!.end)}');
+              ? DateFormat('EEE d MMM yyyy').format(_range!.start)
+              : '${DateFormat('d MMM').format(_range!.start)} → ${DateFormat('d MMM yyyy').format(_range!.end)}');
     return Padding(
       padding: EdgeInsets.only(bottom: bottomInset),
       child: Container(

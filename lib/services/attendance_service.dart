@@ -508,21 +508,21 @@ class AttendanceService {
     // cron will record today as absent; allowing a check-in here would
     // overwrite that record on the next archive write.
     // AFTER
-    final _now = DateTime.now();
+    final now0 = DateTime.now();
 
     // ── Per-employee window check ──────────────────────────────────────────
     // Fetch the active override first so both bounds use the same object.
-    final activeOv = await _overrideService.activeFor(userId, _now);
+    final activeOv = await _overrideService.activeFor(userId, now0);
 
     // 1. Too early? (before override.workStart OR before 8:00 AM default)
     final bool tooEarly;
     if (activeOv != null) {
       tooEarly =
-          _now.hour < activeOv.workStartHour ||
-          (_now.hour == activeOv.workStartHour &&
-              _now.minute < activeOv.workStartMinute);
+          now0.hour < activeOv.workStartHour ||
+          (now0.hour == activeOv.workStartHour &&
+              now0.minute < activeOv.workStartMinute);
     } else {
-      tooEarly = _now.hour < 8; // global default: window opens at 8 AM
+      tooEarly = now0.hour < 8; // global default: window opens at 8 AM
     }
     if (tooEarly) {
       final opensAt = activeOv != null
@@ -536,8 +536,8 @@ class AttendanceService {
 
     // 2. Too late? (past override cutoff OR past global 6:30 PM)
     final bool tooLate = activeOv != null
-        ? activeOv.isPastDailyCutoff(_now)
-        : isPastDailyCutoff(_now);
+        ? activeOv.isPastDailyCutoff(now0)
+        : isPastDailyCutoff(now0);
     if (tooLate) {
       throw StateError('Check-in window closed for today. Try again tomorrow.');
     }

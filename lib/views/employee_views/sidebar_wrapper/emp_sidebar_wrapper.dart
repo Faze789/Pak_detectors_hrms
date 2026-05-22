@@ -6,6 +6,7 @@ import 'package:hrms_app/views/employee_views/lead_leave_approvals_screen.dart';
 import 'package:hrms_app/views/employee_views/submit_report_screen.dart';
 import 'package:hrms_app/views/employee_views/team_reports_screen.dart';
 import 'package:hrms_app/views/employee_views/my_profile_screen.dart';
+import 'package:hrms_app/views/employee_views/my_letters_screen.dart';
 import 'package:hrms_app/views/meetings_screens/employee_meetings_screen.dart';
 import 'package:hrms_app/views/performance_screens/employee_performance_screen.dart';
 import 'package:provider/provider.dart';
@@ -81,6 +82,8 @@ class _EmployeeDashboardWithSidebarState
           employeeId: user!.uid,
           employeeName: user.name,
         );
+      case 'my-letters':
+        return const MyLettersScreen();
       default:
         return Center(
           child: Text(

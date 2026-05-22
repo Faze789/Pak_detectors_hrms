@@ -6,7 +6,8 @@ import 'package:hrms_app/views/HR_views/AssignTaskByHR.dart';
 import 'package:hrms_app/views/HR_views/employee_screen.dart';
 import 'package:hrms_app/views/HR_views/hr_attendance_screen.dart';
 import 'package:hrms_app/views/HR_views/hr_branch_management.dart';
-import 'package:hrms_app/views/HR_views/hr_leave_screen.dart';
+import 'package:hrms_app/views/HR_views/HRLeaveApprovalsScreen.dart';
+import 'package:hrms_app/views/HR_views/company_letters_screen.dart';
 import 'package:hrms_app/views/HR_views/hr_report_screen.dart';
 import 'package:hrms_app/views/HR_views/payroll_screen.dart';
 import 'package:hrms_app/views/HR_views/recruitment_screen.dart';
@@ -77,30 +78,30 @@ class _HRDashboardWithSidebarState extends State<HRDashboardWithSidebar> {
         .orderBy('createdAt', descending: true)
         .snapshots()
         .listen((snap) {
-      for (final change in snap.docChanges) {
-        if (change.type != DocumentChangeType.added) continue;
+          for (final change in snap.docChanges) {
+            if (change.type != DocumentChangeType.added) continue;
 
-        final data = change.doc.data();
-        if (data == null) continue;
+            final data = change.doc.data();
+            if (data == null) continue;
 
-        final leadId = (data['lead_id'] ?? '').toString().toLowerCase();
-        if (leadId != lower) continue;
+            final leadId = (data['lead_id'] ?? '').toString().toLowerCase();
+            if (leadId != lower) continue;
 
-        final docId = change.doc.id;
-        if (_seenNotifIds.contains(docId)) continue;
-        _seenNotifIds.add(docId);
+            final docId = change.doc.id;
+            if (_seenNotifIds.contains(docId)) continue;
+            _seenNotifIds.add(docId);
 
-        // Skip the initial batch load — only show popup for truly new ones
-        if (!_initialLoadDone) continue;
+            // Skip the initial batch load — only show popup for truly new ones
+            if (!_initialLoadDone) continue;
 
-        final title = (data['title'] ?? '').toString();
-        final body = (data['body'] ?? '').toString();
-        if (title.isNotEmpty && mounted) {
-          _showNotificationPopup(title, body);
-        }
-      }
-      _initialLoadDone = true;
-    });
+            final title = (data['title'] ?? '').toString();
+            final body = (data['body'] ?? '').toString();
+            if (title.isNotEmpty && mounted) {
+              _showNotificationPopup(title, body);
+            }
+          }
+          _initialLoadDone = true;
+        });
   }
 
   void _showNotificationPopup(String title, String body) {
@@ -167,7 +168,12 @@ class _HRDashboardWithSidebarState extends State<HRDashboardWithSidebar> {
       case 'attendance':
         return HRAttendanceScreen();
       case 'leaves':
-        return const HRLeaveScreen();
+        // Routes to the new approvals screen (3-tab Pending / Approved /
+        // Declined with action buttons) backed by `request_for_leave`.
+        // The legacy `HRLeaveScreen` (older `leaves` collection model)
+        // is still importable but no longer the entry point — once the
+        // approvals flow is validated end-to-end we can delete it.
+        return const HRLeaveApprovalsScreen();
       case 'performance':
         return const HRPerformanceScreen();
       case 'settings':
@@ -187,6 +193,8 @@ class _HRDashboardWithSidebarState extends State<HRDashboardWithSidebar> {
           return const Center(child: CircularProgressIndicator());
         }
         return HRMeetingsScreen(hrUserId: _hrUserId, hrUserName: _hrUserName);
+      case 'company-letters':
+        return const CompanyLettersScreen();
       default:
         return Center(
           child: Text(

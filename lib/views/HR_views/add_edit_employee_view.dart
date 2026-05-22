@@ -45,6 +45,15 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
 
   EmployeeStatus status = EmployeeStatus.active;
   String _selectedRole = 'employee';
+  // 'in_station' or 'out_station' — drives per-quarter leave quota
+  // (3 days/qtr in-station, 4 days/qtr out-of-station per policy).
+  // Defaults to in_station for new and existing employees with no value.
+  String _selectedStation = 'in_station';
+  // Gender drives which leave-type options appear in the request UI:
+  //   'female' → maternity option shown
+  //   'male'   → paternity option shown
+  //   null     → neither shown (HR can flip when known)
+  String? _selectedGender;
   bool _resettingPassword = false;
   bool _passwordVisible = false;
   final _newPasswordCtrl = TextEditingController();
@@ -98,6 +107,8 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
       text: widget.employee?.personalEmail ?? '',
     );
     status = widget.employee?.status ?? EmployeeStatus.active;
+    _selectedStation = widget.employee?.station ?? 'in_station';
+    _selectedGender = widget.employee?.gender;
   }
 
   @override
@@ -241,6 +252,8 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
         jobDescription: jobDescriptionCtrl.text.trim(),
         emergencyPhone: emergencyPhoneCtrl.text.trim(),
         personalEmail: personalEmailCtrl.text.trim(),
+        station: _selectedStation,
+        gender: _selectedGender,
       );
       vm.updateEmployee(updatedEmployee);
     } else {
@@ -263,6 +276,8 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
         jobDescription: jobDescriptionCtrl.text.trim(),
         emergencyPhone: emergencyPhoneCtrl.text.trim(),
         personalEmail: personalEmailCtrl.text.trim(),
+        station: _selectedStation,
+        gender: _selectedGender,
       );
       vm.addEmployee(newEmployee);
     }
@@ -470,6 +485,94 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
                       }
                       return null;
                     },
+                  ),
+                  const SizedBox(height: 16),
+                  // ── Station toggle ──────────────────────────────────────
+                  // Drives the per-quarter leave quota: 3 days/qtr for
+                  // in-station, 4 days/qtr for out-of-station (per policy).
+                  // Defaults to in_station.
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.only(left: 4, top: 4, bottom: 6),
+                          child: Text(
+                            'Station',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF475569),
+                              letterSpacing: 0.4,
+                            ),
+                          ),
+                        ),
+                        SegmentedButton<String>(
+                          segments: const [
+                            ButtonSegment(
+                              value: 'in_station',
+                              label: Text('In-station'),
+                              icon: Icon(Icons.business_rounded, size: 16),
+                            ),
+                            ButtonSegment(
+                              value: 'out_station',
+                              label: Text('Out-of-station'),
+                              icon: Icon(Icons.flight_rounded, size: 16),
+                            ),
+                          ],
+                          selected: {_selectedStation},
+                          onSelectionChanged: (s) =>
+                              setState(() => _selectedStation = s.first),
+                          style: ButtonStyle(
+                            padding: WidgetStateProperty.all(
+                              const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
+                            ),
+                          ),
+                        ),
+                        const Padding(
+                          padding: EdgeInsets.only(left: 4, top: 6),
+                          child: Text(
+                            'Leave quota: 3 days/quarter (in-station) · '
+                            '4 days/quarter (out-of-station)',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF94A3B8),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // ── Gender dropdown ─────────────────────────────────────
+                  // Determines whether the employee will see Maternity
+                  // (female) or Paternity (male) as a leave-type option.
+                  // Optional — leaving it unset just hides both.
+                  DropdownButtonFormField<String?>(
+                    initialValue: _selectedGender,
+                    decoration: const InputDecoration(
+                      labelText: 'Gender',
+                      helperText:
+                          'Enables Maternity (female) or Paternity (male) leave option',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.wc_rounded),
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: null,
+                        child: Text('Prefer not to specify'),
+                      ),
+                      DropdownMenuItem(value: 'female', child: Text('Female')),
+                      DropdownMenuItem(value: 'male', child: Text('Male')),
+                    ],
+                    onChanged: (v) => setState(() => _selectedGender = v),
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<EmployeeStatus>(

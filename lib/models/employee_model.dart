@@ -45,6 +45,19 @@ class Employee {
   final DateTime? branchAssignmentExpiry;
   final bool fieldDuty;
 
+  // ── Station status (drives per-quarter leave quotas per policy) ───────────
+  // 'in_station' or 'out_station'. Null → default in_station. HR toggles
+  // this on the Add/Edit Employee screen; AttendanceViewModel.submitLeave
+  // reads it to choose between 3-days-per-quarter (in) or 4-days-per-quarter
+  // (out) for the regular leave cap.
+  final String? station;
+
+  // ── Gender ────────────────────────────────────────────────────────────────
+  // 'male' / 'female' / null (unspecified). Used to gate maternity vs
+  // paternity options on the leave-request dropdown. HR sets this on
+  // Add/Edit Employee; when null, neither maternity nor paternity is shown.
+  final String? gender;
+
   Employee({
     required this.uid,
     required this.name,
@@ -67,6 +80,8 @@ class Employee {
     this.currentAssignedBranchName,
     this.branchAssignmentExpiry,
     this.fieldDuty = false,
+    this.station,
+    this.gender,
     this.project_title = '',
     this.project_description = '',
     this.project_duration = '',
@@ -121,8 +136,21 @@ class Employee {
           ? (map['branchAssignmentExpiry'] as Timestamp).toDate()
           : null,
       fieldDuty: map['fieldDuty'] as bool? ?? false,
+      station: (map['station'] as String?)?.trim().isNotEmpty == true
+          ? (map['station'] as String).trim()
+          : null,
+      gender: (map['gender'] as String?)?.trim().isNotEmpty == true
+          ? (map['gender'] as String).trim().toLowerCase()
+          : null,
     );
   }
+
+  /// True when the employee is treated as in-station (default when no
+  /// explicit station is set on the user doc).
+  bool get isInStation => (station ?? 'in_station') == 'in_station';
+  bool get isOutOfStation => station == 'out_station';
+  bool get isFemale => gender == 'female';
+  bool get isMale => gender == 'male';
 
   Map<String, dynamic> toMap() {
     return {
@@ -156,6 +184,9 @@ class Employee {
       if (branchAssignmentExpiry != null)
         'branchAssignmentExpiry': Timestamp.fromDate(branchAssignmentExpiry!),
       'fieldDuty': fieldDuty,
+      // Default to in_station when not set so HR's view is consistent.
+      'station': station ?? 'in_station',
+      if (gender != null) 'gender': gender,
     };
   }
 
@@ -193,6 +224,8 @@ class Employee {
     String? currentAssignedBranchName,
     DateTime? branchAssignmentExpiry,
     bool? fieldDuty,
+    String? station,
+    String? gender,
     String? jobDescription,
     String? emergencyPhone,
     String? personalEmail,
@@ -227,6 +260,8 @@ class Employee {
       branchAssignmentExpiry:
           branchAssignmentExpiry ?? this.branchAssignmentExpiry,
       fieldDuty: fieldDuty ?? this.fieldDuty,
+      station: station ?? this.station,
+      gender: gender ?? this.gender,
       jobDescription: jobDescription ?? this.jobDescription,
       emergencyPhone: emergencyPhone ?? this.emergencyPhone,
       personalEmail: personalEmail ?? this.personalEmail,
