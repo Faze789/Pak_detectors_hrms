@@ -102,16 +102,36 @@ class _HRDashboardScreenState extends State<HRDashboardScreen> {
     //   }),
     // );
 
-    // if (!mounted) return;
-    // setState(() {
-    //   _archiveRecords.clear();
-    //   for (final entry in results) {
-    //     if (entry.value != null) {
-    //       _archiveRecords[entry.key] = entry.value!;
-    //     }
-    //   }
-    //   _archiveLoading = false;
-    // });
+    final results = await Future.wait(
+      employees.map((emp) async {
+        final rec = await _attendanceVM.getArchivedAttendanceForDay(
+          emp.uid,
+          today,
+        );
+        return MapEntry(emp.uid, rec);
+      }),
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _archiveRecords.clear();
+      for (final entry in results) {
+        if (entry.value != null) {
+          _archiveRecords[entry.key] = entry.value!;
+        }
+      }
+      _archiveLoading = false;
+    });
+  }
+
+  void _onLiveUpdate(String uid, AttendanceModel? rec) {
+    setState(() {
+      if (rec == null) {
+        _liveRecords.remove(uid);
+      } else {
+        _liveRecords[uid] = rec;
+      }
+    });
   }
 
   // ── Merge live + archive into one record per employee ─────────────────────
@@ -182,6 +202,9 @@ class _HRDashboardScreenState extends State<HRDashboardScreen> {
       builder: (context, _) {
         final empVM = context.read<EmployeeViewModel>();
 
+        final employees = empVM.employees;
+        final total = employees.length;
+
         return Scaffold(
           backgroundColor: const Color(0xFFF1F5F9),
           body: SafeArea(
@@ -191,13 +214,49 @@ class _HRDashboardScreenState extends State<HRDashboardScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildHeader(context),
+                  if (_dashVM.errorMessage != null) ...[
+                    const SizedBox(height: 12),
+                    _ErrorBanner(message: _dashVM.errorMessage!),
+                  ],
                   const SizedBox(height: 24),
-                  // Attendance dashboard is temporarily disabled while
-                  // we rework the attendance flow. Header + notifications
-                  // remain functional; the heavy widgets (stats grid,
-                  // charts, live table) are intentionally omitted here.
-                  _AttendanceUnavailableCard(
-                    employeeCount: empVM.employees.length,
+                  _StatCardsGrid(
+                    totalEmployees: total,
+                    presentCount: _presentCount,
+                    onBreakCount: _onBreakCount,
+                    absentCount: _absentCount,
+                    lateCount: _lateCount,
+                    onLeaveCount: _onLeaveCount,
+                    attendanceRate: _attendanceRate,
+                    employees: employees,
+                  ),
+                  const SizedBox(height: 24),
+                  _ChartsAndDepartments(
+                    present: _presentCount,
+                    onBreak: _onBreakCount,
+                    absent: _absentCount,
+                    late: _lateCount,
+                    onLeave: _onLeaveCount,
+                    checkedOut: _checkedOutCount,
+                    total: total,
+                    employees: employees,
+                  ),
+                  const SizedBox(height: 24),
+                  _EmployeeStatusOverview(
+                    employees: employees,
+                    recordFor: _recordFor,
+                  ),
+                  const SizedBox(height: 24),
+                  _LiveAttendanceTable(
+                    attendanceVM: _attendanceVM,
+                    employeeVM: empVM,
+                    liveRecords: _liveRecords,
+                    archiveRecords: _archiveRecords,
+                    archiveLoading: _archiveLoading,
+                    onLiveUpdate: _onLiveUpdate,
+                    onRefresh: () async {
+                      await empVM.loadEmployees('');
+                      await _loadTodayArchive();
+                    },
                   ),
                 ],
               ),
@@ -1808,6 +1867,271 @@ class _ErrorBanner extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Compact per-employee status grid for HR at-a-glance.
+// ─────────────────────────────────────────────────────────────────────────────
+class _EmployeeStatusOverview extends StatelessWidget {
+  final List<Employee> employees;
+  final AttendanceModel? Function(String uid) recordFor;
+
+  const _EmployeeStatusOverview({
+    required this.employees,
+    required this.recordFor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (employees.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: const Center(
+          child: Text(
+            'No employees loaded',
+            style: TextStyle(color: Color(0xFF64748B)),
+          ),
+        ),
+      );
+    }
+
+    final sorted = List<Employee>.from(employees)
+      ..sort((a, b) => a.name.compareTo(b.name));
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: const [
+              Icon(Icons.groups_rounded, size: 20, color: Color(0xFF0F172A)),
+              SizedBox(width: 8),
+              Text(
+                'Team status today',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final cols = constraints.maxWidth > 900
+                  ? 3
+                  : constraints.maxWidth > 600
+                      ? 2
+                      : 1;
+              final itemW = (constraints.maxWidth - (cols - 1) * 12) / cols;
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: sorted.map((emp) {
+                  final rec = recordFor(emp.uid);
+                  final status = _statusLabel(rec);
+                  final cfg = _statusStyle(status);
+                  final ci = rec?.checkInTime;
+                  final co = rec?.checkOutTime;
+                  return SizedBox(
+                    width: itemW,
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: cfg.bg,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: cfg.border),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 16,
+                                backgroundColor: const Color(0xFF3B82F6),
+                                child: Text(
+                                  _initials(emp.name),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      emp.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                    Text(
+                                      emp.department.isNotEmpty
+                                          ? emp.department
+                                          : emp.role,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Color(0xFF64748B),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.7),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              status,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: cfg.fg,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'In: ${ci != null ? DateFormat('HH:mm').format(ci) : '—'}  ·  Out: ${co != null ? DateFormat('HH:mm').format(co) : '—'}',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: Color(0xFF475569),
+                            ),
+                          ),
+                          if (emp.emp_id.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              'ID ${emp.emp_id}',
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: Color(0xFF94A3B8),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _initials(String name) {
+    final parts = name.trim().split(' ');
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) return parts[0][0].toUpperCase();
+    return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+  }
+
+  static String _statusLabel(AttendanceModel? rec) {
+    if (rec == null) return 'No record';
+    switch (rec.status) {
+      case AttendanceStatus.checkedIn:
+        return 'Checked in';
+      case AttendanceStatus.onBreak:
+        return 'On break';
+      case AttendanceStatus.late:
+        return 'Late';
+      case AttendanceStatus.checkedOut:
+        return 'Checked out';
+      case AttendanceStatus.absent:
+        return 'Absent';
+      case AttendanceStatus.onLeave:
+      case AttendanceStatus.firstHalfLeave:
+      case AttendanceStatus.secondHalfLeave:
+        return 'On leave';
+      default:
+        return rec.status.name;
+    }
+  }
+
+  static ({Color bg, Color fg, Color border}) _statusStyle(String label) {
+    switch (label) {
+      case 'Checked in':
+        return (
+          bg: const Color(0xFFECFDF5),
+          fg: const Color(0xFF065F46),
+          border: const Color(0xFF6EE7B7),
+        );
+      case 'On break':
+        return (
+          bg: const Color(0xFFFFFBEB),
+          fg: const Color(0xFF92400E),
+          border: const Color(0xFFFCD34D),
+        );
+      case 'Late':
+        return (
+          bg: const Color(0xFFFEF3C7),
+          fg: const Color(0xFF92400E),
+          border: const Color(0xFFFDE68A),
+        );
+      case 'Checked out':
+        return (
+          bg: const Color(0xFFEEF2FF),
+          fg: const Color(0xFF3730A3),
+          border: const Color(0xFFC7D2FE),
+        );
+      case 'On leave':
+        return (
+          bg: const Color(0xFFE0F2FE),
+          fg: const Color(0xFF0369A1),
+          border: const Color(0xFF7DD3FC),
+        );
+      case 'Absent':
+        return (
+          bg: const Color(0xFFFEF2F2),
+          fg: const Color(0xFF991B1B),
+          border: const Color(0xFFFCA5A5),
+        );
+      default:
+        return (
+          bg: const Color(0xFFF8FAFC),
+          fg: const Color(0xFF64748B),
+          border: const Color(0xFFE2E8F0),
+        );
+    }
+  }
+}
+
 // Placeholder shown while the attendance dashboard is disabled.
 // Keeps the page useful (employee count visible, friendly empty state)
 // instead of showing an infinite spinner or red error banner.

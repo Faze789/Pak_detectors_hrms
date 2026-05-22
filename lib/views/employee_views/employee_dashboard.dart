@@ -1,5 +1,6 @@
 // lib/screens/employee_dashboard_screen.dart
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:hrms_app/services/attendance_service.dart';
@@ -8,11 +9,18 @@ import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
 
 import '../../models/attendance_model.dart';
-import '../../viewmodels/auth_viewmodel.dart';
-import '../../viewmodels/leave_viewmodel.dart';
-import '../../viewmodels/attendance_viewmodel.dart';
-import '../../viewmodels/employee_viewmodel.dart';
+import '../../models/company_letter.dart';
+import '../../models/employee_model.dart';
 import '../../models/leave_model.dart';
+import '../../models/payroll_model.dart';
+import '../../services/company_letter_service.dart';
+import '../../services/payroll_service.dart';
+import '../../viewmodels/auth_viewmodel.dart';
+import '../../viewmodels/attendance_viewmodel.dart';
+import '../../viewmodels/employee_report_viewmodel.dart';
+import '../../viewmodels/employee_viewmodel.dart';
+import '../../viewmodels/leave_viewmodel.dart';
+import '../../viewmodels/task_viewmodel.dart';
 
 enum _LocPermStatus { unknown, enabled, denied, permanentlyDenied, servicesOff }
 
@@ -28,7 +36,9 @@ abstract class _BP {
 // Employee Dashboard Screen
 // ─────────────────────────────────────────────────────────────────────────────
 class EmployeeDashboardScreen extends StatefulWidget {
-  const EmployeeDashboardScreen({super.key});
+  final void Function(String tabId)? onNavigate;
+
+  const EmployeeDashboardScreen({super.key, this.onNavigate});
 
   @override
   State<EmployeeDashboardScreen> createState() =>
@@ -42,27 +52,8 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
   final DateTime _selectedCalendarDay = DateTime.now();
   final DateTime _focusedCalendarMonth = DateTime.now();
 
-  // Static project data (replace with real VM when available)
-  static const List<Map<String, dynamic>> _projects = [
-    {
-      'name': 'E-Commerce Platform',
-      'progress': 75,
-      'deadline': 'Mar 15',
-      'team': 8,
-    },
-    {
-      'name': 'Mobile App Redesign',
-      'progress': 45,
-      'deadline': 'Apr 20',
-      'team': 5,
-    },
-    {
-      'name': 'Analytics Dashboard',
-      'progress': 90,
-      'deadline': 'Feb 28',
-      'team': 4,
-    },
-  ];
+  List<PayslipModel>? _payslips;
+  bool _payslipsLoading = true;
 
   @override
   void initState() {
@@ -89,8 +80,32 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
         if (!mounted) return;
 
         context.read<EmployeeViewModel>().loadEmployees(uid);
+        context.read<EmployeeReportViewModel>().loadReportsForEmployee(uid);
+        _loadPayslips(uid);
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .get();
+        final empId = (doc.data()?['emp_id'] ?? '').toString();
+        if (empId.isNotEmpty && mounted) {
+          await context.read<TaskViewModel>().loadTasksForUser(empId);
+        }
       }
     });
+  }
+
+  Future<void> _loadPayslips(String uid) async {
+    try {
+      final slips = await PayrollService().getPayslipsForEmployee(uid);
+      if (mounted) {
+        setState(() {
+          _payslips = slips;
+          _payslipsLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _payslipsLoading = false);
+    }
   }
 
   Future<void> _onCheckIn() async {
@@ -340,6 +355,8 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
     final leaveVm = context.watch<LeaveViewModel>();
     final attVm = context.watch<AttendanceViewModel>();
     final empVm = context.watch<EmployeeViewModel>();
+    final reportVm = context.watch<EmployeeReportViewModel>();
+    final taskVm = context.watch<TaskViewModel>();
 
     // final location_permission = context.watch<AttendanceService>();
 
@@ -374,9 +391,18 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
         )
         .fold(0, (s, l) => s + l.days);
     final annualUsed = approvedDays;
-    const annualTotal = 20;
-    const sickTotal = 10;
-    const casualTotal = 8;
+
+    // ── Employee profile from EmployeeViewModel ───────────────────────────
+    final employee = empVm.employees.isNotEmpty
+        ? empVm.employees.firstWhere(
+            (e) => e.uid == uid,
+            orElse: () => empVm.employees.first,
+          )
+        : null;
+
+    final annualTotal = employee?.annualLeaveQuota ?? 4;
+    final sickTotal = employee?.sickLeaveQuota ?? 3;
+    final casualTotal = employee?.casualLeaveQuota ?? 6;
     final sickUsed = myLeaves
         .where(
           (l) => l.status == LeaveStatus.approved && l.type == LeaveType.sick,
@@ -388,53 +414,60 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
         )
         .fold(0, (s, l) => s + l.days);
 
-    // ── Employee profile from EmployeeViewModel ───────────────────────────
-    final employee = empVm.employees.isNotEmpty
-        ? empVm.employees.firstWhere(
-            (e) => e.uid == uid,
-            orElse: () => empVm.employees.first,
-          )
-        : null;
-
     final department = employee?.department ?? '—';
     final role = employee?.role ?? user?.role ?? '—';
     final joinDate = employee?.joinDate ?? '—';
+    final empIdDisplay = employee?.emp_id ?? '—';
     final initials = _initials(userName);
+    final todayAtt = attVm.todayAttendance;
+    final recentReports = reportVm.reports.take(3).toList();
+
+    final latestPayslip = (_payslips != null && _payslips!.isNotEmpty)
+        ? _payslips!.first
+        : null;
+    final netPayLabel = _payslipsLoading
+        ? '…'
+        : latestPayslip != null
+        ? 'Rs ${_formatAmount(latestPayslip.netPay)}'
+        : '—';
+    final activeTasks = taskVm.tasks
+        .where((t) => (t['status'] ?? '').toString() != 'completed')
+        .length;
 
     // ── Metric cards ──────────────────────────────────────────────────────
     final metrics = [
       _MetricData(
-        title: 'Attendance',
+        title: 'This Month',
         value: '$attendancePct%',
-        subtitle: '$presentDays / $totalDays days',
+        subtitle: '$presentDays / $totalDays days present',
         icon: Icons.event_available_outlined,
         iconColor: const Color(0xFF3B82F6),
         borderColor: const Color(0xFF3B82F6),
         backgroundColor: const Color(0xFFDBEAFE),
       ),
       _MetricData(
-        title: 'Annual Leave',
-        value: '${annualTotal - annualUsed}',
-        subtitle: '$annualUsed / $annualTotal used',
-        icon: Icons.calendar_today_outlined,
-        iconColor: const Color(0xFFA855F7),
-        borderColor: const Color(0xFFA855F7),
-        backgroundColor: const Color(0xFFF3E8FF),
+        title: 'Net Pay',
+        value: netPayLabel,
+        subtitle: latestPayslip?.month ?? 'No payslip yet',
+        icon: Icons.payments_outlined,
+        iconColor: const Color(0xFF6366F1),
+        borderColor: const Color(0xFF6366F1),
+        backgroundColor: const Color(0xFFE0E7FF),
       ),
       _MetricData(
-        title: 'Sick Leave',
-        value: '${sickTotal - sickUsed}',
-        subtitle: '$sickUsed / $sickTotal used',
-        icon: Icons.health_and_safety_outlined,
+        title: 'My Tasks',
+        value: '$activeTasks',
+        subtitle: '${taskVm.tasks.length} total assigned',
+        icon: Icons.flag_outlined,
         iconColor: const Color(0xFF10B981),
         borderColor: const Color(0xFF10B981),
         backgroundColor: const Color(0xFFD1FAE5),
       ),
       _MetricData(
-        title: 'Pending',
+        title: 'Leave Pending',
         value: '$pendingLeaves',
-        subtitle: 'leave request${pendingLeaves != 1 ? 's' : ''}',
-        icon: Icons.access_time_outlined,
+        subtitle: '${annualTotal - annualUsed} annual left',
+        icon: Icons.calendar_today_outlined,
         iconColor: const Color(0xFFF59E0B),
         borderColor: const Color(0xFFF59E0B),
         backgroundColor: const Color(0xFFFEF3C7),
@@ -485,35 +518,60 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
             const SizedBox(height: 18),
             _MetricCardsRow(metrics: metrics),
             const SizedBox(height: 18),
+            _AttendanceTodayCard(
+              attendance: todayAtt,
+              busy: attVm.isLoading,
+              onCheckIn: _onCheckIn,
+              onCheckOut: _onCheckOut,
+            ),
+            const SizedBox(height: 18),
             isDesktop
-                ? _DesktopLayout(
-                    projects: _projects,
+                ? _OverviewDesktopLayout(
+                    uid: uid,
+                    userName: userName,
+                    role: role,
+                    initials: initials,
+                    department: department,
+                    joinDate: joinDate,
+                    empId: empIdDisplay,
+                    employee: employee,
                     leaveBalances: leaveBalances,
-                    profileData: _ProfileData(
-                      name: userName,
-                      role: role,
-                      initials: initials,
-                      department: department,
-                      joinDate: joinDate,
-                      uid: uid,
-                    ),
+                    latestPayslip: latestPayslip,
+                    payslipsLoading: _payslipsLoading,
+                    taskVm: taskVm,
+                    activeTasks: activeTasks,
+                    recentReports: recentReports,
+                    reportsLoading: reportVm.isLoading,
+                    onNavigate: widget.onNavigate,
                   )
-                : _MobileLayout(
-                    projects: _projects,
+                : _OverviewMobileLayout(
+                    uid: uid,
+                    userName: userName,
+                    role: role,
+                    initials: initials,
+                    department: department,
+                    joinDate: joinDate,
+                    empId: empIdDisplay,
+                    employee: employee,
                     leaveBalances: leaveBalances,
-                    profileData: _ProfileData(
-                      name: userName,
-                      role: role,
-                      initials: initials,
-                      department: department,
-                      joinDate: joinDate,
-                      uid: uid,
-                    ),
+                    latestPayslip: latestPayslip,
+                    payslipsLoading: _payslipsLoading,
+                    taskVm: taskVm,
+                    activeTasks: activeTasks,
+                    recentReports: recentReports,
+                    reportsLoading: reportVm.isLoading,
+                    onNavigate: widget.onNavigate,
                   ),
           ],
         ),
       ),
     );
+  }
+
+  static String _formatAmount(double v) {
+    if (v >= 100000) return '${(v / 100000).toStringAsFixed(1)}L';
+    if (v >= 1000) return '${(v / 1000).toStringAsFixed(1)}K';
+    return v.toStringAsFixed(0);
   }
 
   static String _initials(String name) {
@@ -581,63 +639,63 @@ class _AttendanceTodayCard extends StatelessWidget {
           //     ),
           //   ],
           // ),
-          // const SizedBox(height: 14),
-          // Row(
-          //   children: [
-          //     Expanded(
-          //       child: _timeBlock(
-          //         label: 'Check In',
-          //         value: checkIn != null
-          //             ? DateFormat('HH:mm').format(checkIn)
-          //             : '—',
-          //       ),
-          //     ),
-          //     const SizedBox(width: 12),
-          //     Expanded(
-          //       child: _timeBlock(
-          //         label: 'Check Out',
-          //         value: checkOut != null
-          //             ? DateFormat('HH:mm').format(checkOut)
-          //             : '—',
-          //       ),
-          //     ),
-          //   ],
-          // ),
           const SizedBox(height: 14),
-          if (!isCheckedIn && !isDone)
-            _btn(
-              label: busy ? 'Checking In…' : 'Check In',
-              icon: Icons.login_rounded,
-              color: Colors.white,
-              fg: const Color(0xFF1D4ED8),
-              onPressed: busy ? null : onCheckIn,
-            )
-          else if (isCheckedIn)
-            _btn(
-              label: busy ? 'Checking Out…' : 'Check Out',
-              icon: Icons.logout_rounded,
-              color: const Color(0xFFFCA5A5),
-              fg: const Color(0xFF7F1D1D),
-              onPressed: busy ? null : onCheckOut,
-            )
-          else
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Text(
-                '✓ Done for today',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
-                ),
-              ),
-            ),
+          Row(
+            children: [
+              // Expanded(
+              //   child: _timeBlock(
+              //     label: 'Check In',
+              //     value: checkIn != null
+              //         ? DateFormat('HH:mm').format(checkIn)
+              //         : '—',
+              //   ),
+              // ),
+              // const SizedBox(width: 12),
+              // Expanded(
+              //   child: _timeBlock(
+              //     label: 'Check Out',
+              //     value: checkOut != null
+              //         ? DateFormat('HH:mm').format(checkOut)
+              //         : '—',
+              //   ),
+              // ),
+            ],
+          ),
+          // const SizedBox(height: 14),
+          // if (!isCheckedIn && !isDone)
+          //   _btn(
+          //     label: busy ? 'Checking In…' : 'Check In',
+          //     icon: Icons.login_rounded,
+          //     color: Colors.white,
+          //     fg: const Color(0xFF1D4ED8),
+          //     onPressed: busy ? null : onCheckIn,
+          //   )
+          // else if (isCheckedIn)
+          //   _btn(
+          //     label: busy ? 'Checking Out…' : 'Check Out',
+          //     icon: Icons.logout_rounded,
+          //     color: const Color(0xFFFCA5A5),
+          //     fg: const Color(0xFF7F1D1D),
+          //     onPressed: busy ? null : onCheckOut,
+          //   )
+          // else
+          //   Container(
+          //     width: double.infinity,
+          //     padding: const EdgeInsets.symmetric(vertical: 10),
+          //     decoration: BoxDecoration(
+          //       color: Colors.white.withOpacity(0.15),
+          //       borderRadius: BorderRadius.circular(8),
+          //     ),
+          //     child: const Text(
+          //       '✓ Done for today',
+          //       textAlign: TextAlign.center,
+          //       style: TextStyle(
+          //         color: Colors.white,
+          //         fontWeight: FontWeight.w700,
+          //         fontSize: 13,
+          //       ),
+          //     ),
+          //   ),
         ],
       ),
     );
@@ -1187,12 +1245,19 @@ class _WelcomeHeader extends StatelessWidget {
   final String userName;
   const _WelcomeHeader({required this.userName});
 
+  String get _greeting {
+    final h = DateTime.now().hour;
+    if (h < 12) return 'Good morning';
+    if (h < 17) return 'Good afternoon';
+    return 'Good evening';
+  }
+
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Text(
-        'Good Morning, $userName! 👋',
+        '$_greeting, $userName 👋',
         style: const TextStyle(
           fontSize: 26,
           fontWeight: FontWeight.bold,
@@ -1323,16 +1388,43 @@ class _MetricCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Layouts
+// Overview layouts (real data)
 // ─────────────────────────────────────────────────────────────────────────────
-class _DesktopLayout extends StatelessWidget {
-  final List<Map<String, dynamic>> projects;
+class _OverviewDesktopLayout extends StatelessWidget {
+  final String uid;
+  final String userName;
+  final String role;
+  final String initials;
+  final String department;
+  final String joinDate;
+  final String empId;
+  final Employee? employee;
   final List<Map<String, dynamic>> leaveBalances;
-  final _ProfileData profileData;
-  const _DesktopLayout({
-    required this.projects,
+  final PayslipModel? latestPayslip;
+  final bool payslipsLoading;
+  final TaskViewModel taskVm;
+  final int activeTasks;
+  final List<Map<String, dynamic>> recentReports;
+  final bool reportsLoading;
+  final void Function(String tabId)? onNavigate;
+
+  const _OverviewDesktopLayout({
+    required this.uid,
+    required this.userName,
+    required this.role,
+    required this.initials,
+    required this.department,
+    required this.joinDate,
+    required this.empId,
+    required this.employee,
     required this.leaveBalances,
-    required this.profileData,
+    required this.latestPayslip,
+    required this.payslipsLoading,
+    required this.taskVm,
+    required this.activeTasks,
+    required this.recentReports,
+    required this.reportsLoading,
+    this.onNavigate,
   });
 
   @override
@@ -1340,39 +1432,133 @@ class _DesktopLayout extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Expanded(
+        flex: 3,
+        child: Column(
+          children: [
+            _GoalsOverviewCard(
+              total: taskVm.tasks.length,
+              active: activeTasks,
+              onTap: () => onNavigate?.call('employee-goals'),
+            ),
+            const SizedBox(height: 14),
+            _LettersOverviewCard(
+              uid: uid,
+              onTap: () => onNavigate?.call('my-letters'),
+            ),
+            const SizedBox(height: 14),
+            _ReportsOverviewCard(
+              reports: recentReports,
+              loading: reportsLoading,
+              onTap: () => onNavigate?.call('submit-report'),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(width: 16),
+      Expanded(
         flex: 2,
         child: Column(
           children: [
-            _ActiveProjectsCard(projects: projects),
-            const SizedBox(height: 18),
+            _ProfileOverviewCard(
+              name: userName,
+              role: role,
+              initials: initials,
+              department: department,
+              joinDate: joinDate,
+              empId: empId,
+              email: employee?.email,
+              onViewProfile: () => onNavigate?.call('my-profile'),
+            ),
+            const SizedBox(height: 14),
+            _PayslipOverviewCard(
+              payslip: latestPayslip,
+              loading: payslipsLoading,
+              onTap: () => onNavigate?.call('my-payslips'),
+            ),
+            const SizedBox(height: 14),
             _LeaveBalanceCard(leaveBalances: leaveBalances),
           ],
         ),
       ),
-      const SizedBox(width: 18),
-      Expanded(flex: 1, child: _ProfileCard(data: profileData)),
     ],
   );
 }
 
-class _MobileLayout extends StatelessWidget {
-  final List<Map<String, dynamic>> projects;
+class _OverviewMobileLayout extends StatelessWidget {
+  final String uid;
+  final String userName;
+  final String role;
+  final String initials;
+  final String department;
+  final String joinDate;
+  final String empId;
+  final Employee? employee;
   final List<Map<String, dynamic>> leaveBalances;
-  final _ProfileData profileData;
-  const _MobileLayout({
-    required this.projects,
+  final PayslipModel? latestPayslip;
+  final bool payslipsLoading;
+  final TaskViewModel taskVm;
+  final int activeTasks;
+  final List<Map<String, dynamic>> recentReports;
+  final bool reportsLoading;
+  final void Function(String tabId)? onNavigate;
+
+  const _OverviewMobileLayout({
+    required this.uid,
+    required this.userName,
+    required this.role,
+    required this.initials,
+    required this.department,
+    required this.joinDate,
+    required this.empId,
+    required this.employee,
     required this.leaveBalances,
-    required this.profileData,
+    required this.latestPayslip,
+    required this.payslipsLoading,
+    required this.taskVm,
+    required this.activeTasks,
+    required this.recentReports,
+    required this.reportsLoading,
+    this.onNavigate,
   });
 
   @override
   Widget build(BuildContext context) => Column(
     children: [
-      _ActiveProjectsCard(projects: projects),
-      const SizedBox(height: 18),
+      _ProfileOverviewCard(
+        name: userName,
+        role: role,
+        initials: initials,
+        department: department,
+        joinDate: joinDate,
+        empId: empId,
+        email: employee?.email,
+        onViewProfile: () => onNavigate?.call('my-profile'),
+      ),
+      const SizedBox(height: 14),
+      _GoalsOverviewCard(
+        total: taskVm.tasks.length,
+        active: activeTasks,
+        onTap: () => onNavigate?.call('employee-goals'),
+      ),
+      const SizedBox(height: 14),
+      _PayslipOverviewCard(
+        payslip: latestPayslip,
+        loading: payslipsLoading,
+        onTap: () => onNavigate?.call('my-payslips'),
+      ),
+      const SizedBox(height: 14),
+      _LettersOverviewCard(
+        uid: uid,
+        onTap: () => onNavigate?.call('my-letters'),
+      ),
+      const SizedBox(height: 14),
+      _ReportsOverviewCard(
+        reports: recentReports,
+        loading: reportsLoading,
+        onTap: () => onNavigate?.call('submit-report'),
+      ),
+      const SizedBox(height: 14),
       _LeaveBalanceCard(leaveBalances: leaveBalances),
-      const SizedBox(height: 18),
-      _ProfileCard(data: profileData),
     ],
   );
 }
@@ -1435,93 +1621,482 @@ class _CardShell extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Active Projects Card (static data — swap with ProjectViewModel when ready)
+// Goals / letters / reports / profile / payslip overview cards
 // ─────────────────────────────────────────────────────────────────────────────
-class _ActiveProjectsCard extends StatelessWidget {
-  final List<Map<String, dynamic>> projects;
-  const _ActiveProjectsCard({required this.projects});
+class _GoalsOverviewCard extends StatelessWidget {
+  final int total;
+  final int active;
+  final VoidCallback? onTap;
+  const _GoalsOverviewCard({
+    required this.total,
+    required this.active,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) => _CardShell(
-    title: 'Active Projects',
-    subtitle: 'Track progress',
-    body: Column(
-      children: [
-        for (int i = 0; i < projects.length; i++) ...[
-          if (i > 0) const SizedBox(height: 14),
-          _ProjectItem(project: projects[i]),
-        ],
-      ],
+    title: 'My Goals & Tasks',
+    subtitle: 'Assigned work from your lead',
+    body: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            _MiniStat(
+              label: 'Active',
+              value: '$active',
+              color: const Color(0xFF2563EB),
+            ),
+            const SizedBox(width: 16),
+            _MiniStat(
+              label: 'Total',
+              value: '$total',
+              color: const Color(0xFF64748B),
+            ),
+            const Spacer(),
+            const Icon(Icons.chevron_right, color: Color(0xFF94A3B8)),
+          ],
+        ),
+      ),
     ),
   );
 }
 
-class _ProjectItem extends StatelessWidget {
-  final Map<String, dynamic> project;
-  const _ProjectItem({required this.project});
+class _LettersOverviewCard extends StatelessWidget {
+  final String uid;
+  final VoidCallback? onTap;
+  const _LettersOverviewCard({required this.uid, this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final progress = project['progress'] as int;
-    final color = progress >= 75
-        ? const Color(0xFF10B981)
-        : progress >= 50
-        ? const Color(0xFF3B82F6)
-        : const Color(0xFFFCD34D);
+    if (uid.isEmpty) {
+      return _CardShell(
+        title: 'Company Letters',
+        subtitle: 'HR-issued documents',
+        body: const Text(
+          'Sign in to view letters.',
+          style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+        ),
+      );
+    }
+    return StreamBuilder<List<CompanyLetter>>(
+      stream: CompanyLetterService().streamForEmployee(uid),
+      builder: (context, snap) {
+        final letters = snap.data ?? const <CompanyLetter>[];
+        final latest = letters.isNotEmpty ? letters.first : null;
+        return _CardShell(
+          title: 'Company Letters',
+          subtitle: '${letters.length} issued to you',
+          body: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(8),
+            child: letters.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: Text(
+                      'No letters yet.',
+                      style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                    ),
+                  )
+                : Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.description_rounded,
+                          color: Color(0xFF2563EB),
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              latest!.kind.label,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                              ),
+                            ),
+                            Text(
+                              latest.subject,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right, color: Color(0xFF94A3B8)),
+                    ],
+                  ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ReportsOverviewCard extends StatelessWidget {
+  final List<Map<String, dynamic>> reports;
+  final bool loading;
+  final VoidCallback? onTap;
+  const _ReportsOverviewCard({
+    required this.reports,
+    required this.loading,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => _CardShell(
+    title: 'My Reports',
+    subtitle: 'Recent submissions',
+    body: loading
+        ? const Center(
+            child: Padding(
+              padding: EdgeInsets.all(12),
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          )
+        : InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(8),
+            child: reports.isEmpty
+                ? const Text(
+                    'No reports submitted yet.',
+                    style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                  )
+                : Column(
+                    children: [
+                      for (int i = 0; i < reports.length; i++) ...[
+                        if (i > 0) const SizedBox(height: 8),
+                        _ReportRow(report: reports[i]),
+                      ],
+                    ],
+                  ),
+          ),
+  );
+}
+
+class _ReportRow extends StatelessWidget {
+  final Map<String, dynamic> report;
+  const _ReportRow({required this.report});
+
+  @override
+  Widget build(BuildContext context) {
+    final type = (report['reportType'] ?? report['type'] ?? 'report')
+        .toString();
+    final status = (report['status'] ?? 'submitted').toString();
+    final created = report['createdAt'];
+    String dateStr = '';
+    if (created is Timestamp) {
+      dateStr = DateFormat('d MMM').format(created.toDate());
+    }
     return Container(
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         border: Border.all(color: const Color(0xFFE2E8F0)),
         borderRadius: BorderRadius.circular(8),
       ),
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Flexible(
-                child: Text(
-                  project['name'] as String,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF0F172A),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                '$progress%',
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF0F172A),
-                ),
-              ),
-            ],
+          Expanded(
+            child: Text(
+              '${type[0].toUpperCase()}${type.substring(1)} report',
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            ),
           ),
-          const SizedBox(height: 6),
           Text(
-            'Due: ${project['deadline']} · ${project['team']} members',
-            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+            dateStr,
+            style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
           ),
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: progress / 100,
-              minHeight: 7,
-              backgroundColor: const Color(0xFFF1F5F9),
-              valueColor: AlwaysStoppedAnimation<Color>(color),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              status,
+              style: const TextStyle(fontSize: 10, color: Color(0xFF475569)),
             ),
           ),
         ],
       ),
     );
   }
+}
+
+class _PayslipOverviewCard extends StatelessWidget {
+  final PayslipModel? payslip;
+  final bool loading;
+  final VoidCallback? onTap;
+  const _PayslipOverviewCard({
+    required this.payslip,
+    required this.loading,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _CardShell(
+      title: 'Latest Payslip',
+      subtitle: payslip?.month ?? 'Salary summary',
+      body: loading
+          ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+          : InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(8),
+              child: payslip == null
+                  ? const Text(
+                      'No payslip generated yet.',
+                      style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Net pay',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                            Text(
+                              'Rs ${payslip!.netPay.toStringAsFixed(0)}',
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF0F172A),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        _PayslipLine(label: 'Gross', value: payslip!.grossPay),
+                        _PayslipLine(
+                          label: 'Deductions',
+                          value: payslip!.totalDeductions,
+                          isDeduction: true,
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            _StatusChip(
+                              label: payslip!.status.name,
+                              color: const Color(0xFF10B981),
+                            ),
+                            const Spacer(),
+                            const Icon(
+                              Icons.chevron_right,
+                              color: Color(0xFF94A3B8),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+            ),
+    );
+  }
+}
+
+class _PayslipLine extends StatelessWidget {
+  final String label;
+  final double value;
+  final bool isDeduction;
+  const _PayslipLine({
+    required this.label,
+    required this.value,
+    this.isDeduction = false,
+  });
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 4),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+        ),
+        Text(
+          'Rs ${value.toStringAsFixed(0)}',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: isDeduction
+                ? const Color(0xFFDC2626)
+                : const Color(0xFF0F172A),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _ProfileOverviewCard extends StatelessWidget {
+  final String name;
+  final String role;
+  final String initials;
+  final String department;
+  final String joinDate;
+  final String empId;
+  final String? email;
+  final VoidCallback? onViewProfile;
+  const _ProfileOverviewCard({
+    required this.name,
+    required this.role,
+    required this.initials,
+    required this.department,
+    required this.joinDate,
+    required this.empId,
+    this.email,
+    this.onViewProfile,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      boxShadow: [
+        BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4),
+      ],
+    ),
+    padding: const EdgeInsets.all(16),
+    child: Column(
+      children: [
+        Row(
+          children: [
+            CircleAvatar(
+              radius: 28,
+              backgroundColor: const Color(0xFF2563EB),
+              child: Text(
+                initials,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
+                    ),
+                  ),
+                  Text(
+                    role,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        _DetailRow('Employee ID', empId),
+        const SizedBox(height: 8),
+        _DetailRow('Department', department),
+        const SizedBox(height: 8),
+        _DetailRow('Joined', joinDate),
+        if (email != null && email!.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          _DetailRow('Email', email!),
+        ],
+        const SizedBox(height: 14),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            onPressed: onViewProfile,
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF2563EB),
+            ),
+            child: const Text('View full profile'),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _MiniStat extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  const _MiniStat({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+      ),
+      Text(
+        value,
+        style: TextStyle(
+          fontSize: 22,
+          fontWeight: FontWeight.w800,
+          color: color,
+        ),
+      ),
+    ],
+  );
+}
+
+class _StatusChip extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _StatusChip({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.12),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Text(
+      label,
+      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color),
+    ),
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1551,7 +2126,7 @@ class _LeaveBalanceCard extends StatelessWidget {
               side: const BorderSide(color: Color(0xFFE2E8F0)),
             ),
             child: const Text(
-              'Request Leave',
+              'Manage leave in profile',
               style: TextStyle(
                 color: Color(0xFF0F172A),
                 fontSize: 13,

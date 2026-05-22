@@ -20,12 +20,7 @@ import 'package:hrms_app/viewmodels/employee_report_viewmodel.dart';
 import 'package:hrms_app/viewmodels/task_viewmodel.dart';
 import 'package:hrms_app/views/HR_views/apply_screen.dart';
 import 'package:hrms_app/views/HR_views/employee_screen.dart';
-import 'package:hrms_app/views/HR_views/hr_task_audit_screen.dart';
-import 'package:hrms_app/views/employee_views/lead_review_screen.dart';
-import 'package:hrms_app/views/employee_views/lead_task_receipt_screen.dart';
-import 'package:hrms_app/views/employee_views/member_weekly_submit_screen.dart';
 import 'package:provider/provider.dart';
-
 import 'firebase_options.dart';
 import 'views/login_screen.dart';
 import 'views/signup_screen.dart';
@@ -34,6 +29,7 @@ import 'views/HR_views/sidebar_wrapper/hr_sidebar_wrapper.dart';
 import 'views/employee_views/sidebar_wrapper/emp_sidebar_wrapper.dart';
 import 'services/auth_service.dart';
 import 'viewmodels/auth_viewmodel.dart';
+import 'navigation/app_notification_router.dart';
 
 // ─────────────────────────────────────────────────────────────
 // FCM
@@ -73,22 +69,22 @@ const AndroidNotificationChannel _taskChannel = AndroidNotificationChannel(
 //     tone; otherwise the device's default channel sound plays).
 const AndroidNotificationChannel _hrSystemAlertChannel =
     AndroidNotificationChannel(
-  'hr_system_alerts',
-  'System Alerts (HR)',
-  description:
-      'Genuine backend failures — cron crashes, FCM delivery failures, '
-      'data-integrity issues. HR-only.',
-  importance: Importance.max,
-  playSound: true,
-  // RawResourceAndroidNotificationSound looks for
-  // `android/app/src/main/res/raw/hr_alert.mp3`. If the file is missing
-  // the Android system falls back to the channel default sound — no
-  // crash, just less distinct.
-  sound: RawResourceAndroidNotificationSound('hr_alert'),
-  enableVibration: true,
-  enableLights: true,
-  ledColor: Color(0xFFDC2626), // red LED
-);
+      'hr_system_alerts',
+      'System Alerts (HR)',
+      description:
+          'Genuine backend failures — cron crashes, FCM delivery failures, '
+          'data-integrity issues. HR-only.',
+      importance: Importance.max,
+      playSound: true,
+      // RawResourceAndroidNotificationSound looks for
+      // `android/app/src/main/res/raw/hr_alert.mp3`. If the file is missing
+      // the Android system falls back to the channel default sound — no
+      // crash, just less distinct.
+      sound: RawResourceAndroidNotificationSound('hr_alert'),
+      enableVibration: true,
+      enableLights: true,
+      ledColor: Color(0xFFDC2626), // red LED
+    );
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -103,11 +99,16 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   }
 }
 
-void _showTaskNotification({required String title, required String body}) {
+void _showTaskNotification({
+  required String title,
+  required String body,
+  Map<String, dynamic>? data,
+}) {
   _localNotifications.show(
     id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
     title: title,
     body: body,
+    payload: data != null ? encodeNotificationPayload(data) : null,
     notificationDetails: NotificationDetails(
       android: AndroidNotificationDetails(
         _taskChannel.id,
@@ -207,7 +208,10 @@ void main() async {
       iOS: DarwinInitializationSettings(),
     ),
     onDidReceiveNotificationResponse: (details) {
-      debugPrint('[LocalNotif] tapped: ${details.payload}');
+      final data = decodeNotificationPayload(details.payload);
+      if (data.isNotEmpty) {
+        handleNotificationDeepLink(data);
+      }
     },
   );
 
@@ -344,6 +348,7 @@ class HRMSApp extends StatelessWidget {
         ),
       ],
       child: MaterialApp(
+        navigatorKey: rootNavigatorKey,
         title: 'HRMS',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
@@ -555,6 +560,7 @@ class _AppInitState extends State<_AppInit> {
       } else {
         Navigator.of(context).pushReplacementNamed('/employee_dashboard');
       }
+      await _handleColdStartNotification();
     } else {
       Navigator.of(context).pushReplacementNamed('/login');
     }
@@ -595,7 +601,15 @@ class _AppInitState extends State<_AppInit> {
               if (leadId == empId && !isRead) {
                 final title = data['title'] ?? 'Task Notification';
                 final body = data['body'] ?? '';
-                _showTaskNotification(title: title, body: body);
+                _showTaskNotification(
+                  title: title,
+                  body: body,
+                  data: {
+                    'type': (data['type'] ?? '').toString(),
+                    'referenceId': (data['referenceId'] ?? '').toString(),
+                    'taskId': (data['taskId'] ?? '').toString(),
+                  },
+                );
               }
             }
           }
@@ -659,75 +673,27 @@ class _AppInitState extends State<_AppInit> {
         } else if (type.startsWith('barrier')) {
           _showLocalNotification(title: title, body: body);
         } else {
-          _showTaskNotification(title: title, body: body);
+          _showTaskNotification(
+            title: title,
+            body: body,
+            data: Map<String, dynamic>.from(data),
+          );
         }
       }
     });
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage msg) {
       debugPrint('[FCM Tapped] type: ${msg.data['type']}');
-      _deepLinkFromFcm(msg.data);
+      handleNotificationDeepLink(msg.data);
     });
   }
 
-  /// FCM tap → deep-link into the v2 hierarchical task screens when the
-  /// payload carries `taskId`. Falls back to a no-op for legacy / non-task
-  /// notifications since the in-app notifications screen handles those.
-  Future<void> _deepLinkFromFcm(Map<String, dynamic> data) async {
-    final taskId = (data['taskId'] ?? '').toString();
-    if (taskId.isEmpty) return;
-    if (!mounted) return;
-    try {
-      final taskDoc = await FirebaseFirestore.instance
-          .collection('tasks')
-          .doc(taskId)
-          .get();
-      if (!taskDoc.exists || taskDoc.data()?['schemaVersion'] != 2) return;
-      if (!mounted) return;
-
-      final user = context.read<AuthViewModel>().currentUser;
-      final role = (user?.role ?? '').toLowerCase();
-      final isHR = role == 'hr';
-      final eventId = (data['eventId'] ?? '').toString();
-      final weekRaw = data['weekNumber'];
-      final weekNumber = weekRaw is int
-          ? weekRaw
-          : int.tryParse(weekRaw?.toString() ?? '');
-
-      Widget? target;
-      if (isHR) {
-        target = HRTaskAuditScreen(
-          taskId: taskId,
-          highlightedEventId: eventId.isEmpty ? null : eventId,
-          highlightedWeekNumber: weekNumber,
-        );
-      } else {
-        final myUid = user?.uid ?? '';
-        if (myUid.isEmpty) return;
-        final me = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(myUid)
-            .get();
-        if (!mounted) return;
-        final myEmpId = (me.data()?['emp_id'] ?? '').toString();
-        final leadId =
-            (taskDoc.data()?['lead_id'] ?? '').toString().toLowerCase();
-        final isLead = leadId.isNotEmpty && leadId == myEmpId.toLowerCase();
-        if (isLead) {
-          if (weekNumber != null &&
-              (data['memberEmpId'] ?? '').toString().isNotEmpty) {
-            target = LeadReviewScreen(taskId: taskId);
-          } else {
-            target = LeadTaskReceiptScreen(taskId: taskId);
-          }
-        } else {
-          target = MemberWeeklySubmitScreen(taskId: taskId, empId: myEmpId);
-        }
-      }
-      if (!mounted) return;
-      Navigator.of(context).push(MaterialPageRoute(builder: (_) => target!));
-    } catch (e) {
-      debugPrint('[FCM deep-link] failed: $e');
-    }
+  /// App opened from terminated state via notification tap.
+  Future<void> _handleColdStartNotification() async {
+    final initial = await FirebaseMessaging.instance.getInitialMessage();
+    if (initial == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      handleNotificationDeepLink(initial.data);
+    });
   }
 
   @override

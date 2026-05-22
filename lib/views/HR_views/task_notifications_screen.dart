@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../navigation/app_notification_router.dart';
 import '../../services/task_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../employee_views/EmployeeGoalsScreen.dart';
@@ -38,6 +39,16 @@ class TaskNotificationsScreen extends StatelessWidget {
     final user = context.read<AuthViewModel>().currentUser;
     final role = (user?.role ?? '').toLowerCase();
     final isHR = role == 'hr';
+
+    if (type == 'company_letter' && !isHR) {
+      final letterId = (n['referenceId'] ?? '').toString();
+      if (context.mounted) Navigator.of(context).pop();
+      await handleNotificationDeepLink({
+        'type': 'company_letter',
+        'referenceId': letterId,
+      });
+      return;
+    }
 
     // Report notifications retain the existing top-level routing.
     if (type == 'report' || title.contains('Report')) {

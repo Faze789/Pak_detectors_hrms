@@ -74,6 +74,11 @@ class SidebarProvider {
           icon: Icons.work_outline,
         ),
         SidebarItem(
+          id: 'company-letters',
+          label: 'Company Letter',
+          icon: Icons.description_outlined,
+        ),
+        SidebarItem(
           id: 'performance',
           label: 'Performance',
           icon: Icons.trending_up_outlined,
@@ -100,11 +105,11 @@ class SidebarProvider {
           badge: '3',
           badgeColor: 'amber',
         ),
-        SidebarItem(
-          id: 'company-letters',
-          label: 'Company Letter',
-          icon: Icons.description_outlined,
-        ),
+        // SidebarItem(
+        //   id: 'company-letters',
+        //   label: 'Company Letter',
+        //   icon: Icons.description_outlined,
+        // ),
       ],
     ),
     // Reports & Documents
@@ -164,6 +169,11 @@ class SidebarProvider {
               label: 'Team Reports',
               icon: Icons.group_outlined,
             ),
+          const SidebarItem(
+            id: 'my-letters',
+            label: 'My Letters',
+            icon: Icons.description_outlined,
+          ),
           if (isLead)
             const SidebarItem(
               id: 'lead-leave-approvals',
@@ -196,11 +206,11 @@ class SidebarProvider {
             label: 'My Payslips',
             icon: Icons.credit_card_outlined,
           ),
-          const SidebarItem(
-            id: 'my-letters',
-            label: 'My Letters',
-            icon: Icons.description_outlined,
-          ),
+          // const SidebarItem(
+          //   id: 'my-letters',
+          //   label: 'My Letters',
+          //   icon: Icons.description_outlined,
+          // ),
         ],
       ),
       const SidebarSection(

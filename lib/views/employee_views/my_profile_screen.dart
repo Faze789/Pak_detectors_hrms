@@ -8,6 +8,8 @@ import '../../models/payroll_model.dart';
 import '../../viewmodels/attendance_viewmodel.dart';
 import '../../viewmodels/employee_viewmodel.dart';
 import '../../viewmodels/leave_viewmodel.dart';
+import '../../viewmodels/performance_viewmodel.dart';
+import '../../models/performance_models.dart';
 import '../employee_tabs/leaves_tab.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -266,7 +268,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                   emp_id: employee?.emp_id ?? '',
                   isHR: (employee?.role ?? '').toLowerCase() == 'hr',
                 ),
-                _PerformanceTab(),
+                _PerformanceTab(userId: widget.userId),
                 // ✅ Real payslip data
                 _SalaryTab(userId: widget.userId),
               ],
@@ -291,7 +293,9 @@ class _ProfileHeader extends StatelessWidget {
     final name = employee?.name ?? '—';
     final role = employee?.role ?? '—';
     final department = employee?.department ?? '—';
-    final empId = employee?.uid ?? '—';
+    final empId = employee?.emp_id.isNotEmpty == true
+        ? employee!.emp_id
+        : (employee?.uid ?? '—');
     final statusColor = employee?.status == EmployeeStatus.active
         ? Colors.greenAccent
         : Colors.orangeAccent;
@@ -891,48 +895,203 @@ class _AttendanceDayTile extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// PERFORMANCE TAB — Dummy data (replace when real data is available)
+// PERFORMANCE TAB — live data from EmployeePerformanceViewModel
 // ══════════════════════════════════════════════════════════════════════════════
 
 class _PerformanceTab extends StatelessWidget {
-  final _quarters = const [
-    {'quarter': 'Q4 2024', 'date': '2024-12-31', 'score': '92%'},
-    {'quarter': 'Q3 2024', 'date': '2024-09-30', 'score': '88%'},
-  ];
+  final String userId;
+  const _PerformanceTab({required this.userId});
 
   @override
-  Widget build(BuildContext context) => ListView(
-    padding: const EdgeInsets.all(16),
-    children: [
-      Row(
-        children: [
-          Expanded(
-            child: _StatTile(
-              label: 'Completed Reviews',
-              value: '2',
-              icon: Icons.check_circle_outline,
-              color: const Color(0xFF10B981),
-            ),
+  Widget build(BuildContext context) {
+    final perfVm = context.watch<EmployeePerformanceViewModel>();
+    if (perfVm.employeeId != userId) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final goals = perfVm.goals;
+    final empGoals = perfVm.employeeGoals;
+    final weekTasks = perfVm.currentWeekTasks;
+    final deduction = perfVm.currentMonthDeduction;
+
+    final completedGoals =
+        goals.where((g) => g.status == GoalStatus.completed).length;
+    final activeWeekTasks = weekTasks
+        .where((t) => t.status != TaskStatus.completed)
+        .length;
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        if (perfVm.isLoading && !perfVm.quarterlyStreamReady)
+          const Center(child: Padding(
+            padding: EdgeInsets.all(24),
+            child: CircularProgressIndicator(),
+          ))
+        else ...[
+          Row(
+            children: [
+              Expanded(
+                child: _StatTile(
+                  label: 'Quarterly goals',
+                  value: '${goals.length}',
+                  icon: Icons.flag_outlined,
+                  color: const Color(0xFF2563EB),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _StatTile(
+                  label: 'Completed',
+                  value: '$completedGoals',
+                  icon: Icons.check_circle_outline,
+                  color: const Color(0xFF10B981),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _StatTile(
-              label: 'Status',
-              value: 'All Done',
-              icon: Icons.flag_outlined,
-              color: const Color(0xFF2563EB),
-            ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _StatTile(
+                  label: 'This week tasks',
+                  value: '$activeWeekTasks',
+                  icon: Icons.assignment_outlined,
+                  color: const Color(0xFFF59E0B),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _StatTile(
+                  label: 'Month deduction',
+                  value: deduction != null
+                      ? 'Rs ${deduction.deductionAmount.toStringAsFixed(0)}'
+                      : 'Rs 0',
+                  icon: Icons.trending_down_outlined,
+                  color: const Color(0xFFEF4444),
+                ),
+              ),
+            ],
           ),
+          const SizedBox(height: 16),
+          _SectionCard(
+            title: 'Quarterly goals',
+            icon: Icons.trending_up_outlined,
+            children: goals.isEmpty
+                ? [
+                    const Padding(
+                      padding: EdgeInsets.all(8),
+                      child: Text(
+                        'No quarterly goals assigned yet.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ),
+                  ]
+                : goals
+                    .take(5)
+                    .map((g) => _QuarterlyGoalTile(goal: g))
+                    .toList(),
+          ),
+          if (empGoals.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            _SectionCard(
+              title: 'Employee goals',
+              icon: Icons.track_changes_outlined,
+              children: empGoals
+                  .take(5)
+                  .map((g) => _EmployeeGoalTile(goal: g))
+                  .toList(),
+            ),
+          ],
         ],
-      ),
-      const SizedBox(height: 16),
-      _SectionCard(
-        title: 'Quarterly Reviews',
-        icon: Icons.trending_up_outlined,
-        children: _quarters.map((q) => _QuarterTile(data: q)).toList(),
-      ),
-    ],
-  );
+      ],
+    );
+  }
+}
+
+class _QuarterlyGoalTile extends StatelessWidget {
+  final QuarterlyGoalModel goal;
+  const _QuarterlyGoalTile({required this.goal});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    goal.title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                  Text(
+                    '${DateFormat('MMM d').format(goal.startDate)} – ${DateFormat('MMM d, y').format(goal.endDate)} · ${goal.status.name}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Text(
+              '${goal.currentProgress.toStringAsFixed(0)}%',
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF2563EB),
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+class _EmployeeGoalTile extends StatelessWidget {
+  final EmployeeGoalModel goal;
+  const _EmployeeGoalTile({required this.goal});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              goal.title,
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              goal.status.name,
+              style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+            ),
+          ],
+        ),
+      );
 }
 
 class _QuarterTile extends StatelessWidget {

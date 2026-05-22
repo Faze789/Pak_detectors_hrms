@@ -475,8 +475,9 @@ exports.onTaskNotificationCreated = onDocumentCreated(
         token: leadToken,
         notification: { title, body },
         data: {
-          type: "task_modified",
+          type: notif.type ?? "task_modified",
           taskId: notif.taskId ?? "",
+          referenceId: notif.referenceId ?? "",
           modifiedBy: notif.modifiedBy ?? "",
           timestamp: new Date().toISOString(),
         },
@@ -1015,7 +1016,7 @@ exports.markAbsentAtSixPM = onSchedule(
       const liveSnap = await db.collection("attendance_live").doc(userId).get();
       if (liveSnap.exists) {
         const live = liveSnap.data();
-        if (live.dateString === dateKey &&
+        if (_liveDateKey(live) === dateKey &&
           (live.checkInTime || live.checkOutTime)) {
           skippedAlreadyIn++;
           continue;
@@ -1117,7 +1118,7 @@ exports.cleanStaleLiveRecords = onSchedule(
 
     for await (const doc of db.collection("attendance_live").stream()) {
       const data = doc.data();
-      if (data.dateString !== todayKey) continue;
+      if (_liveDateKey(data) !== todayKey) continue;
       if (data.checkOutTime != null) continue;
 
       const userId = doc.id;
@@ -1330,14 +1331,7 @@ async function _runMarkAbsent({ skipFirstHalfLeave }) {
 
     let checkedIn = false;
     if (liveData) {
-      if (liveData.dateString) {
-        // ── Preferred: compare string directly (no timezone ambiguity) ──
-        checkedIn = liveData.dateString === dayKey;
-      } else if (liveData.date) {
-        // ── Fallback: old Timestamp field ──
-        const liveDate = liveData.date.toDate();
-        checkedIn = isSameDayInTZ(liveDate, now, timezone);
-      }
+      checkedIn = _liveDateKey(liveData) === dayKey;
     }
 
     // ── FIX 3: Employee never opened the app → liveData is null → checkedIn
@@ -1524,6 +1518,21 @@ function _todayKeyKarachi() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' });
 }
 
+// Resolve an attendance_live doc to its YYYY-MM-DD key in Asia/Karachi.
+// Newer client writes carry `dateString` explicitly; older writes (including
+// any that AttendanceModel.toMap produced before the field was added) only
+// have the Timestamp `date` field. Falling back to `date.toDate()` keeps
+// every cron consistent even when both shapes coexist in the wild.
+function _liveDateKey(live) {
+  if (!live) return '';
+  if (live.dateString) return live.dateString.toString();
+  const d = live.date;
+  if (d && typeof d.toDate === 'function') {
+    return d.toDate().toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' });
+  }
+  return '';
+}
+
 // Defaults applied when no work_hour_overrides doc covers today for an employee.
 const _DEFAULT_WORK_START_MINUTES = 9 * 60;  // 09:00
 const _DEFAULT_WORK_END_MINUTES = 18 * 60;   // 18:00
@@ -1666,7 +1675,7 @@ exports.checkInReminders = onSchedule(
       const liveDoc = await db.collection('attendance_live').doc(userId).get();
       if (liveDoc.exists) {
         const live = liveDoc.data();
-        if ((live.dateString || '') === todayKey && live.checkInTime) continue;
+        if (_liveDateKey(live) === todayKey && live.checkInTime) continue;
       }
 
       // Body uses the employee's PERSONAL start time so the message is
@@ -1770,7 +1779,7 @@ exports.checkOutReminders = onSchedule(
       const liveDoc = await db.collection('attendance_live').doc(userId).get();
       if (!liveDoc.exists) continue;
       const live = liveDoc.data();
-      if ((live.dateString || '') !== todayKey) continue;
+      if (_liveDateKey(live) !== todayKey) continue;
       if (!live.checkInTime) continue;     // never checked in → no checkout nag
       if (live.checkOutTime) continue;     // already checked out → done
 
@@ -1787,9 +1796,9 @@ exports.checkOutReminders = onSchedule(
         : '🕕 Check-out Reminder';
       const body = isFinal
         ? `Last reminder — please check out now. After ${cutoffLabel} ` +
-          `the check-out button will be disabled.`
+        `the check-out button will be disabled.`
         : `Your shift ended at ${endH}:${String(endM).padStart(2, '0')} ` +
-          `— please check out for the day.`;
+        `— please check out for the day.`;
 
       const notifRef = db.collection('task_notifications').doc();
       writeBatch.set(notifRef, {
