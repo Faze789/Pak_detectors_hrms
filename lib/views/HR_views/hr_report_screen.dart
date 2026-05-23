@@ -676,10 +676,10 @@ class _ProfileCard extends StatelessWidget {
               width: 64,
               height: 64,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
+                color: Colors.white.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(32),
                 border: Border.all(
-                  color: Colors.white.withOpacity(0.3),
+                  color: Colors.white.withValues(alpha: 0.3),
                   width: 2,
                 ),
               ),
@@ -711,7 +711,7 @@ class _ProfileCard extends StatelessWidget {
                     '${employee.role} · ${employee.department}',
                     style: TextStyle(
                       fontSize: 13,
-                      color: Colors.white.withOpacity(0.8),
+                      color: Colors.white.withValues(alpha: 0.8),
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -1006,7 +1006,9 @@ class _AttendanceCard extends StatelessWidget {
                           (r) => TableRow(
                             decoration: BoxDecoration(
                               color: r.status == AttendanceStatus.absent
-                                  ? const Color(0xFFFEF2F2).withOpacity(0.5)
+                                  ? const Color(
+                                      0xFFFEF2F2,
+                                    ).withValues(alpha: 0.5)
                                   : null,
                             ),
                             children: [
@@ -1400,7 +1402,7 @@ class _PayItem extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.6),
+        color: Colors.white.withValues(alpha: 0.6),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -1690,7 +1692,7 @@ class _Card extends StatelessWidget {
       borderRadius: BorderRadius.circular(16),
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withOpacity(0.05),
+          color: Colors.black.withValues(alpha: 0.05),
           blurRadius: 6,
           offset: const Offset(0, 2),
         ),
@@ -1798,10 +1800,12 @@ class _StatusBadge extends StatelessWidget {
         border = const Color(0xFFFCA5A5);
         break;
       default:
-        bg = light ? Colors.white.withOpacity(0.2) : const Color(0xFFF1F5F9);
+        bg = light
+            ? Colors.white.withValues(alpha: 0.2)
+            : const Color(0xFFF1F5F9);
         fg = light ? Colors.white : const Color(0xFF475569);
         border = light
-            ? Colors.white.withOpacity(0.3)
+            ? Colors.white.withValues(alpha: 0.3)
             : const Color(0xFFCBD5E1);
     }
     return Container(

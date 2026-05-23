@@ -44,9 +44,9 @@ class _EmployeeReportsScreenState extends State<EmployeeReportsScreen> {
 
   void _applyFilter(String filter) {
     setState(() => _activeFilter = filter);
-    context
-        .read<EmployeeReportViewModel>()
-        .loadAllReports(filterType: filter.isEmpty ? null : filter);
+    context.read<EmployeeReportViewModel>().loadAllReports(
+      filterType: filter.isEmpty ? null : filter,
+    );
   }
 
   void _openPdf(String url) {
@@ -71,7 +71,11 @@ class _EmployeeReportsScreenState extends State<EmployeeReportsScreen> {
             color: Colors.white,
             child: Row(
               children: [
-                const Icon(Icons.filter_list, color: Color(0xFF64748B), size: 20),
+                const Icon(
+                  Icons.filter_list,
+                  color: Color(0xFF64748B),
+                  size: 20,
+                ),
                 const SizedBox(width: 8),
                 const Text(
                   'Type:',
@@ -99,7 +103,11 @@ class _EmployeeReportsScreenState extends State<EmployeeReportsScreen> {
             color: Colors.white,
             child: Row(
               children: [
-                const Icon(Icons.people_outline, color: Color(0xFF64748B), size: 20),
+                const Icon(
+                  Icons.people_outline,
+                  color: Color(0xFF64748B),
+                  size: 20,
+                ),
                 const SizedBox(width: 8),
                 const Text(
                   'Role:',
@@ -132,7 +140,9 @@ class _EmployeeReportsScreenState extends State<EmployeeReportsScreen> {
                 final filtered = _roleFilter.isEmpty
                     ? vm.reports
                     : vm.reports.where((r) {
-                        final role = (r['employeeRole'] ?? '').toString().toLowerCase();
+                        final role = (r['employeeRole'] ?? '')
+                            .toString()
+                            .toLowerCase();
                         if (_roleFilter == 'lead') {
                           return role.contains('project lead');
                         } else {
@@ -145,11 +155,18 @@ class _EmployeeReportsScreenState extends State<EmployeeReportsScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.inbox_outlined, size: 64, color: Colors.grey.shade400),
+                        Icon(
+                          Icons.inbox_outlined,
+                          size: 64,
+                          color: Colors.grey.shade400,
+                        ),
                         const SizedBox(height: 12),
                         Text(
                           'No reports found',
-                          style: TextStyle(color: Colors.grey.shade500, fontSize: 15),
+                          style: TextStyle(
+                            color: Colors.grey.shade500,
+                            fontSize: 15,
+                          ),
                         ),
                       ],
                     ),
@@ -200,8 +217,8 @@ class _EmployeeReportsScreenState extends State<EmployeeReportsScreen> {
     final color = value == 'lead'
         ? const Color(0xFFF59E0B)
         : value == 'member'
-            ? const Color(0xFF10B981)
-            : const Color(0xFF64748B);
+        ? const Color(0xFF10B981)
+        : const Color(0xFF64748B);
     final activeColor = value.isEmpty ? const Color(0xFF2563EB) : color;
 
     return GestureDetector(
@@ -273,7 +290,9 @@ class _EmployeeReportsScreenState extends State<EmployeeReportsScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border(left: BorderSide(color: typeColor, width: 4)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6)],
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6),
+        ],
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -288,12 +307,14 @@ class _EmployeeReportsScreenState extends State<EmployeeReportsScreen> {
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: typeColor.withOpacity(0.1),
+                    color: typeColor.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   alignment: Alignment.center,
                   child: Text(
-                    employeeName.isNotEmpty ? employeeName[0].toUpperCase() : '?',
+                    employeeName.isNotEmpty
+                        ? employeeName[0].toUpperCase()
+                        : '?',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -319,10 +340,15 @@ class _EmployeeReportsScreenState extends State<EmployeeReportsScreen> {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          if (employeeRole.toLowerCase().contains('project lead')) ...[
+                          if (employeeRole.toLowerCase().contains(
+                            'project lead',
+                          )) ...[
                             const SizedBox(width: 6),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
                                 color: const Color(0xFFFEF3C7),
                                 borderRadius: BorderRadius.circular(10),
@@ -342,16 +368,22 @@ class _EmployeeReportsScreenState extends State<EmployeeReportsScreen> {
                       if (department.isNotEmpty)
                         Text(
                           department,
-                          style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF94A3B8),
+                          ),
                         ),
                     ],
                   ),
                 ),
                 // Type badge
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
-                    color: typeColor.withOpacity(0.1),
+                    color: typeColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
@@ -373,29 +405,32 @@ class _EmployeeReportsScreenState extends State<EmployeeReportsScreen> {
                 const SizedBox(width: 6),
                 // Status badge
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: isAssessed
                         ? const Color(0xFFD1FAE5)
                         : isLeadAssessed
-                            ? const Color(0xFFDBEAFE)
-                            : const Color(0xFFFEF3C7),
+                        ? const Color(0xFFDBEAFE)
+                        : const Color(0xFFFEF3C7),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
                     isAssessed
                         ? 'Assessed'
                         : isLeadAssessed
-                            ? 'Lead Assessed'
-                            : 'Pending',
+                        ? 'Lead Assessed'
+                        : 'Pending',
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
                       color: isAssessed
                           ? const Color(0xFF059669)
                           : isLeadAssessed
-                              ? const Color(0xFF2563EB)
-                              : const Color(0xFFD97706),
+                          ? const Color(0xFF2563EB)
+                          : const Color(0xFFD97706),
                     ),
                   ),
                 ),
@@ -422,7 +457,11 @@ class _EmployeeReportsScreenState extends State<EmployeeReportsScreen> {
               ),
               child: Text(
                 text,
-                style: const TextStyle(fontSize: 13, color: Color(0xFF334155), height: 1.5),
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFF334155),
+                  height: 1.5,
+                ),
               ),
             ),
 
@@ -432,7 +471,10 @@ class _EmployeeReportsScreenState extends State<EmployeeReportsScreen> {
               InkWell(
                 onTap: () => _openPdf(pdfUrl),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFFF7ED),
                     borderRadius: BorderRadius.circular(8),
@@ -441,11 +483,18 @@ class _EmployeeReportsScreenState extends State<EmployeeReportsScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.picture_as_pdf, color: Color(0xFFEA580C), size: 16),
+                      const Icon(
+                        Icons.picture_as_pdf,
+                        color: Color(0xFFEA580C),
+                        size: 16,
+                      ),
                       const SizedBox(width: 6),
                       Text(
                         pdfName.isNotEmpty ? pdfName : 'View PDF',
-                        style: const TextStyle(fontSize: 12, color: Color(0xFFEA580C)),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFFEA580C),
+                        ),
                       ),
                     ],
                   ),
@@ -468,7 +517,11 @@ class _EmployeeReportsScreenState extends State<EmployeeReportsScreen> {
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.rate_review, size: 16, color: Color(0xFF2563EB)),
+                        const Icon(
+                          Icons.rate_review,
+                          size: 16,
+                          color: Color(0xFF2563EB),
+                        ),
                         const SizedBox(width: 6),
                         Text(
                           'Lead Assessment by $assessedByLeadName',
@@ -484,7 +537,9 @@ class _EmployeeReportsScreenState extends State<EmployeeReportsScreen> {
                     Row(
                       children: List.generate(5, (i) {
                         return Icon(
-                          i < leadRating.toInt() ? Icons.star : Icons.star_border,
+                          i < leadRating.toInt()
+                              ? Icons.star
+                              : Icons.star_border,
                           color: const Color(0xFFF59E0B),
                           size: 18,
                         );
@@ -494,7 +549,11 @@ class _EmployeeReportsScreenState extends State<EmployeeReportsScreen> {
                       const SizedBox(height: 6),
                       Text(
                         leadRemarks,
-                        style: const TextStyle(fontSize: 13, color: Color(0xFF334155), height: 1.4),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF334155),
+                          height: 1.4,
+                        ),
                       ),
                     ],
                   ],
@@ -517,7 +576,11 @@ class _EmployeeReportsScreenState extends State<EmployeeReportsScreen> {
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.check_circle, size: 16, color: Color(0xFF059669)),
+                        const Icon(
+                          Icons.check_circle,
+                          size: 16,
+                          color: Color(0xFF059669),
+                        ),
                         const SizedBox(width: 6),
                         Text(
                           'Assessed by $assessedByName',
@@ -543,7 +606,11 @@ class _EmployeeReportsScreenState extends State<EmployeeReportsScreen> {
                       const SizedBox(height: 6),
                       Text(
                         hrRemarks,
-                        style: const TextStyle(fontSize: 13, color: Color(0xFF334155), height: 1.4),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF334155),
+                          height: 1.4,
+                        ),
                       ),
                     ],
                   ],
@@ -587,7 +654,9 @@ class _EmployeeReportsScreenState extends State<EmployeeReportsScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSt) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           title: Row(
             children: [
               const Icon(Icons.rate_review, color: Color(0xFF2563EB)),
@@ -625,7 +694,9 @@ class _EmployeeReportsScreenState extends State<EmployeeReportsScreen> {
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 4),
                         child: Icon(
-                          starNum <= selectedRating ? Icons.star : Icons.star_border,
+                          starNum <= selectedRating
+                              ? Icons.star
+                              : Icons.star_border,
                           color: const Color(0xFFF59E0B),
                           size: 36,
                         ),
@@ -660,7 +731,10 @@ class _EmployeeReportsScreenState extends State<EmployeeReportsScreen> {
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: Color(0xFF2563EB), width: 2),
+                      borderSide: const BorderSide(
+                        color: Color(0xFF2563EB),
+                        width: 2,
+                      ),
                     ),
                   ),
                 ),

@@ -48,7 +48,9 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<LeaveViewModel>().initForEmployee(widget.userId);
       context.read<EmployeeViewModel>().loadEmployees(widget.userId);
-      context.read<DocumentViewModel>().loadDocuments(employeeId: widget.userId);
+      context.read<DocumentViewModel>().loadDocuments(
+        employeeId: widget.userId,
+      );
     });
   }
 
@@ -283,9 +285,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                     allowManage: false,
                   )
                 else
-                  const Center(
-                    child: Text('Loading profile…'),
-                  ),
+                  const Center(child: Text('Loading profile…')),
               ],
             ),
           );
@@ -412,10 +412,10 @@ class _ProfileHeader extends StatelessWidget {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: _roleColor(role).withOpacity(0.25),
+                        color: _roleColor(role).withValues(alpha: 0.25),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: _roleColor(role).withOpacity(0.5),
+                          color: _roleColor(role).withValues(alpha: 0.5),
                         ),
                       ),
                       child: Row(
@@ -929,8 +929,9 @@ class _PerformanceTab extends StatelessWidget {
     final weekTasks = perfVm.currentWeekTasks;
     final deduction = perfVm.currentMonthDeduction;
 
-    final completedGoals =
-        goals.where((g) => g.status == GoalStatus.completed).length;
+    final completedGoals = goals
+        .where((g) => g.status == GoalStatus.completed)
+        .length;
     final activeWeekTasks = weekTasks
         .where((t) => t.status != TaskStatus.completed)
         .length;
@@ -939,10 +940,12 @@ class _PerformanceTab extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       children: [
         if (perfVm.isLoading && !perfVm.quarterlyStreamReady)
-          const Center(child: Padding(
-            padding: EdgeInsets.all(24),
-            child: CircularProgressIndicator(),
-          ))
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: CircularProgressIndicator(),
+            ),
+          )
         else ...[
           Row(
             children: [
@@ -1007,9 +1010,9 @@ class _PerformanceTab extends StatelessWidget {
                     ),
                   ]
                 : goals
-                    .take(5)
-                    .map((g) => _QuarterlyGoalTile(goal: g))
-                    .toList(),
+                      .take(5)
+                      .map((g) => _QuarterlyGoalTile(goal: g))
+                      .toList(),
           ),
           if (empGoals.isNotEmpty) ...[
             const SizedBox(height: 16),
@@ -1034,46 +1037,43 @@ class _QuarterlyGoalTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade50,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.grey.shade200),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    goal.title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                    ),
-                  ),
-                  Text(
-                    '${DateFormat('MMM d').format(goal.startDate)} – ${DateFormat('MMM d, y').format(goal.endDate)} · ${goal.status.name}',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: Color(0xFF64748B),
-                    ),
-                  ),
-                ],
+    margin: const EdgeInsets.only(bottom: 10),
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: Colors.grey.shade50,
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: Colors.grey.shade200),
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                goal.title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
               ),
-            ),
-            Text(
-              '${goal.currentProgress.toStringAsFixed(0)}%',
-              style: const TextStyle(
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF2563EB),
+              Text(
+                '${DateFormat('MMM d').format(goal.startDate)} – ${DateFormat('MMM d, y').format(goal.endDate)} · ${goal.status.name}',
+                style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      );
+        Text(
+          '${goal.currentProgress.toStringAsFixed(0)}%',
+          style: const TextStyle(
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF2563EB),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _EmployeeGoalTile extends StatelessWidget {
@@ -1082,31 +1082,28 @@ class _EmployeeGoalTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade50,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.grey.shade200),
+    margin: const EdgeInsets.only(bottom: 10),
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: Colors.grey.shade50,
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: Colors.grey.shade200),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          goal.title,
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              goal.title,
-              style: const TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              goal.status.name,
-              style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-            ),
-          ],
+        const SizedBox(height: 4),
+        Text(
+          goal.status.name,
+          style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
         ),
-      );
+      ],
+    ),
+  );
 }
 
 class _QuarterTile extends StatelessWidget {
@@ -1401,9 +1398,9 @@ class _SalaryTabState extends State<_SalaryTab> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: statusColor.withOpacity(0.12),
+                color: statusColor.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: statusColor.withOpacity(0.4)),
+                border: Border.all(color: statusColor.withValues(alpha: 0.4)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -1727,7 +1724,7 @@ class _SalaryOverviewTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       border: Border(left: BorderSide(color: color, width: 4)),
       boxShadow: [
-        BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6),
+        BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6),
       ],
     ),
     child: Column(
@@ -1826,7 +1823,7 @@ class _SectionCard extends StatelessWidget {
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
       boxShadow: [
-        BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8),
+        BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8),
       ],
     ),
     child: Column(
@@ -1886,7 +1883,7 @@ class _RoleBadgeRow extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(7),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, color: color, size: 16),
@@ -1906,9 +1903,9 @@ class _RoleBadgeRow extends StatelessWidget {
                   vertical: 5,
                 ),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: color.withOpacity(0.3)),
+                  border: Border.all(color: color.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -2004,7 +2001,7 @@ class _StatTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       border: Border(left: BorderSide(color: color, width: 4)),
       boxShadow: [
-        BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6),
+        BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6),
       ],
     ),
     child: Column(

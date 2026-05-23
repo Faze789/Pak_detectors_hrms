@@ -328,7 +328,7 @@ class _HRMonthlyGoalsScreenState extends State<HRMonthlyGoalsScreen>
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -341,7 +341,7 @@ class _HRMonthlyGoalsScreenState extends State<HRMonthlyGoalsScreen>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: statusBg.withOpacity(0.3),
+              color: statusBg.withValues(alpha: 0.3),
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(14),
                 topRight: Radius.circular(14),

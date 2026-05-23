@@ -219,7 +219,7 @@ class _MeetingFormSheetState extends State<MeetingFormSheet> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF3B82F6).withOpacity(0.1),
+                    color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(
@@ -500,7 +500,7 @@ class _MeetingFormSheetState extends State<MeetingFormSheet> {
                                         radius: 18,
                                         backgroundColor: const Color(
                                           0xFF3B82F6,
-                                        ).withOpacity(0.15),
+                                        ).withValues(alpha: 0.15),
                                         child: Text(
                                           employee.name.isNotEmpty
                                               ? employee.name[0].toUpperCase()

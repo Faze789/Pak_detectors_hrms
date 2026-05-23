@@ -39,8 +39,7 @@ class _HRMonthlyAttendanceScreenState extends State<HRMonthlyAttendanceScreen> {
   // Per-employee monthly salary loaded from users/{uid}.salary. When 0 or
   // null, the policy falls back to AttendancePolicy.monthlySalary (35,000).
   double? _employeeSalary;
-  bool get _hasCustomSalary =>
-      _employeeSalary != null && _employeeSalary! > 0;
+  bool get _hasCustomSalary => _employeeSalary != null && _employeeSalary! > 0;
   double get _effectiveMonthlySalary =>
       _hasCustomSalary ? _employeeSalary! : AttendancePolicy.monthlySalary;
 
@@ -201,7 +200,9 @@ class _HRMonthlyAttendanceScreenState extends State<HRMonthlyAttendanceScreen> {
                 children: [
                   Expanded(
                     child: _SummaryCard(
-                      label: _hasCustomSalary ? 'Gross (saved)' : 'Gross (default)',
+                      label: _hasCustomSalary
+                          ? 'Gross (saved)'
+                          : 'Gross (default)',
                       value: 'Rs ${_fmtMoney(_effectiveMonthlySalary)}',
                       color: const Color(0xFF2563EB),
                       icon: Icons.account_balance_wallet_rounded,
@@ -257,7 +258,9 @@ class _HRMonthlyAttendanceScreenState extends State<HRMonthlyAttendanceScreen> {
                 ],
               ),
               const SizedBox(height: 16),
-              _PolicyBanner(perDayWage: AttendancePolicy.perDayWageFor(_employeeSalary)),
+              _PolicyBanner(
+                perDayWage: AttendancePolicy.perDayWageFor(_employeeSalary),
+              ),
               const SizedBox(height: 16),
               if (_loading)
                 const Padding(
@@ -427,7 +430,7 @@ class _SummaryCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.12),
+                  color: color.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(icon, color: color, size: 14),

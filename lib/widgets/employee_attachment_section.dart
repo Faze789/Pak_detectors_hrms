@@ -39,17 +39,15 @@ class EmployeeAttachmentSection extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<DocumentCategory>(
-              value: category,
+              initialValue: category,
               decoration: const InputDecoration(
                 labelText: 'Category',
                 border: OutlineInputBorder(),
               ),
               items: DocumentCategory.values
                   .map(
-                    (c) => DropdownMenuItem(
-                      value: c,
-                      child: Text(c.displayName),
-                    ),
+                    (c) =>
+                        DropdownMenuItem(value: c, child: Text(c.displayName)),
                   )
                   .toList(),
               onChanged: (v) {
@@ -113,10 +111,7 @@ class EmployeeAttachmentSection extends StatelessWidget {
               SizedBox(width: 8),
               Text(
                 'Attachments & offer letters',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
-                ),
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
               ),
             ],
           ),
@@ -151,7 +146,9 @@ class EmployeeAttachmentSection extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            ...vm.documents.take(3).map(
+            ...vm.documents
+                .take(3)
+                .map(
                   (d) => ListTile(
                     dense: true,
                     contentPadding: EdgeInsets.zero,
@@ -160,10 +157,7 @@ class EmployeeAttachmentSection extends StatelessWidget {
                       color: const Color(0xFF2563EB),
                       size: 22,
                     ),
-                    title: Text(
-                      d.title,
-                      style: const TextStyle(fontSize: 13),
-                    ),
+                    title: Text(d.title, style: const TextStyle(fontSize: 13)),
                     subtitle: Text(
                       '${d.category.displayName} · ${documentTypeLabel(d)}',
                       style: const TextStyle(fontSize: 11),

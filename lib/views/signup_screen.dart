@@ -122,8 +122,8 @@ class _SignupScreenState extends State<SignupScreen> {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      Theme.of(context).primaryColor.withOpacity(0.8),
-                      Theme.of(context).primaryColor.withOpacity(0.2),
+                      Theme.of(context).primaryColor.withValues(alpha: 0.8),
+                      Theme.of(context).primaryColor.withValues(alpha: 0.2),
                     ],
                   ),
                 ),
@@ -146,7 +146,7 @@ class _SignupScreenState extends State<SignupScreen> {
                             color: Colors.white,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
+                                color: Colors.black.withValues(alpha: 0.1),
                                 blurRadius: 10,
                                 spreadRadius: 2,
                               ),

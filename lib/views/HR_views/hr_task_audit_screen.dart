@@ -406,7 +406,7 @@ class _HRTaskAuditScreenState extends State<HRTaskAuditScreen> {
                   color: bgColor,
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: iconColor.withOpacity(0.4),
+                    color: iconColor.withValues(alpha: 0.4),
                     width: 2,
                   ),
                 ),
@@ -435,7 +435,7 @@ class _HRTaskAuditScreenState extends State<HRTaskAuditScreen> {
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF0F172A).withOpacity(0.04),
+                      color: const Color(0xFF0F172A).withValues(alpha: 0.04),
                       blurRadius: 6,
                       offset: const Offset(0, 2),
                     ),

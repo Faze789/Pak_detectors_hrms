@@ -594,7 +594,7 @@ class _AttendanceChartCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 4,
             offset: const Offset(0, 1),
           ),
@@ -767,7 +767,7 @@ class _DepartmentBreakdownCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 4,
             offset: const Offset(0, 1),
           ),
@@ -1017,7 +1017,7 @@ class _LiveAttendanceTableState extends State<_LiveAttendanceTable> {
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withValues(alpha: 0.05),
                 blurRadius: 4,
                 offset: const Offset(0, 1),
               ),
@@ -1246,10 +1246,10 @@ class _LiveAttendanceTableState extends State<_LiveAttendanceTable> {
       color: WidgetStateProperty.resolveWith((states) {
         if (status == _DisplayStatus.absent ||
             status == _DisplayStatus.noRecord) {
-          return const Color(0xFFFEF2F2).withOpacity(0.5);
+          return const Color(0xFFFEF2F2).withValues(alpha: 0.5);
         }
         if (status == _DisplayStatus.onLeave) {
-          return const Color(0xFFEFF6FF).withOpacity(0.5);
+          return const Color(0xFFEFF6FF).withValues(alpha: 0.5);
         }
         return null;
       }),
@@ -1726,7 +1726,7 @@ class StatCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 4,
             offset: const Offset(0, 1),
           ),
@@ -1907,7 +1907,7 @@ class _EmployeeStatusOverview extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 4,
             offset: const Offset(0, 1),
           ),
@@ -1937,8 +1937,8 @@ class _EmployeeStatusOverview extends StatelessWidget {
               final cols = constraints.maxWidth > 900
                   ? 3
                   : constraints.maxWidth > 600
-                      ? 2
-                      : 1;
+                  ? 2
+                  : 1;
               final itemW = (constraints.maxWidth - (cols - 1) * 12) / cols;
               return Wrap(
                 spacing: 12,
@@ -2012,7 +2012,7 @@ class _EmployeeStatusOverview extends StatelessWidget {
                               vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.7),
+                              color: Colors.white.withValues(alpha: 0.7),
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(

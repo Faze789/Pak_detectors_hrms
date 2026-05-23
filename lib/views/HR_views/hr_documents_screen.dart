@@ -35,7 +35,9 @@ class _HRDocumentsScreenState extends State<HRDocumentsScreen> {
 
   Future<void> _openUrl(String url) async {
     final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 
   @override
@@ -110,20 +112,20 @@ class _HRDocumentsScreenState extends State<HRDocumentsScreen> {
             child: vm.isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : vm.allDocuments.isEmpty
-                    ? const _EmptyDocs()
-                    : ListView.separated(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: vm.allDocuments.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
-                        itemBuilder: (_, i) {
-                          final doc = vm.allDocuments[i];
-                          return _HRDocTile(
-                            doc: doc,
-                            onOpen: () => _openUrl(doc.fileUrl),
-                            onDelete: () => _confirmDelete(context, vm, doc),
-                          );
-                        },
-                      ),
+                ? const _EmptyDocs()
+                : ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: vm.allDocuments.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    itemBuilder: (_, i) {
+                      final doc = vm.allDocuments[i];
+                      return _HRDocTile(
+                        doc: doc,
+                        onOpen: () => _openUrl(doc.fileUrl),
+                        onDelete: () => _confirmDelete(context, vm, doc),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
@@ -154,8 +156,7 @@ class _HRDocumentsScreenState extends State<HRDocumentsScreen> {
       ),
     );
     if (ok != true || !context.mounted) return;
-    final success =
-        await vm.deleteDocument(doc.id, employeeId: doc.employeeId);
+    final success = await vm.deleteDocument(doc.id, employeeId: doc.employeeId);
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -276,29 +277,29 @@ class _ChipStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(8),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.08),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          '$label: ',
+          style: TextStyle(fontSize: 12, color: color.withValues(alpha: 0.8)),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '$label: ',
-              style: TextStyle(fontSize: 12, color: color.withOpacity(0.8)),
-            ),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                color: color,
-              ),
-            ),
-          ],
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            color: color,
+          ),
         ),
-      );
+      ],
+    ),
+  );
 }
 
 class _EmptyDocs extends StatelessWidget {
@@ -306,29 +307,29 @@ class _EmptyDocs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => const Center(
-        child: Padding(
-          padding: EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.folder_open_rounded, size: 48, color: Color(0xFFCBD5E1)),
-              SizedBox(height: 12),
-              Text(
-                'No documents yet',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF64748B),
-                ),
-              ),
-              SizedBox(height: 6),
-              Text(
-                'Upload offer letters and files when editing an employee.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
-              ),
-            ],
+    child: Padding(
+      padding: EdgeInsets.all(32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.folder_open_rounded, size: 48, color: Color(0xFFCBD5E1)),
+          SizedBox(height: 12),
+          Text(
+            'No documents yet',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF64748B),
+            ),
           ),
-        ),
-      );
+          SizedBox(height: 6),
+          Text(
+            'Upload offer letters and files when editing an employee.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+          ),
+        ],
+      ),
+    ),
+  );
 }

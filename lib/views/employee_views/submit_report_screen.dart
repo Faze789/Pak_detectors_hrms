@@ -204,7 +204,10 @@ class _SubmitReportScreenState extends State<SubmitReportScreen>
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 8,
+              ),
             ],
           ),
           child: Column(
@@ -250,7 +253,10 @@ class _SubmitReportScreenState extends State<SubmitReportScreen>
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 8,
+              ),
             ],
           ),
           child: Column(
@@ -308,7 +314,10 @@ class _SubmitReportScreenState extends State<SubmitReportScreen>
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 8,
+              ),
             ],
           ),
           child: Column(
@@ -544,7 +553,7 @@ class _SubmitReportScreenState extends State<SubmitReportScreen>
         borderRadius: BorderRadius.circular(12),
         border: Border(left: BorderSide(color: typeColor, width: 4)),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6),
         ],
       ),
       child: Padding(
@@ -561,7 +570,7 @@ class _SubmitReportScreenState extends State<SubmitReportScreen>
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: typeColor.withOpacity(0.1),
+                    color: typeColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(

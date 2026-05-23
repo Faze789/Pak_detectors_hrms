@@ -49,10 +49,10 @@ class _TeamReportsScreenState extends State<TeamReportsScreen> {
 
   void _loadReports() {
     context.read<EmployeeReportViewModel>().loadReportsForLead(
-          leadId: _leadId,
-          department: _leadDept,
-          filterType: _activeFilter.isNotEmpty ? _activeFilter : null,
-        );
+      leadId: _leadId,
+      department: _leadDept,
+      filterType: _activeFilter.isNotEmpty ? _activeFilter : null,
+    );
   }
 
   void _setFilter(String filter) {
@@ -63,9 +63,7 @@ class _TeamReportsScreenState extends State<TeamReportsScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loadingUser) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(
@@ -109,11 +107,16 @@ class _TeamReportsScreenState extends State<TeamReportsScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.error_outline,
-                            size: 48, color: Color(0xFFEF4444)),
+                        const Icon(
+                          Icons.error_outline,
+                          size: 48,
+                          color: Color(0xFFEF4444),
+                        ),
                         const SizedBox(height: 12),
-                        Text(vm.errorMessage!,
-                            style: const TextStyle(color: Color(0xFFEF4444))),
+                        Text(
+                          vm.errorMessage!,
+                          style: const TextStyle(color: Color(0xFFEF4444)),
+                        ),
                         const SizedBox(height: 12),
                         ElevatedButton(
                           onPressed: _loadReports,
@@ -129,13 +132,18 @@ class _TeamReportsScreenState extends State<TeamReportsScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.inbox_outlined,
-                            size: 64, color: Colors.grey.shade400),
+                        Icon(
+                          Icons.inbox_outlined,
+                          size: 64,
+                          color: Colors.grey.shade400,
+                        ),
                         const SizedBox(height: 12),
                         Text(
                           'No team reports found',
                           style: TextStyle(
-                              color: Colors.grey.shade500, fontSize: 15),
+                            color: Colors.grey.shade500,
+                            fontSize: 15,
+                          ),
                         ),
                       ],
                     ),
@@ -169,9 +177,7 @@ class _TeamReportsScreenState extends State<TeamReportsScreen> {
           color: isActive ? const Color(0xFF2563EB) : const Color(0xFFF1F5F9),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isActive
-                ? const Color(0xFF2563EB)
-                : const Color(0xFFE2E8F0),
+            color: isActive ? const Color(0xFF2563EB) : const Color(0xFFE2E8F0),
           ),
         ),
         child: Text(
@@ -198,16 +204,14 @@ class _TeamReportsScreenState extends State<TeamReportsScreen> {
     // Lead assessment fields
     final leadRemarks = (report['leadRemarks'] ?? '').toString();
     final leadRating = (report['leadRating'] ?? 0) as num;
-    final assessedByLeadName =
-        (report['assessedByLeadName'] ?? '').toString();
+    final assessedByLeadName = (report['assessedByLeadName'] ?? '').toString();
 
     // HR assessment fields
     final hrRemarks = (report['hrRemarks'] ?? '').toString();
     final hrRating = (report['hrRating'] ?? 0) as num;
     final assessedByName = (report['assessedByName'] ?? '').toString();
 
-    final isLeadAssessed =
-        status == 'lead_assessed' || status == 'assessed';
+    final isLeadAssessed = status == 'lead_assessed' || status == 'assessed';
     final isHrAssessed = status == 'assessed';
 
     Color typeColor;
@@ -250,8 +254,7 @@ class _TeamReportsScreenState extends State<TeamReportsScreen> {
         borderRadius: BorderRadius.circular(12),
         border: Border(left: BorderSide(color: typeColor, width: 4)),
         boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.04), blurRadius: 6),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6),
         ],
       ),
       child: Padding(
@@ -269,8 +272,11 @@ class _TeamReportsScreenState extends State<TeamReportsScreen> {
                     color: const Color(0xFFEFF6FF),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.person_outline,
-                      size: 16, color: Color(0xFF2563EB)),
+                  child: const Icon(
+                    Icons.person_outline,
+                    size: 16,
+                    color: Color(0xFF2563EB),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -287,11 +293,13 @@ class _TeamReportsScreenState extends State<TeamReportsScreen> {
                       ),
                       if (submittedAt != null)
                         Text(
-                          DateFormat.yMMMd()
-                              .add_jm()
-                              .format(submittedAt.toDate()),
+                          DateFormat.yMMMd().add_jm().format(
+                            submittedAt.toDate(),
+                          ),
                           style: const TextStyle(
-                              fontSize: 11, color: Color(0xFF94A3B8)),
+                            fontSize: 11,
+                            color: Color(0xFF94A3B8),
+                          ),
                         ),
                     ],
                   ),
@@ -299,9 +307,11 @@ class _TeamReportsScreenState extends State<TeamReportsScreen> {
                 // Type badge
                 Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
-                    color: typeColor.withOpacity(0.1),
+                    color: typeColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
@@ -324,9 +334,11 @@ class _TeamReportsScreenState extends State<TeamReportsScreen> {
                 // Status badge
                 Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 3),
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
+                    color: statusColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
@@ -346,18 +358,25 @@ class _TeamReportsScreenState extends State<TeamReportsScreen> {
             Text(
               text,
               style: const TextStyle(
-                  fontSize: 13, color: Color(0xFF334155), height: 1.5),
+                fontSize: 13,
+                color: Color(0xFF334155),
+                height: 1.5,
+              ),
             ),
 
             // PDF
             if (pdfUrl.isNotEmpty) ...[
               const SizedBox(height: 8),
               InkWell(
-                onTap: () => launchUrl(Uri.parse(pdfUrl),
-                    mode: LaunchMode.externalApplication),
+                onTap: () => launchUrl(
+                  Uri.parse(pdfUrl),
+                  mode: LaunchMode.externalApplication,
+                ),
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 6),
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFFF7ED),
                     borderRadius: BorderRadius.circular(8),
@@ -366,14 +385,19 @@ class _TeamReportsScreenState extends State<TeamReportsScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.picture_as_pdf,
-                          color: Color(0xFFEA580C), size: 16),
+                      const Icon(
+                        Icons.picture_as_pdf,
+                        color: Color(0xFFEA580C),
+                        size: 16,
+                      ),
                       const SizedBox(width: 6),
                       Flexible(
                         child: Text(
                           pdfName.isNotEmpty ? pdfName : 'View PDF',
                           style: const TextStyle(
-                              fontSize: 12, color: Color(0xFFEA580C)),
+                            fontSize: 12,
+                            color: Color(0xFFEA580C),
+                          ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -398,8 +422,11 @@ class _TeamReportsScreenState extends State<TeamReportsScreen> {
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.rate_review,
-                            size: 16, color: Color(0xFF2563EB)),
+                        const Icon(
+                          Icons.rate_review,
+                          size: 16,
+                          color: Color(0xFF2563EB),
+                        ),
                         const SizedBox(width: 6),
                         Text(
                           'Your Assessment${assessedByLeadName.isNotEmpty ? ' ($assessedByLeadName)' : ''}',
@@ -427,9 +454,10 @@ class _TeamReportsScreenState extends State<TeamReportsScreen> {
                     Text(
                       leadRemarks,
                       style: const TextStyle(
-                          fontSize: 13,
-                          color: Color(0xFF334155),
-                          height: 1.4),
+                        fontSize: 13,
+                        color: Color(0xFF334155),
+                        height: 1.4,
+                      ),
                     ),
                   ],
                 ),
@@ -451,8 +479,11 @@ class _TeamReportsScreenState extends State<TeamReportsScreen> {
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.verified,
-                            size: 16, color: Color(0xFF059669)),
+                        const Icon(
+                          Icons.verified,
+                          size: 16,
+                          color: Color(0xFF059669),
+                        ),
                         const SizedBox(width: 6),
                         Text(
                           'HR Assessment${assessedByName.isNotEmpty ? ' by $assessedByName' : ''}',
@@ -468,9 +499,7 @@ class _TeamReportsScreenState extends State<TeamReportsScreen> {
                     Row(
                       children: List.generate(5, (i) {
                         return Icon(
-                          i < hrRating.toInt()
-                              ? Icons.star
-                              : Icons.star_border,
+                          i < hrRating.toInt() ? Icons.star : Icons.star_border,
                           color: const Color(0xFFF59E0B),
                           size: 18,
                         );
@@ -480,9 +509,10 @@ class _TeamReportsScreenState extends State<TeamReportsScreen> {
                     Text(
                       hrRemarks,
                       style: const TextStyle(
-                          fontSize: 13,
-                          color: Color(0xFF334155),
-                          height: 1.4),
+                        fontSize: 13,
+                        color: Color(0xFF334155),
+                        height: 1.4,
+                      ),
                     ),
                   ],
                 ),
@@ -503,7 +533,8 @@ class _TeamReportsScreenState extends State<TeamReportsScreen> {
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                 ),
               ),
@@ -525,16 +556,15 @@ class _TeamReportsScreenState extends State<TeamReportsScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDlgState) => AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
           title: Row(
             children: [
-              const Icon(Icons.rate_review,
-                  color: Color(0xFF2563EB), size: 22),
+              const Icon(Icons.rate_review, color: Color(0xFF2563EB), size: 22),
               const SizedBox(width: 8),
               const Expanded(
-                child: Text('Assess Report',
-                    style: TextStyle(fontSize: 17)),
+                child: Text('Assess Report', style: TextStyle(fontSize: 17)),
               ),
             ],
           ),
@@ -547,12 +577,15 @@ class _TeamReportsScreenState extends State<TeamReportsScreen> {
                 Text(
                   'Employee: $employeeName',
                   style: const TextStyle(
-                      fontSize: 13, color: Color(0xFF64748B)),
+                    fontSize: 13,
+                    color: Color(0xFF64748B),
+                  ),
                 ),
                 const SizedBox(height: 16),
-                const Text('Rating',
-                    style: TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w600)),
+                const Text(
+                  'Rating',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                ),
                 const SizedBox(height: 8),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -563,29 +596,28 @@ class _TeamReportsScreenState extends State<TeamReportsScreen> {
                         color: const Color(0xFFF59E0B),
                         size: 32,
                       ),
-                      onPressed: () =>
-                          setDlgState(() => rating = i + 1),
+                      onPressed: () => setDlgState(() => rating = i + 1),
                     );
                   }),
                 ),
                 const SizedBox(height: 16),
-                const Text('Remarks / Feedback',
-                    style: TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w600)),
+                const Text(
+                  'Remarks / Feedback',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: remarksCtrl,
                   maxLines: 4,
                   decoration: InputDecoration(
                     hintText: 'Enter your feedback...',
-                    hintStyle:
-                        const TextStyle(color: Color(0xFF94A3B8)),
+                    hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
                     border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10)),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
-                      borderSide:
-                          const BorderSide(color: Color(0xFFE2E8F0)),
+                      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
                     ),
                   ),
                 ),
@@ -595,22 +627,22 @@ class _TeamReportsScreenState extends State<TeamReportsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel',
-                  style: TextStyle(color: Color(0xFF64748B))),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: Color(0xFF64748B)),
+              ),
             ),
             ElevatedButton(
               onPressed: () async {
                 if (remarksCtrl.text.trim().isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text('Please enter remarks')),
+                    const SnackBar(content: Text('Please enter remarks')),
                   );
                   return;
                 }
                 Navigator.pop(ctx);
 
-                final vm =
-                    context.read<EmployeeReportViewModel>();
+                final vm = context.read<EmployeeReportViewModel>();
                 final ok = await vm.leadAssessReport(
                   reportId: reportId,
                   leadId: _leadId,
@@ -634,7 +666,8 @@ class _TeamReportsScreenState extends State<TeamReportsScreen> {
                 backgroundColor: const Color(0xFF2563EB),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
               child: const Text('Submit Assessment'),
             ),

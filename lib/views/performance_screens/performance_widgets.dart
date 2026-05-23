@@ -45,8 +45,7 @@ InputDecoration formDec(String label) => InputDecoration(
     borderRadius: BorderRadius.circular(8),
     borderSide: const BorderSide(color: kBlue, width: 1.5),
   ),
-  contentPadding:
-  const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
   filled: true,
   fillColor: Colors.white,
 );
@@ -75,9 +74,9 @@ class DatePickerField extends StatelessWidget {
           firstDate: DateTime(2020),
           lastDate: DateTime(2100),
           builder: (ctx, child) => Theme(
-            data: Theme.of(ctx).copyWith(
-              colorScheme: const ColorScheme.light(primary: kBlue),
-            ),
+            data: Theme.of(
+              ctx,
+            ).copyWith(colorScheme: const ColorScheme.light(primary: kBlue)),
             child: child!,
           ),
         );
@@ -99,8 +98,7 @@ class DatePickerField extends StatelessWidget {
                 ),
               ),
             ),
-            const Icon(Icons.calendar_today_rounded,
-                size: 15, color: kSlate),
+            const Icon(Icons.calendar_today_rounded, size: 15, color: kSlate),
           ],
         ),
       ),
@@ -133,10 +131,10 @@ class StatCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 8,
             offset: const Offset(0, 2),
-          )
+          ),
         ],
       ),
       child: Row(
@@ -200,10 +198,10 @@ class PCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 8,
             offset: const Offset(0, 2),
-          )
+          ),
         ],
       ),
       child: child,
@@ -234,11 +232,12 @@ class ScoreBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-          color: bg, borderRadius: BorderRadius.circular(20)),
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+      ),
       child: Text(
         '$score%',
-        style: TextStyle(
-            fontSize: 12, fontWeight: FontWeight.bold, color: fg),
+        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: fg),
       ),
     );
   }
@@ -255,29 +254,34 @@ class GoalStatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final (label, bg, fg) = switch (status) {
       GoalStatus.completed => (
-      'Completed',
-      const Color(0xFFDCFCE7),
-      const Color(0xFF16A34A)
+        'Completed',
+        const Color(0xFFDCFCE7),
+        const Color(0xFF16A34A),
       ),
       GoalStatus.inProgress => ('In Progress', kBlueSoft, kBlue),
       GoalStatus.onTrack => (
-      'On Track',
-      const Color(0xFFDCFCE7),
-      const Color(0xFF16A34A)
+        'On Track',
+        const Color(0xFFDCFCE7),
+        const Color(0xFF16A34A),
       ),
       GoalStatus.atRisk => ('At Risk', const Color(0xFFFEE2E2), kRed),
       GoalStatus.failed => ('Failed', const Color(0xFFFEE2E2), kRed),
-      GoalStatus.notStarted => ('Not Started', kSlate100, const Color(0xFF475569)),
+      GoalStatus.notStarted => (
+        'Not Started',
+        kSlate100,
+        const Color(0xFF475569),
+      ),
     };
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration:
-      BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+      ),
       child: Text(
         label,
-        style: TextStyle(
-            fontSize: 11, fontWeight: FontWeight.bold, color: fg),
+        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: fg),
       ),
     );
   }
@@ -293,21 +297,17 @@ class TaskStatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (icon, color, label) = switch (status) {
-      TaskStatus.completed => (
-      Icons.check_circle_rounded,
-      kGreen,
-      'Completed'
-      ),
+      TaskStatus.completed => (Icons.check_circle_rounded, kGreen, 'Completed'),
       TaskStatus.missed => (Icons.cancel_rounded, kRed, 'Missed'),
       TaskStatus.weekend => (
-      Icons.access_time_rounded,
-      const Color(0xFFF59E0B),
-      'Weekend'
+        Icons.access_time_rounded,
+        const Color(0xFFF59E0B),
+        'Weekend',
       ),
       TaskStatus.pending => (
-      Icons.radio_button_unchecked_rounded,
-      kSlate,
-      'Pending'
+        Icons.radio_button_unchecked_rounded,
+        kSlate,
+        'Pending',
       ),
     };
 
@@ -319,7 +319,10 @@ class TaskStatusBadge extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
-              fontSize: 12, color: color, fontWeight: FontWeight.w500),
+            fontSize: 12,
+            color: color,
+            fontWeight: FontWeight.w500,
+          ),
         ),
       ],
     );
@@ -339,9 +342,7 @@ class PriorityBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: isUrgent
-            ? const Color(0xFFFEE2E2)
-            : const Color(0xFFFFF7ED),
+        color: isUrgent ? const Color(0xFFFEE2E2) : const Color(0xFFFFF7ED),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(

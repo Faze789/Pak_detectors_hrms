@@ -425,7 +425,7 @@ class _SidebarContentState extends State<SidebarContent> {
                       ),
                       decoration: BoxDecoration(
                         color: active
-                            ? Colors.white.withOpacity(0.3)
+                            ? Colors.white.withValues(alpha: 0.3)
                             : _bgBadge(item.badgeColor),
                         borderRadius: BorderRadius.circular(12),
                       ),

@@ -132,7 +132,9 @@ class _MeetingDetailScreenState extends State<MeetingDetailScreen> {
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         title: Text(
-          meeting.conclusion == null ? 'Add Meeting Summary' : 'Edit Meeting Summary',
+          meeting.conclusion == null
+              ? 'Add Meeting Summary'
+              : 'Edit Meeting Summary',
         ),
         content: SizedBox(
           width: 480,
@@ -204,9 +206,9 @@ class _MeetingDetailScreenState extends State<MeetingDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final statusColor = MeetingTheme.statusColor(meeting.status);
-    final canCancel =
-        widget.isHR && meeting.status == MeetingStatus.approved;
-    final canAddConclusion = widget.isHR &&
+    final canCancel = widget.isHR && meeting.status == MeetingStatus.approved;
+    final canAddConclusion =
+        widget.isHR &&
         (meeting.status == MeetingStatus.approved ||
             meeting.status == MeetingStatus.completed);
 
@@ -223,7 +225,7 @@ class _MeetingDetailScreenState extends State<MeetingDetailScreen> {
               background: Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [statusColor, statusColor.withOpacity(0.7)],
+                    colors: [statusColor, statusColor.withValues(alpha: 0.7)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -265,17 +267,14 @@ class _MeetingDetailScreenState extends State<MeetingDetailScreen> {
                       borderRadius: BorderRadius.circular(14),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
+                          color: Colors.black.withValues(alpha: 0.04),
                           blurRadius: 10,
                         ),
                       ],
                     ),
                     child: Row(
                       children: [
-                        DateBox(
-                          dateTime: meeting.dateTime,
-                          color: statusColor,
-                        ),
+                        DateBox(dateTime: meeting.dateTime, color: statusColor),
                         const SizedBox(width: 16),
                         Expanded(
                           child: Column(
@@ -324,7 +323,7 @@ class _MeetingDetailScreenState extends State<MeetingDetailScreen> {
                       borderRadius: BorderRadius.circular(14),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
+                          color: Colors.black.withValues(alpha: 0.04),
                           blurRadius: 10,
                         ),
                       ],
@@ -458,7 +457,8 @@ class _MeetingDetailScreenState extends State<MeetingDetailScreen> {
                           ),
                         ),
                       ),
-                    if (canCancel && canAddConclusion) const SizedBox(height: 10),
+                    if (canCancel && canAddConclusion)
+                      const SizedBox(height: 10),
                     if (canAddConclusion)
                       SizedBox(
                         width: double.infinity,
@@ -504,7 +504,10 @@ class _MeetingDetailScreenState extends State<MeetingDetailScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+          ),
         ],
       ),
       child: Column(
@@ -561,7 +564,10 @@ class _MeetingDetailScreenState extends State<MeetingDetailScreen> {
                   style: TextStyle(fontWeight: FontWeight.bold, color: fg),
                 ),
                 const SizedBox(height: 4),
-                Text(body, style: TextStyle(fontSize: 13, color: fg, height: 1.4)),
+                Text(
+                  body,
+                  style: TextStyle(fontSize: 13, color: fg, height: 1.4),
+                ),
               ],
             ),
           ),

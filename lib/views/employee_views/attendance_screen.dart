@@ -152,7 +152,9 @@ class _AttendanceScreenState extends State<AttendanceScreen>
       if (raw is String && raw.trim().isNotEmpty) {
         gender = raw.trim().toLowerCase();
       }
-    } catch (_) {/* ignore — gender stays null */}
+    } catch (_) {
+      /* ignore — gender stays null */
+    }
 
     if (!mounted) return;
     final result = await showRequestLeaveSheet(context, gender: gender);
@@ -628,9 +630,9 @@ class _AttendanceScreenState extends State<AttendanceScreen>
     // one-shot bottom sheet. The new screen subscribes to
     // request_for_leave for this uid so HR decisions appear instantly,
     // and renders pending / approved / declined with proper status chips.
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const MyLeaveRequestsScreen()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const MyLeaveRequestsScreen()));
   }
 }
 
@@ -1314,7 +1316,7 @@ class _HalfDayLeaveCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: bgColor,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: color.withOpacity(0.3)),
+                border: Border.all(color: color.withValues(alpha: 0.3)),
               ),
               child: Column(
                 children: [
@@ -1481,7 +1483,8 @@ class _MainCard extends StatelessWidget {
     // Approved leave for today blocks check-in entirely (full-day leave
     // is the most common case; first/second-half are handled inline by
     // the regular check-in flow because the user still works half the day).
-    final onLeaveToday = attIsForToday &&
+    final onLeaveToday =
+        attIsForToday &&
         att.status.isAnyLeave &&
         att.status != AttendanceStatus.firstHalfLeave &&
         att.status != AttendanceStatus.secondHalfLeave;
@@ -1493,10 +1496,10 @@ class _MainCard extends StatelessWidget {
       final reason = onLeaveToday
           ? _CheckInClosedReason.onLeave
           : completedToday
-              ? _CheckInClosedReason.completed
-              : pastWindowClose
-                  ? _CheckInClosedReason.windowClosed
-                  : _CheckInClosedReason.beforeWindow;
+          ? _CheckInClosedReason.completed
+          : pastWindowClose
+          ? _CheckInClosedReason.windowClosed
+          : _CheckInClosedReason.beforeWindow;
       final opensAtLabel = ov != null
           ? _fmtAmPm(ov.workStartHour, ov.workStartMinute)
           : '8:00 AM';
@@ -1563,7 +1566,7 @@ class _MainCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(14),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF2563EB).withOpacity(0.4),
+                  color: const Color(0xFF2563EB).withValues(alpha: 0.4),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
@@ -1777,7 +1780,7 @@ class _ActionButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(13),
         boxShadow: [
           BoxShadow(
-            color: gradient.first.withOpacity(0.35),
+            color: gradient.first.withValues(alpha: 0.35),
             blurRadius: 8,
             offset: const Offset(0, 3),
           ),
@@ -1931,7 +1934,7 @@ class _CheckInClosed extends StatelessWidget {
           width: isMobile ? 96 : 120,
           height: isMobile ? 96 : 120,
           decoration: BoxDecoration(
-            color: iconColor.withOpacity(0.10),
+            color: iconColor.withValues(alpha: 0.10),
             borderRadius: BorderRadius.circular(isMobile ? 48 : 60),
           ),
           child: Icon(icon, size: isMobile ? 44 : 56, color: iconColor),
@@ -2146,7 +2149,7 @@ class _MarkAttendanceCta extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF2563EB).withOpacity(0.25),
+            color: const Color(0xFF2563EB).withValues(alpha: 0.25),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
@@ -2158,7 +2161,7 @@ class _MarkAttendanceCta extends StatelessWidget {
             width: 64,
             height: 64,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(20),
             ),
             child: const Icon(

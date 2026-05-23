@@ -705,7 +705,7 @@ class _AttendanceTodayCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15),
+        color: Colors.white.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -1331,7 +1331,7 @@ class _MetricCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       border: Border(left: BorderSide(color: data.borderColor, width: 4)),
       boxShadow: [
-        BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4),
+        BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4),
       ],
     ),
     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -1581,7 +1581,7 @@ class _CardShell extends StatelessWidget {
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
       boxShadow: [
-        BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4),
+        BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4),
       ],
     ),
     child: Column(
@@ -1980,7 +1980,7 @@ class _ProfileOverviewCard extends StatelessWidget {
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
       boxShadow: [
-        BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4),
+        BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4),
       ],
     ),
     padding: const EdgeInsets.all(16),
@@ -2089,7 +2089,7 @@ class _StatusChip extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
     decoration: BoxDecoration(
-      color: color.withOpacity(0.12),
+      color: color.withValues(alpha: 0.12),
       borderRadius: BorderRadius.circular(12),
     ),
     child: Text(
@@ -2230,7 +2230,7 @@ class _ProfileCard extends StatelessWidget {
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
       boxShadow: [
-        BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4),
+        BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4),
       ],
     ),
     padding: const EdgeInsets.all(16),
@@ -2253,7 +2253,7 @@ class _ProfileCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(44),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: Colors.black.withValues(alpha: 0.1),
                     blurRadius: 8,
                   ),
                 ],

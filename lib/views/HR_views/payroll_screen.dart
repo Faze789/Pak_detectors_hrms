@@ -357,9 +357,9 @@ class _StatusPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -548,10 +548,10 @@ class _PayslipStatusMenu extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: _statusColor(payslip.status).withOpacity(0.1),
+          color: _statusColor(payslip.status).withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
-            color: _statusColor(payslip.status).withOpacity(0.3),
+            color: _statusColor(payslip.status).withValues(alpha: 0.3),
           ),
         ),
         child: Row(
@@ -699,7 +699,7 @@ class _RunPayrollTab extends StatelessWidget {
               border: const Border(left: BorderSide(color: kBlue, width: 4)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
+                  color: Colors.black.withValues(alpha: 0.04),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -1775,7 +1775,7 @@ class _PayslipCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: Colors.black.withValues(alpha: 0.06),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -2213,9 +2213,9 @@ class _AttChip extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
     decoration: BoxDecoration(
-      color: color.withOpacity(0.1),
+      color: color.withValues(alpha: 0.1),
       borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: color.withOpacity(0.3)),
+      border: Border.all(color: color.withValues(alpha: 0.3)),
     ),
     child: Text(
       label,
@@ -2297,12 +2297,12 @@ class _PayslipStatusBadge extends StatelessWidget {
       ),
       PayslipStatus.approved => (
         'APPROVED',
-        const Color(0xFF1D4ED8).withOpacity(0.2),
+        const Color(0xFF1D4ED8).withValues(alpha: 0.2),
         const Color(0xFF60A5FA),
       ),
       PayslipStatus.paid => (
         'PAID',
-        const Color(0xFF065F46).withOpacity(0.3),
+        const Color(0xFF065F46).withValues(alpha: 0.3),
         const Color(0xFF34D399),
       ),
     };
@@ -2488,7 +2488,7 @@ class _PerformanceSection extends StatelessWidget {
                 width: 56,
                 height: 56,
                 decoration: BoxDecoration(
-                  color: scoreColor.withOpacity(0.1),
+                  color: scoreColor.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                   border: Border.all(color: scoreColor, width: 2),
                 ),

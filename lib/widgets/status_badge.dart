@@ -15,7 +15,12 @@ class StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (status == null) {
-      return _badge('Unknown', Colors.grey.shade100, Colors.grey.shade600, null);
+      return _badge(
+        'Unknown',
+        Colors.grey.shade100,
+        Colors.grey.shade600,
+        null,
+      );
     }
 
     if (status is JobStatus) {
@@ -33,11 +38,29 @@ class StatusBadge extends StatelessWidget {
   Widget _jobBadge(JobStatus s) {
     switch (s) {
       case JobStatus.open:
-        return _badge('Open', const Color(0xFFECFDF5), const Color(0xFF065F46), Icons.circle, dotOnly: true);
+        return _badge(
+          'Open',
+          const Color(0xFFECFDF5),
+          const Color(0xFF065F46),
+          Icons.circle,
+          dotOnly: true,
+        );
       case JobStatus.closed:
-        return _badge('Closed', const Color(0xFFFEF2F2), const Color(0xFF991B1B), Icons.circle, dotOnly: true);
+        return _badge(
+          'Closed',
+          const Color(0xFFFEF2F2),
+          const Color(0xFF991B1B),
+          Icons.circle,
+          dotOnly: true,
+        );
       case JobStatus.draft:
-        return _badge('Draft', const Color(0xFFF1F5F9), const Color(0xFF475569), Icons.circle, dotOnly: true);
+        return _badge(
+          'Draft',
+          const Color(0xFFF1F5F9),
+          const Color(0xFF475569),
+          Icons.circle,
+          dotOnly: true,
+        );
     }
   }
 
@@ -45,13 +68,33 @@ class StatusBadge extends StatelessWidget {
   Widget _candidateBadge(CandidateStatus s) {
     switch (s) {
       case CandidateStatus.pending:
-        return _badge('Pending', const Color(0xFFFFFBEB), const Color(0xFF92400E), Icons.schedule);
+        return _badge(
+          'Pending',
+          const Color(0xFFFFFBEB),
+          const Color(0xFF92400E),
+          Icons.schedule,
+        );
       case CandidateStatus.shortlisted:
-        return _badge('Shortlisted', const Color(0xFFECFDF5), const Color(0xFF065F46), Icons.check_circle);
+        return _badge(
+          'Shortlisted',
+          const Color(0xFFECFDF5),
+          const Color(0xFF065F46),
+          Icons.check_circle,
+        );
       case CandidateStatus.hired:
-        return _badge('Hired', const Color(0xFFEFF6FF), const Color(0xFF1D4ED8), Icons.person);
+        return _badge(
+          'Hired',
+          const Color(0xFFEFF6FF),
+          const Color(0xFF1D4ED8),
+          Icons.person,
+        );
       case CandidateStatus.rejected:
-        return _badge('Rejected', const Color(0xFFFEF2F2), const Color(0xFF991B1B), Icons.cancel);
+        return _badge(
+          'Rejected',
+          const Color(0xFFFEF2F2),
+          const Color(0xFF991B1B),
+          Icons.cancel,
+        );
     }
   }
 
@@ -59,38 +102,49 @@ class StatusBadge extends StatelessWidget {
   Widget _employeeBadge(EmployeeStatus s) {
     switch (s) {
       case EmployeeStatus.active:
-        return _badge('Active', const Color(0xFFECFDF5), const Color(0xFF065F46), Icons.check_circle);
+        return _badge(
+          'Active',
+          const Color(0xFFECFDF5),
+          const Color(0xFF065F46),
+          Icons.check_circle,
+        );
       case EmployeeStatus.leave:
-        return _badge('On Leave', const Color(0xFFFFFBEB), const Color(0xFF92400E), Icons.beach_access);
+        return _badge(
+          'On Leave',
+          const Color(0xFFFFFBEB),
+          const Color(0xFF92400E),
+          Icons.beach_access,
+        );
       case EmployeeStatus.inactive:
-        return _badge('Inactive', const Color(0xFFF1F5F9), const Color(0xFF475569), Icons.pause_circle);
+        return _badge(
+          'Inactive',
+          const Color(0xFFF1F5F9),
+          const Color(0xFF475569),
+          Icons.pause_circle,
+        );
     }
   }
 
   // ─────────────────── BASE BUILDER ───────────────────────────
   Widget _badge(
-      String label,
-      Color bg,
-      Color fg,
-      IconData? icon, {
-        bool dotOnly = false,
-      }) {
+    String label,
+    Color bg,
+    Color fg,
+    IconData? icon, {
+    bool dotOnly = false,
+  }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(9999),
-        border: Border.all(color: fg.withOpacity(0.25)),
+        border: Border.all(color: fg.withValues(alpha: 0.25)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(
-              icon,
-              size: dotOnly ? 8 : 12,
-              color: fg,
-            ),
+            Icon(icon, size: dotOnly ? 8 : 12, color: fg),
             const SizedBox(width: 4),
           ],
           Text(

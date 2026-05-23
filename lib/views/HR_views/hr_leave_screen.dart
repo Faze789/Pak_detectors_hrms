@@ -167,7 +167,7 @@ class _HRLeaveScreenState extends State<HRLeaveScreen> {
       borderRadius: BorderRadius.circular(12),
       border: Border.all(color: const Color(0xFFE2E8F0)),
       boxShadow: [
-        BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6),
+        BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 6),
       ],
     ),
     child: Wrap(
@@ -277,7 +277,7 @@ class _HRLeaveScreenState extends State<HRLeaveScreen> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 6),
         ],
       ),
       child: Column(
@@ -620,7 +620,7 @@ class _StatCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       border: Border.all(color: const Color(0xFFE2E8F0)),
       boxShadow: [
-        BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6),
+        BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 6),
       ],
     ),
     child: Row(

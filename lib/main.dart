@@ -28,6 +28,7 @@ import 'views/splash_screen.dart';
 import 'views/HR_views/sidebar_wrapper/hr_sidebar_wrapper.dart';
 import 'views/employee_views/sidebar_wrapper/emp_sidebar_wrapper.dart';
 import 'services/auth_service.dart';
+import 'services/update_service.dart';
 import 'viewmodels/auth_viewmodel.dart';
 import 'navigation/app_notification_router.dart';
 
@@ -529,6 +530,12 @@ class _AppInitState extends State<_AppInit> {
   @override
   void initState() {
     super.initState();
+    // Prompt testers/users to update when a newer Play build is available.
+    // Runs after the first frame so it never blocks initial render. No-ops
+    // on web and non-Android platforms.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      UpdateService.checkForUpdate();
+    });
     _boot();
     _listenForegroundMessages();
   }

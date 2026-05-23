@@ -137,10 +137,7 @@ class _HRDashboardWithSidebarState extends State<HRDashboardWithSidebar> {
   void _handleTabChange(String tabId) {
     setState(() => activeTab = tabId);
 
-    const comingSoon = {
-      'reports': 'Reports',
-      'help': 'Help Center',
-    };
+    const comingSoon = {'reports': 'Reports', 'help': 'Help Center'};
 
     if (comingSoon.containsKey(tabId)) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -325,7 +322,7 @@ class _NotificationPopupState extends State<_NotificationPopup>
                   border: Border.all(color: const Color(0xFFE2E8F0)),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.12),
+                      color: Colors.black.withValues(alpha: 0.12),
                       blurRadius: 20,
                       offset: const Offset(0, 4),
                     ),
@@ -337,7 +334,7 @@ class _NotificationPopupState extends State<_NotificationPopup>
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF2563EB).withOpacity(0.1),
+                        color: const Color(0xFF2563EB).withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(

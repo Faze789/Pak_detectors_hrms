@@ -425,8 +425,8 @@ class _HalfDayBanner extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: isFirst
-              ? const Color(0xFF7C3AED).withOpacity(0.3)
-              : const Color(0xFF0891B2).withOpacity(0.3),
+              ? const Color(0xFF7C3AED).withValues(alpha: 0.3)
+              : const Color(0xFF0891B2).withValues(alpha: 0.3),
         ),
       ),
       child: Row(

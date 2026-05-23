@@ -33,6 +33,7 @@ dependencies:
   url_launcher: ^6.3.2
   flutter_launcher_icons: ^0.14.4
   http: ^1.2.0
+  in_app_update: ^4.2.3       # ← ADDED: Play in-app update prompt (Android)
   flutter_web_plugins:        # ← ADDED: enables usePathUrlStrategy()
     sdk: flutter
 

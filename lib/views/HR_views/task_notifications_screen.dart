@@ -94,10 +94,10 @@ class TaskNotificationsScreen extends StatelessWidget {
             );
           } else {
             // Lead vs member: compare emp_id with task's lead_id.
-            final leadId =
-                (taskDoc.data()?['lead_id'] ?? '').toString().toLowerCase();
-            final isLead =
-                leadId.isNotEmpty && leadId == myEmpId.toLowerCase();
+            final leadId = (taskDoc.data()?['lead_id'] ?? '')
+                .toString()
+                .toLowerCase();
+            final isLead = leadId.isNotEmpty && leadId == myEmpId.toLowerCase();
             if (isLead) {
               // If the notification was about a member's submission/barrier
               // (carries weekNumber + memberEmpId), jump into the review screen.
@@ -108,16 +108,10 @@ class TaskNotificationsScreen extends StatelessWidget {
                 target = LeadTaskReceiptScreen(taskId: taskId);
               }
             } else {
-              target = MemberWeeklySubmitScreen(
-                taskId: taskId,
-                empId: myEmpId,
-              );
+              target = MemberWeeklySubmitScreen(taskId: taskId, empId: myEmpId);
             }
           }
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => target),
-          );
+          Navigator.push(context, MaterialPageRoute(builder: (_) => target));
           return;
         }
       } catch (_) {
@@ -183,8 +177,11 @@ class TaskNotificationsScreen extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.notifications_off_rounded,
-                      size: 56, color: Color(0xFFCBD5E1)),
+                  Icon(
+                    Icons.notifications_off_rounded,
+                    size: 56,
+                    color: Color(0xFFCBD5E1),
+                  ),
                   SizedBox(height: 12),
                   Text(
                     'No notifications',
@@ -221,19 +218,22 @@ class TaskNotificationsScreen extends StatelessWidget {
               if (title.contains('Submitted')) {
                 icon = Icons.upload_file_rounded;
                 color = const Color(0xFF7C3AED);
-              } else if (title.contains('Approved') || title.contains('Accepted')) {
+              } else if (title.contains('Approved') ||
+                  title.contains('Accepted')) {
                 icon = Icons.check_circle_rounded;
                 color = const Color(0xFF10B981);
               } else if (title.contains('Rejected')) {
                 icon = Icons.cancel_rounded;
                 color = const Color(0xFFEF4444);
-              } else if (title.contains('No Task') || title.contains('Request')) {
+              } else if (title.contains('No Task') ||
+                  title.contains('Request')) {
                 icon = Icons.assignment_late_rounded;
                 color = const Color(0xFFF59E0B);
               } else if (title.contains('Modified')) {
                 icon = Icons.edit_note_rounded;
                 color = const Color(0xFF3B82F6);
-              } else if (title.contains('Forwarded') || title.contains('Assigned')) {
+              } else if (title.contains('Forwarded') ||
+                  title.contains('Assigned')) {
                 icon = Icons.forward_to_inbox_rounded;
                 color = const Color(0xFF3B82F6);
               } else if (title.contains('Report')) {
@@ -278,8 +278,7 @@ class TaskNotificationsScreen extends StatelessWidget {
                   ),
                   child: const Icon(Icons.delete_rounded, color: Colors.red),
                 ),
-                onDismissed: (_) =>
-                    service.markTaskNotificationRead(notifId),
+                onDismissed: (_) => service.markTaskNotificationRead(notifId),
                 child: GestureDetector(
                   onTap: () {
                     if (!isRead) {
@@ -293,16 +292,16 @@ class TaskNotificationsScreen extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: isRead
                           ? Colors.white
-                          : color.withOpacity(0.04),
+                          : color.withValues(alpha: 0.04),
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
                         color: isRead
                             ? const Color(0xFFE2E8F0)
-                            : color.withOpacity(0.2),
+                            : color.withValues(alpha: 0.2),
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.03),
+                          color: Colors.black.withValues(alpha: 0.03),
                           blurRadius: 6,
                         ),
                       ],
@@ -313,7 +312,7 @@ class TaskNotificationsScreen extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: color.withOpacity(0.12),
+                            color: color.withValues(alpha: 0.12),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(icon, color: color, size: 20),

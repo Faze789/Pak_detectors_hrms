@@ -483,7 +483,7 @@ class _BranchCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       border: Border.all(color: const Color(0xFFE2E8F0)),
       boxShadow: [
-        BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 4),
+        BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 4),
       ],
     ),
     padding: const EdgeInsets.all(14),
@@ -1532,7 +1532,7 @@ class _OfficeSettingsTabState extends State<_OfficeSettingsTab> {
               color: const Color(0xFFF5F3FF),
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                color: const Color(0xFF7C3AED).withOpacity(0.2),
+                color: const Color(0xFF7C3AED).withValues(alpha: 0.2),
               ),
             ),
             child: Column(
@@ -1648,7 +1648,7 @@ class _OfficeSettingsTabState extends State<_OfficeSettingsTab> {
                 borderRadius: BorderRadius.circular(13),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF2563EB).withOpacity(0.35),
+                    color: const Color(0xFF2563EB).withValues(alpha: 0.35),
                     blurRadius: 8,
                     offset: const Offset(0, 3),
                   ),
@@ -1748,7 +1748,7 @@ class _SectionHeader extends StatelessWidget {
         ),
       ),
       const SizedBox(width: 8),
-      Expanded(child: Divider(color: color.withOpacity(0.2))),
+      Expanded(child: Divider(color: color.withValues(alpha: 0.2))),
     ],
   );
 }
@@ -1831,7 +1831,7 @@ class _TimingSlider extends StatelessWidget {
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(12),
       side: highlight
-          ? BorderSide(color: iconColor.withOpacity(0.4), width: 1.5)
+          ? BorderSide(color: iconColor.withValues(alpha: 0.4), width: 1.5)
           : BorderSide.none,
     ),
     child: Padding(
@@ -1898,7 +1898,7 @@ class _TimingSlider extends StatelessWidget {
               activeTrackColor: iconColor,
               thumbColor: iconColor,
               inactiveTrackColor: iconBg,
-              overlayColor: iconColor.withOpacity(0.15),
+              overlayColor: iconColor.withValues(alpha: 0.15),
               trackHeight: 3,
             ),
             child: Slider(

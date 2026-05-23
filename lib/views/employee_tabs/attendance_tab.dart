@@ -182,7 +182,7 @@ class _AttendanceTabState extends State<AttendanceTab> {
     }
   }
 
-  Color _statusBg(AttendanceStatus s) => _statusColor(s).withOpacity(0.1);
+  Color _statusBg(AttendanceStatus s) => _statusColor(s).withValues(alpha: 0.1);
 
   String _formatDate(DateTime d) =>
       '${_weekdays[d.weekday - 1]}, ${_shortMonths[d.month]} ${d.day}';
@@ -229,7 +229,7 @@ class _AttendanceTabState extends State<AttendanceTab> {
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -350,7 +350,7 @@ class _AttendanceTabState extends State<AttendanceTab> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: const Color(0xFF10B981).withOpacity(0.1),
+            color: const Color(0xFF10B981).withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(
@@ -373,7 +373,7 @@ class _AttendanceTabState extends State<AttendanceTab> {
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
