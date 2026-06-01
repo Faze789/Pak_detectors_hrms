@@ -28,6 +28,12 @@ class _EditTaskDialogState extends State<EditTaskDialog> {
   late String _selectedDuration;
   late String _selectedStatus;
 
+  /// Working copy of the task's members ({name, emp_id}). Edited in place by
+  /// HR and written back via [TaskViewModel.updateTaskMembers] on save.
+  late List<Map<String, dynamic>> _members;
+
+  String get _leadId => (widget.task['lead_id'] ?? '').toString().toLowerCase();
+
   final List<String> _durations = [
     'weekly',
     'bi-weekly',
@@ -72,6 +78,20 @@ class _EditTaskDialogState extends State<EditTaskDialog> {
     if (!_statuses.contains(_selectedStatus)) {
       _selectedStatus = _statuses.first;
     }
+
+    // Seed the editable member list from the task's `members` map.
+    _members = [];
+    final rawMembers = widget.task['members'] as Map<String, dynamic>? ?? {};
+    for (final v in rawMembers.values) {
+      if (v is Map<String, dynamic>) {
+        _members.add({
+          'name': (v['name'] ?? '').toString(),
+          'emp_id': (v['emp_id'] ?? '').toString(),
+        });
+      }
+    }
+    // Load the full (non-HR) user list for the add-member picker.
+    context.read<TaskViewModel>().loadAllNonHRUsers();
   }
 
   @override
@@ -97,7 +117,32 @@ class _EditTaskDialogState extends State<EditTaskDialog> {
       return;
     }
 
+    if (_members.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('A task must have at least one member.'),
+          backgroundColor: Color(0xFFEF4444),
+        ),
+      );
+      return;
+    }
+
     final taskVm = context.read<TaskViewModel>();
+
+    // Persist the updated member list first so the audit history (written
+    // inside editTask) snapshots the prior state and the new write reflects
+    // HR's latest team change.
+    final membersMap = <String, dynamic>{};
+    for (int i = 0; i < _members.length; i++) {
+      membersMap['${i + 1}'] = {
+        'name': _members[i]['name'] ?? '',
+        'emp_id': _members[i]['emp_id'] ?? '',
+      };
+    }
+    await taskVm.updateTaskMembers(
+      taskId: widget.task['id'],
+      membersMap: membersMap,
+    );
 
     final success = await taskVm.editTask(
       taskId: widget.task['id'],
@@ -269,6 +314,9 @@ class _EditTaskDialogState extends State<EditTaskDialog> {
                 const Divider(height: 24, color: Color(0xFFE2E8F0)),
               ],
 
+              // ── Team Members ─────────────────────────────────────
+              _buildMembersSection(),
+
               // ── Duration ─────────────────────────────────────────
               Row(
                 children: [
@@ -349,6 +397,165 @@ class _EditTaskDialogState extends State<EditTaskDialog> {
           ),
         ),
       ),
+    );
+  }
+
+  // ── Members editor (HR can add/remove; lead is locked) ─────────
+  Widget _buildMembersSection() {
+    return Consumer<TaskViewModel>(
+      builder: (context, taskVm, _) {
+        final addedIds = _members
+            .map((m) => (m['emp_id'] ?? '').toString().toLowerCase())
+            .toSet();
+        final available = taskVm.allUsers
+            .where(
+              (u) => !addedIds.contains(
+                (u['emp_id'] ?? '').toString().toLowerCase(),
+              ),
+            )
+            .toList();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(
+                  Icons.group_outlined,
+                  size: 18,
+                  color: Color(0xFF334155),
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'Team Members',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDBEAFE),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '${_members.length}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF1D4ED8),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            if (_members.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 6),
+                child: Text(
+                  'No members — add at least one.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                ),
+              )
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _members.map((m) {
+                  final empId = (m['emp_id'] ?? '').toString();
+                  final isLead = empId.toLowerCase() == _leadId;
+                  return Chip(
+                    label: Text(
+                      '${m['name']}${isLead ? ' (Lead)' : ''}',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    backgroundColor: isLead
+                        ? const Color(0xFFDBEAFE)
+                        : const Color(0xFFF1F5F9),
+                    side: BorderSide(
+                      color: isLead
+                          ? const Color(0xFF93C5FD)
+                          : const Color(0xFFE2E8F0),
+                    ),
+                    deleteIcon: isLead
+                        ? null
+                        : const Icon(Icons.close, size: 16),
+                    onDeleted: isLead
+                        ? null
+                        : () => setState(
+                            () => _members.removeWhere(
+                              (x) =>
+                                  (x['emp_id'] ?? '').toString() == empId,
+                            ),
+                          ),
+                  );
+                }).toList(),
+              ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: null,
+                  isExpanded: true,
+                  hint: Text(
+                    available.isEmpty
+                        ? (taskVm.allUsers.isEmpty
+                              ? 'Loading users...'
+                              : 'All users already added')
+                        : '+ Add member',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                  items: available.map((u) {
+                    final empId = (u['emp_id'] ?? '').toString();
+                    final dept = (u['department'] ?? u['role'] ?? '')
+                        .toString();
+                    return DropdownMenuItem<String>(
+                      value: empId,
+                      child: Text(
+                        '${u['name'] ?? 'Unknown'}${dept.isEmpty ? '' : ' · $dept'}',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: available.isEmpty
+                      ? null
+                      : (empId) {
+                          if (empId == null) return;
+                          final u = taskVm.allUsers.firstWhere(
+                            (x) => (x['emp_id'] ?? '').toString() == empId,
+                            orElse: () => <String, dynamic>{},
+                          );
+                          if (u.isEmpty) return;
+                          setState(
+                            () => _members.add({
+                              'name': (u['name'] ?? '').toString(),
+                              'emp_id': empId,
+                            }),
+                          );
+                        },
+                ),
+              ),
+            ),
+            const Divider(height: 24, color: Color(0xFFE2E8F0)),
+          ],
+        );
+      },
     );
   }
 

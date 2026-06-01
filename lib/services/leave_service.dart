@@ -111,23 +111,11 @@ class LeaveService {
         ? toDate.difference(leave.fromDate).inDays + 1.0
         : 0.5;
 
-    // Routing per spec:
-    //   * If the requester is a project member → the leads of those
-    //     projects are the approvers.
-    //   * Otherwise (no project membership, e.g. unassigned employees and
-    //     leads themselves) → fall back to all HR users.
-    // The chosen approver set lands in `requiredApproverEmpIds`; both
-    // routes share the same `approvals[]` audit trail.
-    final leadEmpIds = await findLeadsOfMember(leave.emp_id);
-    final List<String> approverEmpIds;
-    final String approverKind;
-    if (leadEmpIds.isNotEmpty) {
-      approverEmpIds = leadEmpIds;
-      approverKind = 'lead';
-    } else {
-      approverEmpIds = await findAllHrEmpIds();
-      approverKind = 'hr';
-    }
+    // Per policy: HR is the sole approver of every leave request. Leads no
+    // longer receive approval rights here — the final decision is always
+    // HR's. `approverKind` stays for downstream UI compatibility.
+    final approverEmpIds = await findAllHrEmpIds();
+    const approverKind = 'hr';
 
     final model = LeaveModel(
       id: docRef.id,

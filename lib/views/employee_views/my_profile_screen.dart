@@ -13,6 +13,7 @@ import '../../viewmodels/performance_viewmodel.dart';
 import '../../models/performance_models.dart';
 import '../employee_tabs/documents_tab.dart';
 import '../employee_tabs/leaves_tab.dart';
+import 'request_loan_advance_screen.dart' show MyProfileLoansTab;
 
 // ══════════════════════════════════════════════════════════════════════════════
 // MyProfileScreen
@@ -39,7 +40,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 6, vsync: this);
+    _tabController = TabController(length: 7, vsync: this);
 
     final now = DateTime.now();
     _selectedYear = now.year;
@@ -248,6 +249,13 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                         icon: Icon(Icons.folder_outlined, size: 18),
                         text: 'Documents',
                       ),
+                      Tab(
+                        icon: Icon(
+                          Icons.account_balance_outlined,
+                          size: 18,
+                        ),
+                        text: 'Loans',
+                      ),
                     ],
                   ),
                 ),
@@ -286,6 +294,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                   )
                 else
                   const Center(child: Text('Loading profile…')),
+                MyProfileLoansTab(userId: widget.userId),
               ],
             ),
           );

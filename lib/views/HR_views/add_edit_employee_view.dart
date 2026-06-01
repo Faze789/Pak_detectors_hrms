@@ -47,8 +47,8 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
 
   EmployeeStatus status = EmployeeStatus.active;
   String _selectedRole = 'employee';
-  // 'in_station' or 'out_station' — drives per-quarter leave quota
-  // (3 days/qtr in-station, 4 days/qtr out-of-station per policy).
+  // 'in_station' or 'out_station' — drives the annual leave quota
+  // (12 days/year in-station, 16 days/year out-of-station per policy).
   // Defaults to in_station for new and existing employees with no value.
   String _selectedStation = 'in_station';
   // Gender drives which leave-type options appear in the request UI:
@@ -499,8 +499,8 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
                   ),
                   const SizedBox(height: 16),
                   // ── Station toggle ──────────────────────────────────────
-                  // Drives the per-quarter leave quota: 3 days/qtr for
-                  // in-station, 4 days/qtr for out-of-station (per policy).
+                  // Drives the annual leave quota: 12 days/year for
+                  // in-station, 16 days/year for out-of-station (per policy).
                   // Defaults to in_station.
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -550,8 +550,8 @@ class _AddEditEmployeeViewState extends State<AddEditEmployeeView> {
                         const Padding(
                           padding: EdgeInsets.only(left: 4, top: 6),
                           child: Text(
-                            'Leave quota: 3 days/quarter (in-station) · '
-                            '4 days/quarter (out-of-station)',
+                            'Leave quota: 12 days/year (in-station) · '
+                            '16 days/year (out-of-station)',
                             style: TextStyle(
                               fontSize: 11,
                               color: Color(0xFF94A3B8),

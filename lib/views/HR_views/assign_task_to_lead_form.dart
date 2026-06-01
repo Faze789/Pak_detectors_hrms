@@ -31,6 +31,11 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
   // Step 2: HR picks one lead from the selected members
   String? _selectedLeadEmpId;
 
+  // When true, the task has NO team members — the chosen lead does the whole
+  // task alone. Step 1 (member selection) is hidden and the lead is picked
+  // directly; on submit the lead becomes the task's sole member.
+  bool _leadOnly = false;
+
   final List<PlatformFile> _pickedFiles = [];
   final List<PlatformFile> _secondaryPickedFiles = [];
   bool _uploading = false;
@@ -196,6 +201,46 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // ── Single-lead toggle ───────────────────────────────
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: SwitchListTile(
+                          value: _leadOnly,
+                          activeThumbColor: const Color(0xFF2563EB),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 4,
+                          ),
+                          title: const Text(
+                            'Single lead does the whole task',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF1E293B),
+                            ),
+                          ),
+                          subtitle: const Text(
+                            'No team members — the lead handles everything.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF94A3B8),
+                            ),
+                          ),
+                          onChanged: (v) {
+                            setState(() {
+                              _leadOnly = v;
+                              _selectedMemberEmpIds.clear();
+                              _selectedLeadEmpId = null;
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
                       // ── Filter by Department ─────────────────────────────
                       _buildLabel('Filter by Department'),
                       const SizedBox(height: 8),
@@ -248,230 +293,238 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                       const SizedBox(height: 24),
 
                       // ── STEP 1: Select Employees ─────────────────────────
-                      _buildStepHeader(
-                        step: '1',
-                        title: 'Select Project Members',
-                        subtitle:
-                            'Choose all employees who will work on this task.',
-                      ),
-                      const SizedBox(height: 10),
-                      Container(
-                        constraints: BoxConstraints(
-                          maxHeight: isDesktop ? 300 : 240,
+                      if (!_leadOnly) ...[
+                        _buildStepHeader(
+                          step: '1',
+                          title: 'Select Project Members',
+                          subtitle:
+                              'Choose all employees who will work on this task.',
                         ),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                        ),
-                        child: allUsers.isEmpty
-                            ? const Padding(
-                                padding: EdgeInsets.all(16),
-                                child: Center(
-                                  child: Text(
-                                    'Loading users...',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: Color(0xFF94A3B8),
-                                    ),
-                                  ),
-                                ),
-                              )
-                            : Scrollbar(
-                                thumbVisibility: false,
-                                child: ListView(
-                                  shrinkWrap: true,
-                                  children: allUsers.map((user) {
-                                    final empId = (user['emp_id'] ?? '')
-                                        .toString();
-                                    final isSelected = _selectedMemberEmpIds
-                                        .contains(empId);
-                                    return CheckboxListTile(
-                                      value: isSelected,
-                                      activeColor: const Color(0xFF2563EB),
-                                      title: Text(
-                                        user['name'] ?? 'Unknown',
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                          color: Color(0xFF1E293B),
-                                        ),
-                                      ),
-                                      subtitle: Text(
-                                        '$empId · ${user['department'] ?? user['role'] ?? ''}',
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          color: Color(0xFF94A3B8),
-                                        ),
-                                      ),
-                                      onChanged: (v) {
-                                        setState(() {
-                                          if (v == true) {
-                                            _selectedMemberEmpIds.add(empId);
-                                          } else {
-                                            _selectedMemberEmpIds.remove(empId);
-                                            if (_selectedLeadEmpId == empId) {
-                                              _selectedLeadEmpId = null;
-                                            }
-                                          }
-                                        });
-                                      },
-                                    );
-                                  }).toList(),
-                                ),
-                              ),
-                      ),
-
-                      // Selected count chip
-                      if (_selectedMemberEmpIds.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFDBEAFE),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(
-                                '${_selectedMemberEmpIds.length} member${_selectedMemberEmpIds.length == 1 ? '' : 's'} selected',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF1D4ED8),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                      const SizedBox(height: 24),
-
-                      // ── STEP 2: Choose Lead from selected members ─────────
-                      _buildStepHeader(
-                        step: '2',
-                        title: 'Choose Project Lead',
-                        subtitle: _selectedMemberEmpIds.isEmpty
-                            ? 'Select members above first, then pick one as lead.'
-                            : 'Pick one of the selected members to be the lead.',
-                        dimmed: _selectedMemberEmpIds.isEmpty,
-                      ),
-                      const SizedBox(height: 10),
-
-                      if (_selectedMemberEmpIds.isEmpty)
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(vertical: 20),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF1F5F9),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFFE2E8F0)),
-                          ),
-                          child: const Column(
-                            children: [
-                              Icon(
-                                Icons.person_search_outlined,
-                                size: 32,
-                                color: Color(0xFFCBD5E1),
-                              ),
-                              SizedBox(height: 8),
-                              Text(
-                                'No members selected yet',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: Color(0xFF94A3B8),
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      else
+                        const SizedBox(height: 10),
                         Container(
                           constraints: BoxConstraints(
-                            maxHeight: isDesktop ? 280 : 220,
+                            maxHeight: isDesktop ? 300 : 240,
                           ),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: _selectedLeadEmpId != null
-                                  ? const Color(0xFF2563EB)
-                                  : const Color(0xFFE2E8F0),
-                              width: _selectedLeadEmpId != null ? 1.5 : 1,
-                            ),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
                           ),
-                          child: Scrollbar(
-                            thumbVisibility: false,
-                            child: ListView(
-                              shrinkWrap: true,
-                              children: selectedUsers.map((user) {
-                                final empId = (user['emp_id'] ?? '').toString();
-                                final isLead = _selectedLeadEmpId == empId;
-                                return RadioListTile<String>(
-                                  value: empId,
-                                  groupValue: _selectedLeadEmpId,
-                                  activeColor: const Color(0xFF2563EB),
-                                  title: Text(
-                                    user['name'] ?? 'Unknown',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                      color: isLead
-                                          ? const Color(0xFF2563EB)
-                                          : const Color(0xFF1E293B),
+                          child: allUsers.isEmpty
+                              ? const Padding(
+                                  padding: EdgeInsets.all(16),
+                                  child: Center(
+                                    child: Text(
+                                      'Loading users...',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Color(0xFF94A3B8),
+                                      ),
                                     ),
                                   ),
-                                  subtitle: Text(
-                                    '$empId · ${user['department'] ?? user['role'] ?? ''}',
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: Color(0xFF94A3B8),
-                                    ),
-                                  ),
-                                  secondary: isLead
-                                      ? Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 3,
+                                )
+                              : Scrollbar(
+                                  thumbVisibility: false,
+                                  child: ListView(
+                                    shrinkWrap: true,
+                                    children: allUsers.map((user) {
+                                      final empId = (user['emp_id'] ?? '')
+                                          .toString();
+                                      final isSelected = _selectedMemberEmpIds
+                                          .contains(empId);
+                                      return CheckboxListTile(
+                                        value: isSelected,
+                                        activeColor: const Color(0xFF2563EB),
+                                        title: Text(
+                                          user['name'] ?? 'Unknown',
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF1E293B),
                                           ),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFDBEAFE),
-                                            borderRadius: BorderRadius.circular(
-                                              20,
+                                        ),
+                                        subtitle: Text(
+                                          '$empId · ${user['department'] ?? user['role'] ?? ''}',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Color(0xFF94A3B8),
+                                          ),
+                                        ),
+                                        onChanged: (v) {
+                                          setState(() {
+                                            if (v == true) {
+                                              _selectedMemberEmpIds.add(empId);
+                                            } else {
+                                              _selectedMemberEmpIds.remove(
+                                                empId,
+                                              );
+                                              if (_selectedLeadEmpId == empId) {
+                                                _selectedLeadEmpId = null;
+                                              }
+                                            }
+                                          });
+                                        },
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+                        ),
+
+                        // Selected count chip
+                        if (_selectedMemberEmpIds.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFDBEAFE),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  '${_selectedMemberEmpIds.length} member${_selectedMemberEmpIds.length == 1 ? '' : 's'} selected',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF1D4ED8),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                        const SizedBox(height: 24),
+
+                        // ── STEP 2: Choose Lead from selected members ─────────
+                        _buildStepHeader(
+                          step: '2',
+                          title: 'Choose Project Lead',
+                          subtitle: _selectedMemberEmpIds.isEmpty
+                              ? 'Select members above first, then pick one as lead.'
+                              : 'Pick one of the selected members to be the lead.',
+                          dimmed: _selectedMemberEmpIds.isEmpty,
+                        ),
+                        const SizedBox(height: 10),
+
+                        if (_selectedMemberEmpIds.isEmpty)
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(vertical: 20),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: const Color(0xFFE2E8F0),
+                              ),
+                            ),
+                            child: const Column(
+                              children: [
+                                Icon(
+                                  Icons.person_search_outlined,
+                                  size: 32,
+                                  color: Color(0xFFCBD5E1),
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  'No members selected yet',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Color(0xFF94A3B8),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        else
+                          Container(
+                            constraints: BoxConstraints(
+                              maxHeight: isDesktop ? 280 : 220,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: _selectedLeadEmpId != null
+                                    ? const Color(0xFF2563EB)
+                                    : const Color(0xFFE2E8F0),
+                                width: _selectedLeadEmpId != null ? 1.5 : 1,
+                              ),
+                            ),
+                            child: Scrollbar(
+                              thumbVisibility: false,
+                              child: ListView(
+                                shrinkWrap: true,
+                                children: selectedUsers.map((user) {
+                                  final empId = (user['emp_id'] ?? '')
+                                      .toString();
+                                  final isLead = _selectedLeadEmpId == empId;
+                                  return RadioListTile<String>(
+                                    value: empId,
+                                    groupValue: _selectedLeadEmpId,
+                                    activeColor: const Color(0xFF2563EB),
+                                    title: Text(
+                                      user['name'] ?? 'Unknown',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: isLead
+                                            ? const Color(0xFF2563EB)
+                                            : const Color(0xFF1E293B),
+                                      ),
+                                    ),
+                                    subtitle: Text(
+                                      '$empId · ${user['department'] ?? user['role'] ?? ''}',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Color(0xFF94A3B8),
+                                      ),
+                                    ),
+                                    secondary: isLead
+                                        ? Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 3,
                                             ),
-                                          ),
-                                          child: const Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(
-                                                Icons.star_rounded,
-                                                size: 13,
-                                                color: Color(0xFF2563EB),
-                                              ),
-                                              SizedBox(width: 3),
-                                              Text(
-                                                'Lead',
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.w700,
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFDBEAFE),
+                                              borderRadius:
+                                                  BorderRadius.circular(20),
+                                            ),
+                                            child: const Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  Icons.star_rounded,
+                                                  size: 13,
                                                   color: Color(0xFF2563EB),
                                                 ),
-                                              ),
-                                            ],
-                                          ),
-                                        )
-                                      : null,
-                                  onChanged: (v) {
-                                    setState(() => _selectedLeadEmpId = v);
-                                  },
-                                );
-                              }).toList(),
+                                                SizedBox(width: 3),
+                                                Text(
+                                                  'Lead',
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: Color(0xFF2563EB),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          )
+                                        : null,
+                                    onChanged: (v) {
+                                      setState(() => _selectedLeadEmpId = v);
+                                    },
+                                  );
+                                }).toList(),
+                              ),
                             ),
                           ),
-                        ),
+                      ] else ...[
+                        _buildLeadOnlyPicker(allUsers, isDesktop),
+                      ],
                       const SizedBox(height: 28),
 
                       // ── Task Details header ──────────────────────────────
@@ -694,7 +747,8 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                           onPressed: (taskVm.isSubmitting || _uploading)
                               ? null
                               : () async {
-                                  if (_selectedMemberEmpIds.isEmpty) {
+                                  if (!_leadOnly &&
+                                      _selectedMemberEmpIds.isEmpty) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
                                         content: Text(
@@ -709,11 +763,15 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
 
                                   if (_selectedLeadEmpId == null) {
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
+                                      SnackBar(
                                         content: Text(
-                                          'Please select a lead from the selected members',
+                                          _leadOnly
+                                              ? 'Please select the lead for this task'
+                                              : 'Please select a lead from the selected members',
                                         ),
-                                        backgroundColor: Color(0xFFEF4444),
+                                        backgroundColor: const Color(
+                                          0xFFEF4444,
+                                        ),
                                         behavior: SnackBarBehavior.floating,
                                       ),
                                     );
@@ -749,13 +807,21 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
                                   final leadDept =
                                       (leadUser['department'] ?? '').toString();
 
-                                  final selectedMembers = allUsers
-                                      .where(
-                                        (u) => _selectedMemberEmpIds.contains(
-                                          (u['emp_id'] ?? '').toString(),
-                                        ),
-                                      )
-                                      .toList();
+                                  // Lead-only tasks have no separate members:
+                                  // the lead is the sole member so downstream
+                                  // logic (member visibility, submission) still
+                                  // works unchanged.
+                                  final selectedMembers = _leadOnly
+                                      ? <Map<String, dynamic>>[leadUser]
+                                      : allUsers
+                                            .where(
+                                              (u) => _selectedMemberEmpIds
+                                                  .contains(
+                                                    (u['emp_id'] ?? '')
+                                                        .toString(),
+                                                  ),
+                                            )
+                                            .toList();
 
                                   final hrUser = context
                                       .read<AuthViewModel>()
@@ -923,6 +989,114 @@ class _AssignTaskToLeadFormState extends State<AssignTaskToLeadForm> {
           );
         },
       ),
+    );
+  }
+
+  /// Lead picker shown when [_leadOnly] is on: a single bordered list where
+  /// HR taps one person to be the sole lead/worker for the task.
+  Widget _buildLeadOnlyPicker(
+    List<Map<String, dynamic>> allUsers,
+    bool isDesktop,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildStepHeader(
+          step: '1',
+          title: 'Choose the Lead',
+          subtitle: 'This person will handle the entire task on their own.',
+        ),
+        const SizedBox(height: 10),
+        Container(
+          constraints: BoxConstraints(maxHeight: isDesktop ? 300 : 240),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: _selectedLeadEmpId != null
+                  ? const Color(0xFF2563EB)
+                  : const Color(0xFFE2E8F0),
+              width: _selectedLeadEmpId != null ? 1.5 : 1,
+            ),
+          ),
+          child: allUsers.isEmpty
+              ? const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Center(
+                    child: Text(
+                      'Loading users...',
+                      style: TextStyle(fontSize: 14, color: Color(0xFF94A3B8)),
+                    ),
+                  ),
+                )
+              : Scrollbar(
+                  thumbVisibility: false,
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: allUsers.map((user) {
+                      final empId = (user['emp_id'] ?? '').toString();
+                      final isLead = _selectedLeadEmpId == empId;
+                      return RadioListTile<String>(
+                        value: empId,
+                        groupValue: _selectedLeadEmpId,
+                        activeColor: const Color(0xFF2563EB),
+                        title: Text(
+                          user['name'] ?? 'Unknown',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: isLead
+                                ? const Color(0xFF2563EB)
+                                : const Color(0xFF1E293B),
+                          ),
+                        ),
+                        subtitle: Text(
+                          '$empId · ${user['department'] ?? user['role'] ?? ''}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF94A3B8),
+                          ),
+                        ),
+                        secondary: isLead
+                            ? Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFDBEAFE),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.star_rounded,
+                                      size: 13,
+                                      color: Color(0xFF2563EB),
+                                    ),
+                                    SizedBox(width: 3),
+                                    Text(
+                                      'Lead',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF2563EB),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : null,
+                        onChanged: (v) {
+                          setState(() => _selectedLeadEmpId = v);
+                        },
+                      );
+                    }).toList(),
+                  ),
+                ),
+        ),
+      ],
     );
   }
 

@@ -105,6 +105,11 @@ class SidebarProvider {
           badge: '3',
           badgeColor: 'amber',
         ),
+        SidebarItem(
+          id: 'loan-advance-management',
+          label: 'Loan & Advance Management',
+          icon: Icons.account_balance_outlined,
+        ),
         // SidebarItem(
         //   id: 'company-letters',
         //   label: 'Company Letter',
@@ -205,6 +210,11 @@ class SidebarProvider {
             id: 'my-payslips',
             label: 'My Payslips',
             icon: Icons.credit_card_outlined,
+          ),
+          const SidebarItem(
+            id: 'request-loan-advance',
+            label: 'Request Loan / Advance',
+            icon: Icons.account_balance_outlined,
           ),
           // const SidebarItem(
           //   id: 'my-letters',

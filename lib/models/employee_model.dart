@@ -45,11 +45,12 @@ class Employee {
   final DateTime? branchAssignmentExpiry;
   final bool fieldDuty;
 
-  // ── Station status (drives per-quarter leave quotas per policy) ───────────
+  // ── Station status (drives the annual leave quota per policy) ────────────
   // 'in_station' or 'out_station'. Null → default in_station. HR toggles
   // this on the Add/Edit Employee screen; AttendanceViewModel.submitLeave
-  // reads it to choose between 3-days-per-quarter (in) or 4-days-per-quarter
-  // (out) for the regular leave cap.
+  // reads it to choose between 12-days-per-year (in) or 16-days-per-year
+  // (out) for the regular leave cap. The full annual quota can be spent
+  // at any time during the calendar year.
   final String? station;
 
   // ── Gender ────────────────────────────────────────────────────────────────

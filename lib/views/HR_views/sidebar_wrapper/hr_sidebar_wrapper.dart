@@ -9,6 +9,7 @@ import 'package:hrms_app/views/HR_views/hr_branch_management.dart';
 import 'package:hrms_app/views/HR_views/HRLeaveApprovalsScreen.dart';
 import 'package:hrms_app/views/HR_views/company_letters_screen.dart';
 import 'package:hrms_app/views/HR_views/hr_documents_screen.dart';
+import 'package:hrms_app/views/HR_views/loan_advance_management_screen.dart';
 import 'package:hrms_app/views/HR_views/hr_report_screen.dart';
 import 'package:hrms_app/views/HR_views/payroll_screen.dart';
 import 'package:hrms_app/views/HR_views/recruitment_screen.dart';
@@ -194,6 +195,8 @@ class _HRDashboardWithSidebarState extends State<HRDashboardWithSidebar> {
         return const CompanyLettersScreen();
       case 'documents':
         return const HRDocumentsScreen();
+      case 'loan-advance-management':
+        return const LoanAdvanceManagementScreen();
       default:
         return Center(
           child: Text(

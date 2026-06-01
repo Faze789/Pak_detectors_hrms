@@ -317,14 +317,14 @@ class AttendanceViewModel extends ChangeNotifier {
     DateTime end,
     int days, {
     // Categorical leave-type tag picked from the request UI dropdown.
-    // Optional and informational only — does not change the per-quarter
-    // cap (the regular bucket from LeavePolicy still applies).
+    // Optional and informational only — does not change which bucket the
+    // request lands in. The regular-bucket annual cap from LeavePolicy
+    // still applies whenever leaveType is annualCasualSick (or null).
     String? leaveType,
     String? leaveTypeLabel,
     String? reason,
   }) async {
     try {
-      final Set<String> leadIdsToNotify = {};
       String actualEmpId = uid;
       String userName = 'Employee';
       bool isInStation = true; // default per policy
@@ -338,99 +338,134 @@ class AttendanceViewModel extends ChangeNotifier {
         final userData = userDoc.data()!;
         actualEmpId = (userData['emp_id'] ?? uid).toString();
         userName = (userData['name'] ?? 'Employee').toString();
-        final primaryLead = (userData['lead_id'] ?? '').toString();
-        if (primaryLead.isNotEmpty) leadIdsToNotify.add(primaryLead);
         // station defaults to in_station when unset.
         final stationRaw = (userData['station'] ?? 'in_station').toString();
         isInStation = stationRaw != 'out_station';
       }
 
-      // ── Per-quarter / per-station cap pre-check ───────────────────────
-      // Policy:
-      //   • In-station employees:    3 days per QUARTER
-      //   • Out-of-station employees: 4 days per QUARTER
-      // (Marriage / bereavement / medical / maternity / paternity have
-      // separate quotas — wire those in alongside a leave-type picker.)
-      //
-      // The "quarter" is the calendar quarter that contains [start]. If
-      // a request spans two quarters, we charge it to the starting one.
-      final quotaPerQuarter = LeavePolicy.regularQuotaPerQuarter(
-        isInStation: isInStation,
-      );
-      final qBounds = LeavePolicy.quarterBounds(start);
+      // Resolve the picked leave type so we can apply the right cap:
+      //   • Regular bucket (annualCasualSick) → per-CALENDAR-YEAR cap
+      //                                          (12 in-station / 16 out)
+      //   • Specialty types (medical, marriage, bereavement, maternity,
+      //     paternity)                       → per-calendar-year cap
+      //   • Custom                            → HR judges case-by-case
+      // The full annual quota for the regular bucket may be spent at any
+      // time during Jan 1 → Dec 31. Older callers that pass
+      // `leaveType: null` fall back to the regular bucket.
+      final parsedType = leaveType == null
+          ? RequestLeaveType.annualCasualSick
+          : RequestLeaveTypeX.parse(leaveType);
+
+      final isRegularBucket =
+          parsedType == RequestLeaveType.annualCasualSick;
+
+      // Fetch the user's request history once for both pre-checks below.
       final existingSnap = await FirebaseFirestore.instance
           .collection('request_for_leave')
           .where('uid', isEqualTo: uid)
           .get();
-      int usedThisQuarter = 0;
-      for (final doc in existingSnap.docs) {
-        final data = doc.data();
-        final status = (data['status'] ?? '').toString();
-        if (status != 'approved' && status != 'pending') continue;
-        final startTs = data['startDate'];
-        if (startTs is! Timestamp) continue;
-        final startDt = startTs.toDate();
-        if (startDt.isBefore(qBounds.start) || startDt.isAfter(qBounds.end)) {
-          continue;
-        }
-        usedThisQuarter += (data['totalDays'] as num? ?? 0).toInt();
-      }
-      if (usedThisQuarter + days > quotaPerQuarter) {
-        final stationLabel = isInStation ? 'in-station' : 'out-of-station';
-        final remaining = (quotaPerQuarter - usedThisQuarter).clamp(
-          0,
-          quotaPerQuarter,
-        );
-        throw Exception(
-          'Quarterly leave cap for $stationLabel employees is '
-          '$quotaPerQuarter days. You have already used $usedThisQuarter '
-          'day(s) this quarter and have $remaining left — requesting '
-          '$days more would exceed the limit.',
-        );
+
+      bool docCountsAsRegular(Map<String, dynamic> data) {
+        // Pre-policy docs may not carry a `leaveType` field — treat those
+        // as the regular bucket so older usage still counts against the
+        // quarter cap.
+        final t = (data['leaveType'] ?? 'annualCasualSick').toString();
+        return t == 'annualCasualSick';
       }
 
-      // 2. Query ALL Active Tasks to check for multi-leads.
-      // If the employee is mapped under any task's `members`, grab that `lead_id`
-      final tasksSnap = await FirebaseFirestore.instance
-          .collection('tasks')
-          .where('status', isNotEqualTo: 'completed')
+      // ── Per-CALENDAR-YEAR cap (regular bucket only) ───────────────────
+      // Window is Jan 1 → Dec 31 of the year that contains `start`. The
+      // employee can spend the full annual quota at any time inside that
+      // window — no quarter-by-quarter sub-cap.
+      if (isRegularBucket) {
+        final annualQuota = LeavePolicy.regularAnnualQuota(
+          isInStation: isInStation,
+        );
+        final regularYearStart = DateTime(start.year, 1, 1);
+        final regularYearEnd = DateTime(start.year, 12, 31, 23, 59, 59);
+        int usedThisYear = 0;
+        for (final doc in existingSnap.docs) {
+          final data = doc.data();
+          final status = (data['status'] ?? '').toString();
+          if (status != 'approved' && status != 'pending') continue;
+          if (!docCountsAsRegular(data)) continue;
+          final startTs = data['startDate'];
+          if (startTs is! Timestamp) continue;
+          final startDt = startTs.toDate();
+          if (startDt.isBefore(regularYearStart) ||
+              startDt.isAfter(regularYearEnd)) {
+            continue;
+          }
+          usedThisYear += (data['totalDays'] as num? ?? 0).toInt();
+        }
+        if (usedThisYear + days > annualQuota) {
+          final stationLabel =
+              isInStation ? 'in-station' : 'out-of-station';
+          final remaining = (annualQuota - usedThisYear).clamp(
+            0,
+            annualQuota,
+          );
+          throw Exception(
+            'Annual regular-leave cap for $stationLabel employees is '
+            '$annualQuota days. You have already used $usedThisYear '
+            'day(s) this year and have $remaining left — requesting '
+            '$days more would exceed the limit.',
+          );
+        }
+      }
+
+      // ── Per-calendar-year cap (specialty types only) ──────────────────
+      // Medical 10 · Marriage own 6 · Marriage family 3 · Bereavement 5 ·
+      // Maternity 30 · Paternity 4. Sums pending+approved days of THIS
+      // type whose startDate falls in the same calendar year as [start].
+      final annualCap = LeavePolicy.annualCapForType(parsedType);
+      if (annualCap != null) {
+        if (days > annualCap) {
+          throw Exception(
+            'The annual cap for ${parsedType.label} is $annualCap day(s). '
+            'You requested $days — please reduce the date range.',
+          );
+        }
+        final yearStart = DateTime(start.year, 1, 1);
+        final yearEnd = DateTime(start.year, 12, 31, 23, 59, 59);
+        int usedThisYear = 0;
+        for (final doc in existingSnap.docs) {
+          final data = doc.data();
+          final status = (data['status'] ?? '').toString();
+          if (status != 'approved' && status != 'pending') continue;
+          final t = (data['leaveType'] ?? '').toString();
+          if (t != parsedType.value) continue;
+          final startTs = data['startDate'];
+          if (startTs is! Timestamp) continue;
+          final startDt = startTs.toDate();
+          if (startDt.isBefore(yearStart) || startDt.isAfter(yearEnd)) {
+            continue;
+          }
+          usedThisYear += (data['totalDays'] as num? ?? 0).toInt();
+        }
+        if (usedThisYear + days > annualCap) {
+          final remaining =
+              (annualCap - usedThisYear).clamp(0, annualCap);
+          throw Exception(
+            'Annual ${parsedType.label} cap is $annualCap day(s). You '
+            'have already used $usedThisYear day(s) this year and have '
+            '$remaining left — requesting $days more would exceed the '
+            'limit.',
+          );
+        }
+      }
+
+      // 2. Per policy: HR is the only approver. Always route to every HR
+      // user. Leads no longer have approval rights for leave requests.
+      final hrUsersSnap = await FirebaseFirestore.instance
+          .collection('users')
+          .where('role', isEqualTo: 'hr')
           .get();
-
-      for (var doc in tasksSnap.docs) {
-        final data = doc.data();
-        final members = data['members'] as Map<String, dynamic>? ?? {};
-
-        // Loop through the task's numbered members map
-        bool isMember = members.values.any((m) {
-          if (m is Map<String, dynamic>) {
-            return (m['emp_id'] ?? '').toString() == actualEmpId;
-          }
-          return false;
-        });
-
-        if (isMember) {
-          final taskLeadId = (data['lead_id'] ?? '').toString();
-          if (taskLeadId.isNotEmpty) {
-            leadIdsToNotify.add(taskLeadId);
-          }
-        }
+      final List<String> notificationTargets = [];
+      for (var doc in hrUsersSnap.docs) {
+        final hrEmpId = (doc.data()['emp_id'] ?? doc.id).toString();
+        notificationTargets.add(hrEmpId);
       }
-
-      final List<String> notificationTargets = leadIdsToNotify.toList();
-
-      // 3. Fallback: If working under no leads, send directly to HR
-      if (notificationTargets.isEmpty) {
-        final hrUsersSnap = await FirebaseFirestore.instance
-            .collection('users')
-            .where('role', isEqualTo: 'hr')
-            .get();
-
-        for (var doc in hrUsersSnap.docs) {
-          final hrEmpId = (doc.data()['emp_id'] ?? doc.id).toString();
-          notificationTargets.add(hrEmpId);
-        }
-      }
-
       // 4. Create the request in the new collection
       final leaveRef = await FirebaseFirestore.instance
           .collection('request_for_leave')
@@ -443,7 +478,7 @@ class AttendanceViewModel extends ChangeNotifier {
             'totalDays': days,
             'status': 'pending',
             'leadsNotified': notificationTargets,
-            'sentToHR': leadIdsToNotify.isEmpty,
+            'sentToHR': true,
             'createdAt': FieldValue.serverTimestamp(),
             if (leaveType != null) 'leaveType': leaveType,
             if (leaveTypeLabel != null) 'leaveTypeLabel': leaveTypeLabel,

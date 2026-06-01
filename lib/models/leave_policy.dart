@@ -5,7 +5,9 @@
 //
 // Leave Type            | In-Station / Out-of-Station
 // ──────────────────────|─────────────────────────────────────────────────
-// Annual / Casual / Sick| 3 days/quarter (in) · 4 days/quarter (out)
+// Annual / Casual / Sick| 12 days/year (in) · 16 days/year (out)
+//                       |   Highly flexible — the full annual quota can
+//                       |   be taken at any time during Jan 1 – Dec 31.
 // Half-Day              | 3 half-days/qtr (in) · 1 half-day/qtr (out)
 //                       |   4–7h worked = half-day (50% deduction)
 //                       |   < 4h worked = full-day deduction
@@ -23,10 +25,14 @@
 // incur a 2–3 day penalty deduction (applied at payroll time, not here).
 //
 // Enforcement status in code (today):
-//   ✅ Regular leave per-quarter cap (this file + AttendanceViewModel)
-//   ⏳ Half-day, marriage, bereavement, medical, maternity, paternity:
-//      constants are exposed so the future leave-type picker UI can read
-//      them; no quota tracking is wired yet.
+//   ✅ Regular leave per-CALENDAR-YEAR cap (this file +
+//      AttendanceViewModel). The quota window is Jan 1 → Dec 31 of the
+//      year that contains the request's `startDate`; employees can spend
+//      the whole 12–16-day bucket in any month.
+//   ✅ Medical / marriage (own + family) / bereavement / maternity /
+//      paternity: per-calendar-year caps, enforced via
+//      `annualCapForType` (see below).
+//   ⏳ Half-day quotas: constants exposed but not enforced.
 
 class LeavePolicy {
   // ── Salary / working-day basis ──────────────────────────────────────────
@@ -37,14 +43,26 @@ class LeavePolicy {
   static const int standardWorkingDays = 22;
 
   // ── Regular leaves (Annual / Casual / Sick combined bucket) ─────────────
+  // Per-CALENDAR-YEAR caps (Jan 1 → Dec 31). The earlier 3 / 4 day
+  // per-quarter constants are kept below as deprecated aliases so any
+  // legacy reference still compiles, but enforcement now uses the annual
+  // figures — the employee may spend the whole bucket whenever they want.
+  static const int regularPerYearInStation = 12; // = old 3/qtr × 4
+  static const int regularPerYearOutOfStation = 16; // = old 4/qtr × 4
+
+  /// Days-per-CALENDAR-YEAR for the regular bucket, picked by station.
+  static int regularAnnualQuota({required bool isInStation}) => isInStation
+      ? regularPerYearInStation
+      : regularPerYearOutOfStation;
+
+  @Deprecated('Quotas are now per-year — use regularPerYearInStation.')
   static const int regularPerQuarterInStation = 3;
+  @Deprecated('Quotas are now per-year — use regularPerYearOutOfStation.')
   static const int regularPerQuarterOutOfStation = 4;
 
-  /// Days-per-quarter for the regular bucket, picked by station.
+  @Deprecated('Quotas are now per-year — use regularAnnualQuota().')
   static int regularQuotaPerQuarter({required bool isInStation}) =>
-      isInStation
-          ? regularPerQuarterInStation
-          : regularPerQuarterOutOfStation;
+      isInStation ? 3 : 4;
 
   // ── Half-day leaves ───────────────────────────────────────────────────
   static const int halfDayPerQuarterInStation = 3;
@@ -64,8 +82,32 @@ class LeavePolicy {
   static const int maternityStandardDays = 15;
   static const int maternityStandardWfhMonths = 2;
   static const int maternitySurgeryMonths = 1;
+  static const int maternityMaxDays = 30; // surgery case (1 month)
   static const int paternityMinDays = 3;
   static const int paternityMaxDays = 4;
+
+  /// Per-calendar-year cap for a specialty leave type. Returns null for the
+  /// regular bucket (which is governed by [regularAnnualQuota] instead)
+  /// and for [RequestLeaveType.custom] (HR judges these case-by-case).
+  ///
+  /// The caps mirror the policy table:
+  ///   Medical          → 10 days
+  ///   Marriage (own)   → 6 days  (policy: 5–6, max enforced)
+  ///   Marriage (fam.)  → 3 days
+  ///   Bereavement      → 5 days
+  ///   Maternity        → 30 days (covers both 15-day standard and 1-month
+  ///                                surgery cases)
+  ///   Paternity        → 4 days  (policy: 3–4, max enforced)
+  static int? annualCapForType(RequestLeaveType type) => switch (type) {
+        RequestLeaveType.annualCasualSick => null,
+        RequestLeaveType.custom => null,
+        RequestLeaveType.medical => medicalDays,
+        RequestLeaveType.marriageOwn => marriageOwnMaxDays,
+        RequestLeaveType.marriageFamily => marriageImmediateFamilyDays,
+        RequestLeaveType.bereavement => bereavementDays,
+        RequestLeaveType.maternity => maternityMaxDays,
+        RequestLeaveType.paternity => paternityMaxDays,
+      };
 
   // ── Wage penalty formulas (per the authoritative HR doc) ───────────────
   //
@@ -116,9 +158,10 @@ class LeavePolicy {
     (
       title: 'Annual / Casual / Sick',
       body:
-          '3 days per quarter (in-station) · 4 days per quarter '
-          '(out-of-station). Cannot be carried forward to the next '
-          'quarter or year.',
+          '12 days per year (in-station) · 16 days per year '
+          '(out-of-station). Highly flexible — the whole quota can be '
+          'taken at any time between Jan 1 and Dec 31. Unused days do '
+          'not carry forward to the next year.',
     ),
     (
       title: 'Half-Day',
@@ -170,7 +213,7 @@ class LeavePolicy {
 //
 // Categorical only — picking a type sets the `leaveType` field on the
 // `request_for_leave` doc but does not change the per-quarter cap (which
-// stays as the regular bucket from LeavePolicy.regularQuotaPerQuarter).
+// stays as the regular bucket from LeavePolicy.regularAnnualQuota).
 // "Custom" is the escape hatch for situations not covered by the table.
 
 enum RequestLeaveType {
@@ -201,7 +244,7 @@ extension RequestLeaveTypeX on RequestLeaveType {
   /// Short quota hint shown next to the dropdown option for context.
   String get quotaHint => switch (this) {
         RequestLeaveType.annualCasualSick =>
-          '3 days/qtr (in) · 4 days/qtr (out)',
+          '12 days/yr (in) · 16 days/yr (out)',
         RequestLeaveType.marriageOwn => '5–6 days',
         RequestLeaveType.marriageFamily => '3 days · siblings & children only',
         RequestLeaveType.bereavement => '5 days · immediate family',

@@ -165,6 +165,48 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
         taskLeadId == currentEmpId;
   }
 
+  /// True when the lead is the sole worker — exactly one member, who is the
+  /// lead. Detected structurally (not from a stored flag) so it self-corrects
+  /// the moment HR or the lead adds/removes a member. Such tasks skip the
+  /// member-breakdown/forwarding flow: the lead works and submits to HR
+  /// directly.
+  bool _isLeadOnlyTask(Map<String, dynamic> task) {
+    final members = task['members'] as Map<String, dynamic>? ?? {};
+    if (members.length != 1) return false;
+    final leadId = (task['lead_id'] ?? '').toString().toLowerCase();
+    if (leadId.isEmpty) return false;
+    final only = members.values.first;
+    return only is Map<String, dynamic> &&
+        (only['emp_id'] ?? '').toString().toLowerCase() == leadId;
+  }
+
+  /// Lead accepts a solo task. Sets it to approved (via the existing
+  /// acceptance flow) so the lead can immediately work and submit to HR,
+  /// with no assign-to-members step.
+  Future<void> _acceptLeadOnlyTask(Map<String, dynamic> task) async {
+    final vm = context.read<TaskViewModel>();
+    final user = context.read<AuthViewModel>().currentUser;
+    final ok = await vm.leadAcceptTask(
+      taskId: (task['id'] ?? '').toString(),
+      variant: 'accepted_as_is',
+      leadEmpId: _empId ?? '',
+      leadName: user?.name ?? '',
+      taskTitle: (task['title'] ?? '').toString(),
+    );
+    if (!mounted) return;
+    if (ok) {
+      _refreshTasks();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Task accepted — work on it and submit to HR when done.',
+          ),
+          backgroundColor: Color(0xFF16A34A),
+        ),
+      );
+    }
+  }
+
   Map<String, dynamic>? _getMemberSubmission(Map<String, dynamic> task) {
     final submissions =
         task['member_submissions'] as Map<String, dynamic>? ?? {};
@@ -1107,6 +1149,7 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
     final isApproved = status == 'approved';
     final members = task['members'] as Map<String, dynamic>? ?? {};
     final isLead = _isLeadForTask(task);
+    final leadOnly = _isLeadOnlyTask(task);
     final totalWeeks = (task['totalWeeks'] ?? 0) as int;
     final weeklyDeadlines = task['weeklyDeadlines'] as List? ?? [];
     final isUnscheduled = task['unscheduled_task'] == true;
@@ -1748,9 +1791,9 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                         size: 16,
                         color: Colors.white,
                       ),
-                      label: const Text(
-                        'Edit Goals & Members',
-                        style: TextStyle(
+                      label: Text(
+                        leadOnly ? 'Edit Goals' : 'Edit Goals & Members',
+                        style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w700,
                           fontSize: 13,
@@ -1766,40 +1809,72 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: () => showAssignToMembersSheet(
-                        context,
-                        task,
-                        onAssigned: _refreshTasks,
-                      ),
-                      icon: const Icon(
-                        Icons.send_rounded,
-                        size: 16,
-                        color: Colors.white,
-                      ),
-                      label: const Text(
-                        'Accept & Assign Task to Members',
-                        style: TextStyle(
+                  // Solo task → accept & work directly (no assign-to-members).
+                  // Team task → the usual accept-and-distribute flow.
+                  if (leadOnly)
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () => _acceptLeadOnlyTask(task),
+                        icon: const Icon(
+                          Icons.play_arrow_rounded,
+                          size: 16,
                           color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
+                        ),
+                        label: const Text(
+                          'Accept & Start Task',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF16A34A),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
                       ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF2563EB),
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
+                    )
+                  else
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () => showAssignToMembersSheet(
+                          context,
+                          task,
+                          onAssigned: _refreshTasks,
+                        ),
+                        icon: const Icon(
+                          Icons.send_rounded,
+                          size: 16,
+                          color: Colors.white,
+                        ),
+                        label: const Text(
+                          'Accept & Assign Task to Members',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2563EB),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
                       ),
                     ),
-                  ),
                 ],
 
                 // Assign Next Week's Tasks button (lead, approved, multi-week)
+                // Solo (lead-only) tasks have no members to assign to.
                 if (isLead &&
+                    !leadOnly &&
                     isApproved &&
                     totalWeeks > 1 &&
                     status != 'submitted' &&
@@ -1951,6 +2026,7 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                               //   ),
                               // ),
                             ],
+                            if (!leadOnly)
                             Padding(
                               padding: const EdgeInsets.only(bottom: 6),
                               child: SizedBox(
@@ -1990,7 +2066,9 @@ class _EmployeeGoalsScreenState extends State<EmployeeGoalsScreen> {
                             Builder(
                               builder: (_) {
                                 final tw = (task['totalWeeks'] ?? 0) as int;
-                                if (tw <= 1) return const SizedBox.shrink();
+                                if (tw <= 1 || leadOnly) {
+                                  return const SizedBox.shrink();
+                                }
                                 final wd =
                                     task['weeklyDeadlines'] as List? ?? [];
                                 final assignedWeeks = wd
